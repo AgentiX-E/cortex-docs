@@ -1,0 +1,6 @@
+# Bytecode caches are build output, not evidence. The scripts in this repository
+# are published so their logic can be read and re-run; a compiled .pyc is tied to
+# one interpreter version and one machine, so committing it adds noise to the
+# record without adding anything a reader can check.
+__pycache__/
+*.py[cod]
