@@ -1,0 +1,25 @@
+eventLookup TR questions: 20
+
+=== eventLookup questions with a resolvable anchor ===
+  [gold-absent] range={'start': '2023/02/25', 'end': '2023/03/11'}  Q=I mentioned an investment for a competition four weeks ago? 
+  [gold-absent] range={'start': '2022/04/03', 'end': '2022/04/17'}  Q=I mentioned cooking something for my friend a couple of days
+  [gold-in-ctx] range={'start': '2023/06/10', 'end': '2023/06/24'}  Q=I mentioned participating in a sports event two weeks ago. W
+  [gold-in-ctx] range={'start': '2023/01/11', 'end': '2023/01/25'}  Q=I mentioned that I participated in an art-related event two 
+  [gold-in-ctx] range={'start': '2023/03/11', 'end': '2023/03/25'}  Q=What charity event did I participate in a month ago?
+  [gold-absent] range={'start': '2023/01/25', 'end': '2023/02/08'}  Q=What did I do with Rachel on the Wednesday two months ago?
+  [gold-in-ctx] range={'start': '2023/04/14', 'end': '2023/04/28'}  Q=What gardening-related activity did I do two weeks ago?
+  [gold-absent] range={'start': '2023/03/08', 'end': '2023/03/22'}  Q=What kitchen appliance did I buy 10 days ago?
+  [gold-absent] range={'start': '2023/02/21', 'end': '2023/03/07'}  Q=What was the significant buisiness milestone I mentioned fou
+  [gold-in-ctx] range={'start': '2023/03/08', 'end': '2023/03/22'}  Q=What was the social media activity I participated 5 days ago
+  [gold-absent] range={'start': '2023/06/08', 'end': '2023/06/22'}  Q=What was the the life event of one of my relatives that I pa
+  [gold-in-ctx] range={'start': '2023/03/28', 'end': '2023/04/03'}  Q=Where did I attend the religious activity last week?
+  [gold-in-ctx] range={'start': '2023/01/24', 'end': '2023/02/07'}  Q=Which book did I finish a week ago?
+  [gold-in-ctx] range={'start': '2023/04/01', 'end': '2023/04/30'}  Q=Which pair of shoes did I clean last month?
+
+anchored eventLookup: 14
+  gold turn ABSENT from retrieved: 6
+  gold turn in retrieved, header date IN window:  7
+  gold turn in retrieved, header date OUT of window: 1
+
+P2 can only help the 'absent' bucket (widen recall + date filter) — and only
+if the turn is absent for date reasons, not semantic reasons.

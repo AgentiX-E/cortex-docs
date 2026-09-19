@@ -1,0 +1,50 @@
+=== 1. SEPARATION (corrected direction) ===
+  control    [17.02, 14.89, 12.77, 12.77]  min=12.77  max=17.02
+  treatment  [4.26, 4.26, 4.26, 4.26]  min=4.26  max=4.26
+  min(control)=12.77 > max(treatment)=4.26  -> COMPLETE SEPARATION (decrease)
+  (the main script printed 'overlap' because it tested the increase direction: max(control)=17.02 vs min(treatment)=4.26)
+
+=== 2. EXACT PERMUTATION TEST on per-run rates ===
+  observed difference (treatment - control) = -10.11pp
+  1 of 70 relabellings are at least this extreme  ->  exact one-sided p = 0.0143
+  two-sided p = 0.0286
+  This is exact: 4v4 with complete separation is the single most extreme relabelling, so p = 1/70 one-sided by construction.
+
+=== 3. ABS GUARD INVESTIGATION ===
+  control:
+    run_33938183249  correct 30/30  abstained 30/30
+    run_33938223599  correct 30/30  abstained 30/30
+    run_33938269381  correct 30/30  abstained 30/30
+    run_33938283890  correct 30/30  abstained 30/30
+  treatment:
+    run_33938197950  correct 30/30  abstained 30/30
+    run_33938230078  correct 30/30  abstained 30/30
+    run_33938272436  correct 30/30  abstained 30/30
+    run_33938290468  correct 29/30  abstained 29/30
+  Note: ABS has no per-question diagnostics dump, so the offending question
+  cannot be identified from artifacts. Determine whether the change can even
+  reach ABS: buildKnowledgeUpdatePrompt is reachable only from
+  answerKnowledgeUpdate, gated on questionType === 'knowledge-update'.
+
+=== 4. QUESTION 7401057b (moved the WRONG way: 3/4 -> 4/4) ===
+  control    run_33938  abstained=True  answer=null  top1=0.9112926732244492
+  control    run_33938  abstained=True  answer=null  top1=0.9112926732244492
+  control    run_33938  abstained=False  answer="2"  top1=0.9112926732244492
+  control    run_33938  abstained=True  answer=null  top1=0.9112926732244492
+  treatment  run_33938  abstained=True  answer=null  top1=0.9112926732244492
+  treatment  run_33938  abstained=True  answer=null  top1=0.9112926732244492
+  treatment  run_33938  abstained=True  answer=null  top1=0.9112926732244492
+  treatment  run_33938  abstained=True  answer=null  top1=0.9112926732244492
+  gold / question:
+    Q   : How many free night's stays can I redeem at any Hilton property with my accumulated points?
+    GOLD: "Two"
+
+=== 5. KU ACCURACY (co-primary) ===
+  control 217/288 = 75.35%   treatment 229/288 = 79.51%   delta +4.17pp   z=1.20  p=0.2311
+  per-run KU correct: control [52, 55, 56, 54]  treatment [57, 57, 58, 57]
+  separation: min(treatment)=57 vs max(control)=56  -> COMPLETE
+
+=== 6. NOISE FLOOR: control-arm internal spread vs the observed delta ===
+  overall per-run: control [408, 414, 411, 411] (spread 6)   treatment [414, 414, 417, 410] (spread 7)
+  observed overall delta = +2.75 questions/run = +0.55pp
+  within-arm spread (6 and 7 questions) EXCEEDS the delta (2.75) -> overall accuracy cannot resolve this change, as pre-registered.

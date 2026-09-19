@@ -839,7 +839,10 @@ function main() {
 
   const [srcDir, dstDir] = positional;
   if (!srcDir || !dstDir) {
-    console.error('usage: <source-dir> <translated-dir> [--strict-code]');
+    console.error(
+      'usage: <source-dir> <translated-dir> [--strict-code] [--summary] [--trace]\n' +
+        '       --file <source.md> <translated.md> [--strict-code] [--trace]',
+    );
     process.exit(2);
   }
 

@@ -1,0 +1,31 @@
+﻿# Run-id index
+#
+# Every run id named in a verdict or a plan resolves here, so a published claim
+# can be traced back to the run that produced it. Column one is the id, column
+# two is the document that cites it. `scripts/check-analysis-record.sh` enforces
+# this: a verdict that names a run id with no index entry fails CI.
+#
+# Ids below were added when that check was introduced. They were already cited
+# by the named documents; only the index entry was missing, which is why the
+# citing document is recorded rather than a purpose.
+#
+# Earlier runs are indexed in the per-arm files that carry the arm name
+# (<arm>_run_ids.tsv, <arm>_dispatch_order.tsv) and in admission.txt / abs-cap.txt.
+#
+run_id	cited_by
+34479855027	verdicts/p4-sampling-defect.md
+34481475313	verdicts/p4-sampling-defect.md
+34492139716	verdicts/p4-verdict.md
+34558715449	verdicts/p5-variance-plan.md
+34558717704	verdicts/p5-variance-plan.md
+34558719936	verdicts/p5-variance-plan.md
+34582260187	verdicts/p5-pairing-verdict.md
+34586809021	verdicts/p6-verdict.md
+34594513996	verdicts/p6-verdict.md
+34791592602	verdicts/p18-retry-opportunity-verdict.md
+34915402976	verdicts/p20-retry-scope-verdict.md
+35088866831	verdicts/p25-clause-isolation-prereg.md
+35097631133	verdicts/p25-clause-isolation-prereg.md
+35097952715	verdicts/p24-cap-verdict.md
+35162802298	verdicts/p26-retry-structural-zero.md
+35405919424	verdicts/p36-run-35405919424-verdict.md

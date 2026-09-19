@@ -1,0 +1,54 @@
+control: 4 runs loaded
+treatment: 4 runs loaded
+
+=== POOLED ABSTENTION RATE BY GROUP (4 runs per arm) ===
+group          control            treatment              delta  95% CI on delta(pp)   z       p
+KU:other        27/188= 14.36%    8/188=  4.26%    -10.11pp   [-17.92, -1.89]   -3.37  0.0007
+KU:previous      4/40 = 10.00%    4/40 = 10.00%     +0.00pp   [-19.09, +19.09]   +0.00  1.0000
+KU:current       0/60 =  0.00%    0/60 =  0.00%     +0.00pp   [-6.02, +6.02]   +0.00  1.0000
+IE              16/600=  2.67%   16/600=  2.67%     +0.00pp   [-2.64, +2.64]   +0.00  1.0000
+MR              51/484= 10.54%   49/484= 10.12%     -0.41pp   [-5.85, +5.03]   -0.21  0.8327
+TR              36/508=  7.09%   37/508=  7.28%     +0.20pp   [-4.32, +4.72]   +0.12  0.9033
+
+=== PER-RUN KU:'other' ABSTENTION (the primary endpoint) ===
+  control    8/47 (17.02%)  7/47 (14.89%)  6/47 (12.77%)  6/47 (12.77%)
+             mean=14.36%  min=12.77%  max=17.02%  spread=4.26pp
+  treatment  2/47 (4.26%)  2/47 (4.26%)  2/47 (4.26%)  2/47 (4.26%)
+             mean=4.26%  min=4.26%  max=4.26%  spread=0.00pp
+
+  Welch t on per-run rates: t=-9.922  df=3.00  p(approx)=0.0000
+  Per-run paired deltas (each control run minus treatment-run mean):
+    control   : [17.02, 14.89, 12.77, 12.77]  mean=14.36%
+    treatment : [4.26, 4.26, 4.26, 4.26]  mean=4.26%
+    separation: min(treatment)=4.26% vs max(control)=17.02%  -> overlap
+
+=== ACCURACY BY CAPABILITY (pooled, from the report) ===
+cap    control              treatment                delta
+IE      569/600 = 94.83% (ab  16)   569/600 = 94.83% (ab  16)     +0.00pp
+MR      363/484 = 75.00% (ab  51)   367/484 = 75.83% (ab  49)     +0.83pp
+KU      217/288 = 75.35% (ab  31)   229/288 = 79.51% (ab  12)     +4.17pp
+TR      375/508 = 73.82% (ab  36)   371/508 = 73.03% (ab  37)     -0.79pp
+ABS     120/120 =100.00% (ab 120)   119/120 = 99.17% (ab 119)     -0.83pp
+
+OVERALL  control 1644/2000 = 82.20% [80.46, 83.81]   treatment 1655/2000 = 82.75% [81.03, 84.34]   delta +0.55pp
+  per-run overall: control  408, 414, 411, 411
+                   treatment 414, 414, 417, 410
+
+=== PER-QUESTION MOVEMENT on KU:'other' (times abstained out of 4) ===
+qid           ctrl abstain/4  treat abstain/4   change
+830ce83f                   4                0       -4
+cc5ded98                   4                0       -4
+db467c8c                   4                0       -4
+e61a7584                   3                0       -3
+2698e78f                   2                0       -2
+5c40ec5b                   2                0       -2
+41698283                   1                0       -1
+7401057b                   3                4       +1
+
+  questions whose abstention count changed: 8
+  net change in abstentions: -19
+
+=== DID THE RECOVERED ANSWERS BECOME CORRECT? ===
+  questions that moved away from abstention: 7
+  (per-question correctness is not in the diagnostics dump; KU accuracy
+   above is the authoritative correctness measure)

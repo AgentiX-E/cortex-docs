@@ -1,0 +1,23 @@
+runs: 2
+
+=== wrong-answer classification (per capability) ===
+cap        semantic-match        numeric-match   numeric-vs-spelled   spelled-vs-numeric              genuine
+IE                      0                    0                    0                    0                    5
+KU                      0                    0                    0                    0                   23
+MR                      0                    2                    5                    0                   27
+TR                      0                    0                    4                    0                   43
+
+=== SEMANTIC-MATCH / NUMERIC samples (eval-gap candidates) ===
+[MR/numeric-match] pred='1'  gold='I viewed four properties before making an offer on the townh'  Q=How many properties did I view before making an offer on the
+[MR/numeric-match] pred='1'  gold='I viewed four properties before making an offer on the townh'  Q=How many properties did I view before making an offer on the
+[MR/numeric-vs-spelled] pred='4'  gold='I visited three different doctors: a primary care physician,'  Q=How many different doctors did I visit?
+[MR/numeric-vs-spelled] pred='4'  gold='I replaced or fixed five items: the kitchen faucet, the kitc'  Q=How many kitchen items did I replace or fix?
+[MR/numeric-vs-spelled] pred='3'  gold='two'  Q=How many sports have I played competitively in the past?
+[MR/numeric-vs-spelled] pred='4'  gold='I attended three weddings. The couples were Rachel and Mike,'  Q=How many weddings have I attended in this year?
+[MR/numeric-vs-spelled] pred='4'  gold='I attended three weddings. The couples were Rachel and Mike,'  Q=How many weddings have I attended in this year?
+[TR/numeric-vs-spelled] pred='1 month'  gold='Two months'  Q=How long had I been bird watching when I attended the bird w
+[TR/numeric-vs-spelled] pred='0 months ago'  gold='Five months ago'  Q=How many months ago did I book the Airbnb in San Francisco?
+[TR/numeric-vs-spelled] pred='0 months ago'  gold='Five months ago'  Q=How many months ago did I book the Airbnb in San Francisco?
+[TR/numeric-vs-spelled] pred='4 weeks'  gold='one week'  Q=How many weeks have I been accepted into the exchange progra
+
+(eval-gap candidates shown: 11)

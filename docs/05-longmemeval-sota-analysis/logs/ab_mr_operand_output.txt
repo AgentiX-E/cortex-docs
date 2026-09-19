@@ -1,0 +1,39 @@
+control: 4 runs   treatment: 4 runs
+
+=== PRIMARY: real "32" reached the retrieved window (per target, per run) ===
+  control   run_33964168418: reach 0/2  abst 2/2  correct 0/2   [How old was I when Alex was bo=MISS/abst; How many years will I be when =MISS/abst]
+  control   run_33964176430: reach 0/2  abst 2/2  correct 0/2   [How old was I when Alex was bo=MISS/abst; How many years will I be when =MISS/abst]
+  control   run_33964181492: reach 0/2  abst 2/2  correct 0/2   [How old was I when Alex was bo=MISS/abst; How many years will I be when =MISS/abst]
+  control   run_33964188311: reach 0/2  abst 2/2  correct 0/2   [How old was I when Alex was bo=MISS/abst; How many years will I be when =MISS/abst]
+  treatment run_33964173089: reach 2/2  abst 1/2  correct 1/2   [How old was I when Alex was bo=hit/ans; How many years will I be when =hit/abst]
+  treatment run_33964178738: reach 2/2  abst 1/2  correct 1/2   [How old was I when Alex was bo=hit/ans; How many years will I be when =hit/abst]
+  treatment run_33964184650: reach 2/2  abst 1/2  correct 1/2   [How old was I when Alex was bo=hit/ans; How many years will I be when =hit/abst]
+  treatment run_33964190677: reach 2/2  abst 1/2  correct 1/2   [How old was I when Alex was bo=hit/ans; How many years will I be when =hit/abst]
+
+  === reach (of 2 targets) ===
+  control   [0, 0, 0, 0]  mean 0.00
+  treatment [2, 2, 2, 2]  mean 2.00
+
+  === abstained (of 2 targets) ===
+  control   [2, 2, 2, 2]  mean 2.00
+  treatment [1, 1, 1, 1]  mean 1.00
+
+  === correct (of 2 targets) ===
+  control   [0, 0, 0, 0]  mean 0.00
+  treatment [1, 1, 1, 1]  mean 1.00
+
+  [reach] exact permutation (increase): 1/70 = 0.0143
+
+  [abstained] exact permutation (decrease): 1/70 = 0.0143
+
+  [correct] exact permutation (increase): 1/70 = 0.0143
+
+=== GUARDS: per-capability accuracy (pooled 4 runs) ===
+  IE: control 566/600=94.33%  treatment 569/600=94.83%  delta +0.50pp
+  KU: control 228/288=79.17%  treatment 226/288=78.47%  delta -0.69pp
+  TR: control 381/508=75.00%  treatment 385/508=75.79%  delta +0.79pp
+  ABS: control 118/120=98.33%  treatment 119/120=99.17%  delta +0.83pp
+
+=== MR accuracy (descriptive) ===
+  control   [91, 93, 93, 90]  mean 91.75/121 = 75.83%
+  treatment [95, 92, 94, 90]  mean 92.75/121 = 76.65%

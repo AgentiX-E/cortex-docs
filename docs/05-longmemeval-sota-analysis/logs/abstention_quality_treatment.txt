@@ -1,0 +1,22 @@
+arm = treatment   runs = 4
+
+cap    abst   NUMERIC(suspect)   TEXTUAL(trusted)           no hit
+IE       16         4 ( 25.0%)         0 (  0.0%)      12 ( 75.0%)
+KU       12         4 ( 33.3%)         8 ( 66.7%)       0 (  0.0%)
+MR       49        16 ( 32.7%)         3 (  6.1%)      30 ( 61.2%)
+TR       37         4 ( 10.8%)         0 (  0.0%)      33 ( 89.2%)
+
+=== TRUSTED (non-numeric gold, verbatim in context, still abstained) ===
+[KU] Q: Where am I planning to stay for my birthday trip to Hawaii?
+       GOLD : 'Oahu'
+       HIT  : ...if you could recommend some good snorkeling spots on the island 2023 05 25 thu 18 17 user i m actually planning to stay on oahu so the hanauma bay nature preserve and shark s cove sound perfect for me 2023 05 25 thu 18 17 user i m also planning...
+
+[KU] Q: What new kitchen gadget did I invest in before getting the Air Fryer?
+       GOLD : 'Instant Pot'
+       HIT  : ...some inspiration for healthy lunch ideas that can be reheated 2023 05 21 sun 05 48 user i m actually thinking of using my new instant pot to make some of these soups and stews do you have any recipes that are specifically designed for pressure cooking 2023 05 21 sun 05...
+
+[MR] Q: When did I submit my research paper on sentiment analysis?
+       GOLD : 'February 1st'
+       HIT  : ...in sentiment analysis for social media text data 2023 05 30 tue 01 51 user i m reviewing for acl and their submission date was february 1st can you give me some tips on reviewing for this type of conferences 2023 05 24 wed 21 27 user where i can find those...
+
+distinct trusted defective abstentions: 3 over 4 runs = 0.75/run = 0.15% of the benchmark

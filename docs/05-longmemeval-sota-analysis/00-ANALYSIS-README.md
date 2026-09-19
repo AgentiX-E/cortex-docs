@@ -5,13 +5,30 @@
 
 ## 目录结构
 
-| 目录 | 内容 |
+原始工作区中，验收判决位于 `verdicts/` 子目录。发布到本仓库时文档被平铺到顶层，
+以便与 `docs/01`–`04` 的设计文档并列；脚本与派发文件保持原有分层。
+
+| 路径 | 内容 |
 | --- | --- |
-| `verdicts/` | 验收判决、根因审计、计划与研究笔记（`*.md`） |
+| `*.md`（顶层） | 验收判决、根因审计、计划与研究笔记（原 `verdicts/`） |
 | `scripts/` | 可复现的分析脚本（`*.py`、`*.mjs`）——它们读取下载下来的运行产物 |
 | `dispatch/` | A/B 派发 + 产物下载脚本（`*.sh`） |
 | `run-ids/` | GitHub Actions run id（`*.tsv`），用于重新下载产物 |
 | `logs/` | 缓存的脚本输出（`*.txt`）——可由脚本重新生成 |
+| `plans/` | 迭代规划记录 |
+
+脚本注释中出现的 `verdicts/<name>.md` 是原始工作区的路径，在本仓库中对应同名的顶层文件。
+
+## 数值保真度
+
+本目录的文档是英文原始记录的中文译本。译文与源文之间的数值一致性由
+`../../tools/check-numeric-fidelity.mjs` 机械校验：比较两份文档的数值 token 多重集，
+任何未解释的差异都会导致失败。
+
+```bash
+node tools/check-numeric-fidelity.mjs --file <源文> <译文>
+node tools/check-numeric-fidelity.test.mjs
+```
 
 ## 重新下载运行产物
 

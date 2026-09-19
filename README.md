@@ -18,14 +18,33 @@
 - 代码注释、外部文档、commit message 一律使用英文，见 [AgentiX-E/cortex](https://github.com/AgentiX-E/cortex)。
 
 关于 **05 分析记录**的语言选择：该目录由英文原始记录翻译而来，遵循本仓库的中文约定。
-翻译保真度由 `tools/check-numeric-fidelity.mjs` 机械校验，配套回归测试见
-`tools/check-numeric-fidelity.test.mjs`：
+
+## 记录完整性守卫
+
+翻译保真度不能靠人工纪律维持，因此由 `tools/check-analysis-record.sh` 机械校验。
+它自身可失败，这一点由 `tools/check-analysis-record.test.sh` 保证——该套件会重现守卫
+存在的每一种失效场景，并断言守卫确实报告了它：
 
 ```bash
-node tools/check-numeric-fidelity.mjs <源目录> <译文目录> --summary
-node tools/check-numeric-fidelity.test.mjs
+tools/check-analysis-record.sh --sources <英文源目录>
+tools/check-analysis-record.test.sh --sources <英文源目录>
 ```
 
-验收标准为**每个文档的数值 token 多重集完全一致**——整数、小数、百分比、pp 增量、
-指数与带符号值必须逐一复现，只有语言相关的裸小整数计数允许单向调和。当前状态：
-94/94 文档通过，回归 12/12 通过。
+守卫包含四项检查：
+
+| 检查 | 捕获的失效 | 为什么数值比对查不到 |
+|---|---|---|
+| 守卫自测 | 某项检查的模式已静默失配 | 不适用（元检查） |
+| 检查器回归套件 | 容差被放宽或无差别拒绝 | 不适用（元检查） |
+| 结构完整性 | 空文档、残留英文、冻结引用被本地化 | 未翻译的文档与源文件完全相同 |
+| 数值保真 | 数值被篡改、丢弃、改精度或改符号 | 反过来说：它抓不到"照抄原文" |
+
+其中「未翻译」这一项尤其依赖 CJK 判定：一个从未翻译的文档与源文件逐字节相同，
+数值比对会以构造性方式通过。因此该检查把中文字符类写作 Unicode 属性 `\p{Han}` 而非
+范围 `[一-鿿]`——后者在 `en_US.UTF-8` 下是*排序*范围，`grep` 会报
+`Invalid collation character` 并且**一个字符都匹配不到**，从而让每个英文文档都通过。
+
+数值检查的标准是**每个文档的数值 token 多重集完全一致**——整数、小数、百分比、pp 增量、
+指数与带符号值必须逐一复现，只有语言相关的裸小整数计数允许单向调和。
+
+当前状态：守卫自测 7/7，检查器回归 12/12，文档 94/94，语言相关计数调和 194 项。

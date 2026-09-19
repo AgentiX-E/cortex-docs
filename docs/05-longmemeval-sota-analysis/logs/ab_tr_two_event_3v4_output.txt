@@ -1,0 +1,79 @@
+control   3 runs: run_33897743010, run_33897757268, run_33897765140
+treatment 4 runs: run_33897747158, run_33897753536, run_33897760408, run_33897768498
+470 questions in every run
+
+==============================================================================
+PRIMARY  two-event `relative` questions  (n=6)
+==============================================================================
+   gold        control                   treatment                 
+OK  21 days. 2  ['26', '5']               ['21', '25']              
+      How many days ago did I attend a baking class at a local culinary school when I made my frie
+OK  18 days. 1  ['44']                    ['18']                    
+      How many days had passed since I finished reading 'The Seven Husbands of Evelyn Hugo' when I
+OK  24 days. 2  ['59']                    ['24']                    
+      How many days had passed since I started taking ukulele lessons when I decided to take my ac
+BAD 15          ['38']                    ['12']                    
+      How many weeks had passed since I recovered from the flu when I went on my 10th jog outdoors
+OK  19 days ag  ['24']                    ['19']                    
+      How many days ago did I launch my website when I signed a contract with my first client?
+OK  14 days. 1  ['24']                    ['14']                    
+      How many days had passed since I bought my Adidas running shoes when I realized one of the s
+
+  control   0/6
+  treatment 5/6
+  acceptance: treatment >= 5/6  ->  PASS
+
+  within-arm agreement (all 4 runs identical?)
+    control 2=n  treatment 2=n   How many days ago did I attend a baking class at a local culinar
+    control 1=y  treatment 1=y   How many days had passed since I finished reading 'The Seven Hus
+    control 1=y  treatment 1=y   How many days had passed since I started taking ukulele lessons 
+    control 1=y  treatment 1=y   How many weeks had passed since I recovered from the flu when I 
+    control 1=y  treatment 1=y   How many days ago did I launch my website when I signed a contra
+    control 1=y  treatment 1=y   How many days had passed since I bought my Adidas running shoes 
+
+==============================================================================
+SECONDARY  accuracy (noise-floored, descriptive only)
+==============================================================================
+group                    control             treatment    delta   perm p
+ALL          75.93% [75.2-76.6]     75.50% [75.2-75.8]    -0.43    0.343
+TR           72.70% [72.4-73.2]     74.02% [73.2-75.6]    +1.31    0.171
+IE           95.33% [94.7-96.0]     94.67% [93.3-95.3]    -0.67    0.486
+MR           74.10% [71.9-76.0]     72.93% [71.1-75.2]    -1.17    0.514
+KU           75.93% [75.0-76.4]     73.96% [73.6-75.0]    -1.97    0.086
+ABS           0.00% [0.0-0.0]      0.00% [0.0-0.0]    +0.00    1.000
+  (perm p floor with 4+4 runs = 0.014; not an acceptance criterion)
+
+  cross-check: reported vs recomputed TR accuracy
+    control    reported  72.70%   recomputed  47.51%
+    treatment  reported  74.02%   recomputed  50.39%
+    (recomputed counts only exact/numeric hits and defers the rest to a
+     judge it cannot run offline, so it is a LOWER BOUND, not a dispute)
+
+==============================================================================
+GUARDS
+==============================================================================
+G1/G2  bucket-level regressions within TR
+       threshold = max losses over 35 null 4v4 splits of ab_turn
+  single-event relative    n=19   bucket  18 ->  18   +0 -0  (null<=1)   PASS
+  two-event relative       n=6    bucket   0 ->   5   +5 -0  (null<=0)   PASS
+  interval                 n=26   bucket  19 ->  19   +0 -0  (null<=0)   PASS
+  ordering                 n=40   bucket  14 ->  13   +1 -2  (null<=3)   PASS
+  other/eventLookup        n=36   bucket  10 ->   8   +0 -2  (null<=1)   n/a (fix unreachable: returns null before the switch)
+
+G3  capabilities outside TR (structurally unreachable by the fix)
+  IE   n=150  control  95.33%  treatment  94.67%  delta  -0.67pp  own spread  2.00pp  within spread
+  MR   n=121  control  74.10%  treatment  72.93%  delta  -1.17pp  own spread  4.13pp  within spread
+  KU   n=72   control  75.93%  treatment  73.96%  delta  -1.97pp  own spread  1.39pp  exceeds spread (drift, not regression)
+  ABS  n=30   control   0.00%  treatment   0.00%  delta  +0.00pp  own spread  0.00pp  within spread
+
+G4  TR abstention rate
+  control    27/381 = 7.09%
+  treatment  34/508 = 6.69%
+  PASS  (treatment must not abstain more; delta -0.39pp)
+/workspace/analysis/ab_tr_two_event/census.json
+  control runs:   run_33897743010, run_33897757268, run_33897765140
+  treatment runs: run_33897747158, run_33897753536, run_33897760408, run_33897768498
+  per-question: 470 total, 127 TR, 6 two-event relative
+  by capability: {"IE":150,"TR":127,"KU":72,"MR":121}  (ABS has no per-question dump)
+  control run-level accuracy: 76.00, 75.20, 76.60
+  treatment run-level accuracy: 75.60, 75.80, 75.40, 75.20

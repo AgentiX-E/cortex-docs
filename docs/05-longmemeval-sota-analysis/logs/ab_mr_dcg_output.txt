@@ -1,0 +1,19 @@
+control: 4 runs   treatment: 4 runs
+
+=== MR accuracy (per run, /121) ===
+  control   [97, 94, 94, 88]  mean 93.25
+  treatment [93, 87, 85, 89]  mean 88.50  delta -4.75/run
+  exact permutation (increase): 68/70 = 0.9714
+=== MR abstained (per run) ===
+  control   [8, 10, 10, 11]  mean 9.75
+  treatment [11, 10, 12, 10]  mean 10.75  delta +1.00/run
+
+=== GUARDS: per-capability accuracy (pooled) ===
+  IE: control 567/600=94.50%  treatment 574/600=95.67%  delta +1.17pp
+  KU: control 226/288=78.47%  treatment 229/288=79.51%  delta +1.04pp
+  TR: control 385/508=75.79%  treatment 379/508=74.61%  delta -1.18pp
+  ABS: control 120/120=100.00%  treatment 120/120=100.00%  delta +0.00pp
+
+=== OVERALL (descriptive) ===
+  control  : 1671/2000 = 83.55%  per-run [419, 417, 422, 413]
+  treatment: 1656/2000 = 82.80%  per-run [419, 415, 408, 414]

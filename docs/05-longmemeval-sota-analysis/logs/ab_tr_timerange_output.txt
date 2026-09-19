@@ -1,0 +1,22 @@
+=== TR accuracy (mechanism endpoint) ===
+  control   [96, 97, 94, 96]  mean 95.75
+  treatment [94, 94, 94, 94]  mean 94.00
+  delta +-1.75/run; exact permutation (increase): 70/70 = 1.0000
+
+=== OVERALL accuracy ===
+  control   [425, 423, 419, 419]  mean 421.50 (84.30%)
+  treatment [423, 420, 421, 425]  mean 422.25 (84.45%)
+
+=== per-capability guard (control vs treatment, 4-run pooled) ===
+  IE  : correct 562/600->568/600 (93.67%->94.67%)  abst 20->18  delta +1.50/run
+  MR  : correct 387/484->392/484 (79.96%->80.99%)  abst 27->27  delta +1.25/run
+  KU  : correct 235/288->233/288 (81.60%->80.90%)  abst 9->10  delta -0.50/run
+  TR  : correct 383/508->376/508 (75.39%->74.02%)  abst 31->26  delta -1.75/run
+  ABS : correct 119/120->120/120 (99.17%->100.00%)  abst 119->120  delta +0.25/run
+
+=== eventLookup questions (per-question correctness) ===
+  eventLookup TR questions: 20
+  [UP   c0/4 -> t2/4] I mentioned an investment for a competition four weeks ago? What did I
+  [UP   c3/4 -> t4/4] What charity event did I participate in a month ago?
+  eventLookup: 2 up, 0 down, 18 unchanged
+  eventLookup pooled: control 46/80 vs treatment 49/80

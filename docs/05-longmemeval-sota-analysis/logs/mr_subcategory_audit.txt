@@ -1,0 +1,28 @@
+distinct MR wrong questions: 21
+
+=== derivation (1 wrong) ===
+  numeric-diff     1
+
+=== enumeration (20 wrong) ===
+  numeric-diff     14
+  numeric-vs-text  4
+  format-only      1
+  text-diff        1
+
+=== numeric-diff samples (counting/arithmetic errors) ===
+[derivation] pred='2 years and 4 months' gold='1 year and 5 months'  Q=How long have I been working in my current role?
+[enumeration] pred='2' gold='3'  Q=How many items of clothing do I need to pick up or return 
+[enumeration] pred='2' gold='3'  Q=How many plants did I acquire in the last month?
+[enumeration] pred='7' gold='4'  Q=How many times did I bake something in the past two weeks?
+[enumeration] pred='4' gold='5'  Q=How many fitness classes do I attend in a typical week?
+[enumeration] pred='$5,250' gold='$5,850'  Q=How much money did I raise in total through all the charit
+[enumeration] pred='$700' gold='$720'  Q=How much total money did I spend on attending workshops in
+[enumeration] pred='100' gold='99'  Q=How many rare items do I have in total?
+[enumeration] pred='1' gold='2'  Q=How many magazine subscriptions do I currently have?
+[enumeration] pred='2' gold='3'  Q=How many music albums or EPs have I purchased or downloade
+[enumeration] pred='8 years' gold='10 years'  Q=How many years in total did I spend in formal education fr
+[enumeration] pred='300 points' gold='100'  Q=How many points do I need to earn to redeem a free skincar
+[enumeration] pred='12' gold='11 days (or 12 days, if April 15th '  Q=What is the total number of days I spent in Japan and Chic
+[enumeration] pred='2' gold='3'  Q=How many tanks do I currently have, including the one I se
+[enumeration] pred='1' gold='4'  Q=What is the total number of siblings I have?
+(shown 15)

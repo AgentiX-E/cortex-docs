@@ -1,0 +1,35 @@
+=== 1. EXACT PERMUTATION TEST on KU accuracy (co-primary) ===
+  per-run KU correct / 72:
+    control   [52, 55, 56, 54]
+    treatment [57, 57, 58, 57]
+  per-run means : control 54.25  treatment 57.25  delta +3.00 questions/run
+  separation    : min(treatment)=57 vs max(control)=56  -> COMPLETE SEPARATION
+  1 of C(8,4)=70 relabellings are at least this extreme
+  exact one-sided p = 1/70 = 0.0143   two-sided = 0.0286
+  pooled two-proportion z-test (p=0.2311) is DISCARDED as pseudoreplication:
+  4 runs x 72 questions are not 288 independent observations.
+
+  (overall, for reference) control 1644/2000 = 82.20%   treatment 1655/2000 = 82.75%   delta +0.55pp
+  per-run overall: control [408, 414, 411, 411]  treatment [414, 414, 417, 410]
+  within-arm spread: control 6, treatment 7
+
+=== 2. RECOVERY EFFICIENCY ===
+  KU abstentions removed : 31 -> 12   = -19 over 4 runs = 4.75/run
+  KU correct gained      : 217 -> 229   = +12 over 4 runs = 3.00/run
+  efficiency             : 12/19 = 63.2% became CORRECT
+  the other 7 (1.75/run, 36.8%) became WRONG answers
+  an abstention on a non-ABS question already scores 0, so a wrong answer
+  costs nothing extra: those conversions are free.
+
+=== 3. ATTRIBUTION RESIDUAL ===
+  KU abstentions removed, all strata = 31 -> 12 = 19
+    other      27/188  ->   8/188    removed +19
+    previous    4/40   ->   4/40     removed +0
+    current     0/60   ->   0/60     removed +0
+  residual after subtracting every stratum = 0
+  residual 0 => the change is fully explained by the 'other' stratum alone;
+  it does not leak into 'previous' or 'current', which take the bitemporal path.
+
+  cross-check against the report aggregates (independent of the diagnostics dump):
+    control   diagnostics KU abstained = 31   report KU abstained = 31
+    treatment diagnostics KU abstained = 12   report KU abstained = 12

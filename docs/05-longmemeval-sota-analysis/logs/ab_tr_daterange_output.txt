@@ -1,0 +1,31 @@
+=== TR accuracy (primary endpoint) ===
+  control   [94, 96, 96, 100]  mean 96.50  (75.98%)
+  treatment [94, 96, 95, 94]  mean 94.75  (74.61%)
+  delta -1.75/run; exact permutation (increase): 66/70 = 0.9429
+  separation: min(treatment 94) vs max(control 100) -> overlap
+
+=== OVERALL accuracy ===
+  control   [421, 427, 428, 430]  mean 426.50 (85.30%)
+  treatment [423, 426, 420, 422]  mean 422.75 (84.55%)
+
+=== per-capability guard (4-run pooled) ===
+  IE  : correct 571/600->567/600 (95.17%->94.50%)  abst 16->16  delta -1.00/run
+  MR  : correct 393/484->389/484 (81.20%->80.37%)  abst 27->30  delta -1.00/run
+  KU  : correct 236/288->236/288 (81.94%->81.94%)  abst 9->9  delta +0.00/run
+  TR  : correct 386/508->379/508 (75.98%->74.61%)  abst 22->26  delta -1.75/run
+  ABS : correct 120/120->120/120 (100.00%->100.00%)  abst 120->120  delta +0.00/run
+
+=== TR sub-kind attribution ===
+  eventLookup : 20 questions, control 48/80, treatment 46/80, delta -2
+  relative    : 25 questions, control 88/100, treatment 88/100, delta +0
+  interval    : 26 questions, control 92/104, treatment 91/104, delta -1
+  ordering    : 40 questions, control 120/160, treatment 117/160, delta -3
+  other       : 16 questions, control 38/64, treatment 37/64, delta -1
+
+=== eventLookup per-question movement ===
+  [DOWN c4/4 -> t0/4] I mentioned participating in a sports event two weeks ago. What was the eve
+  [DOWN c4/4 -> t0/4] What was the the life event of one of my relatives that I participated in a
+  [UP   c3/4 -> t4/4] I mentioned an investment for a competition four weeks ago? What did I buy?
+  [UP   c1/4 -> t2/4] What was the airline that I flied with on Valentine's day?
+  [UP   c0/4 -> t4/4] I mentioned cooking something for my friend a couple of days ago. What was 
+  eventLookup: 3 up, 2 down

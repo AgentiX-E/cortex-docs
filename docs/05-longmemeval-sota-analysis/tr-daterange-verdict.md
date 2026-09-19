@@ -1,6 +1,6 @@
 # TR 日期范围召回实验臂 A/B 判决 —— 拒绝（负面结果）
 
-**迭代：** P2 日期范围召回通道（Hindsight Tempr 第 2 步）
+**迭代：** P2 日期范围召回通道（Hindsight Tempr step 2）
 **提交：** `4a7c7ce`
 **读者：** deepseek-v4-flash，非思考
 **设计：** 4v4 交错、同瞬、精确置换检验

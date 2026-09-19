@@ -1,0 +1,21 @@
+TR duration wrong questions (distinct): 14
+  with in-turn relative-time phrase: 11
+  without: 3
+
+=== with relative-time phrase ===
+  pred='collaborated with an influencer who promoted my product to her 10,000 followers' gold='I signed a contract with my first client.' rels=['last week', 'three weeks ago', 'two weeks ago']  Q=What was the significant buisiness milestone I mentioned four wee
+  pred='friend' gold='No, you did not visit with a friend.' rels=['next month', 'three weeks ago', 'yesterday']  Q=I mentioned visiting a museum two months ago. Did I visit with a 
+  pred='37' gold='38 days. 39 days (including the last day) is ' rels=['last month', 'next month']  Q=How many days passed between the day I received feedback about my
+  pred='chicken soup' gold='a chocolate cake' rels=['last week', 'yesterday']  Q=I mentioned cooking something for my friend a couple of days ago.
+  pred='0 months ago' gold='Five months ago' rels=['last month', 'two weeks ago']  Q=How many months ago did I book the Airbnb in San Francisco?
+  pred='1 month' gold='Two months' rels=['last month', 'three weeks ago']  Q=How long had I been bird watching when I attended the bird watchi
+  pred='painting' gold='I got my own set of sculpting tools.' rels=['last week', 'next month']  Q=I mentioned an investment for a competition four weeks ago? What 
+  pred='25' gold='21 days. 22 days (including the last day) is ' rels=['yesterday']  Q=How many days ago did I attend a baking class at a local culinary
+  pred='attended a gardening workshop' gold='planting 12 new tomato saplings' rels=['next month']  Q=What gardening-related activity did I do two weeks ago?
+  pred='Museum of Modern Art' gold='The Metropolitan Museum of Art.' rels=['a week before']  Q=I mentioned that I participated in an art-related event two weeks
+  pred='4 weeks' gold='one week' rels=['three weeks ago']  Q=How many weeks have I been accepted into the exchange program whe
+
+=== without relative-time phrase (other root causes) ===
+  pred='0 weeks' gold="2 weeks for 'The Nightingale', 4 weeks for 'S"  Q=How many weeks in total do I spent on reading 'The Nightingale' a
+  pred='6 weeks' gold='3'  Q=How many weeks have I been taking sculpting classes when I invest
+  pred='12' gold='15'  Q=How many weeks had passed since I recovered from the flu when I w

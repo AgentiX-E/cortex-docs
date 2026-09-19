@@ -1,0 +1,39 @@
+control: 4 runs   treatment: 4 runs
+
+MOVED questions (enumeration -> derivation): 5
+  - How long have I been working in my current role?
+  - How many minutes did I exceed my target time by in the marathon?
+  - How many years older am I than when I graduated from college?
+  - How many years older is my grandma than me?
+  - How many years will I be when my friend Rachel gets married?
+
+=== PRIMARY: MR abstention on the moved set ===
+  control   run_33953397813: 3/5 abstained, 0/5 correct
+  control   run_33953614463: 3/5 abstained, 0/5 correct
+  control   run_33953620192: 3/5 abstained, 0/5 correct
+  control   run_33953628764: 4/5 abstained, 0/5 correct
+  treatment run_33953612481: 1/5 abstained, 0/5 correct
+  treatment run_33953616976: 1/5 abstained, 0/5 correct
+  treatment run_33953625284: 1/5 abstained, 0/5 correct
+  treatment run_33953631828: 1/5 abstained, 0/5 correct
+
+  control   abst/run [3, 3, 3, 4]  (total moved = 5 questions)
+  treatment abst/run [1, 1, 1, 1]
+  control   correct/run [0, 0, 0, 0]
+  treatment correct/run [0, 0, 0, 0]
+  abstention rate: control 3.25/run -> treatment 1.00/run  delta -2.25/run
+  separation: min(control)=3 vs max(treatment)=1  -> COMPLETE
+  exact permutation (one-sided, decrease): 1/70 = 0.0143
+
+=== CO-PRIMARY: MR correctness on the moved set ===
+  control   correct/run [0, 0, 0, 0]  mean 0.00
+  treatment correct/run [0, 0, 0, 0]  mean 0.00  delta +0.00/run
+
+=== GUARDS: per-capability abstention (pooled across 4 runs) ===
+  IE: control 14/600=2.33%  treatment 13/600=2.17%  delta -0.17pp
+  KU: control 10/288=3.47%  treatment 8/288=2.78%  delta -0.69pp
+  TR: control 35/508=6.89%  treatment 36/508=7.09%  delta +0.20pp
+
+=== OVERALL (descriptive, noise-floored) ===
+  control  : 1652/2000 = 82.60%   per-run [414, 414, 412, 412]
+  treatment: 1674/2000 = 83.70%   per-run [419, 419, 416, 420]

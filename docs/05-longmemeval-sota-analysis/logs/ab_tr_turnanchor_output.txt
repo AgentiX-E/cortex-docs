@@ -1,0 +1,33 @@
+=== TR accuracy (primary mechanism endpoint) ===
+  control   [94, 96, 95, 95]  mean 95.00  (74.80%)
+  treatment [93, 95, 95, 96]  mean 94.75  (74.61%)
+  delta -0.25/run; exact permutation (increase): 52/70 = 0.7429
+  separation: min(treatment 93) vs max(control 96) -> overlap
+
+=== OVERALL accuracy ===
+  control   [423, 422, 421, 422]  mean 422.00 (84.40%)
+  treatment [421, 422, 421, 428]  mean 423.00 (84.60%)
+
+=== per-capability guard (4-run pooled) ===
+  IE  : correct 563/600->566/600 (93.83%->94.33%)  abst 21->18  delta +0.75/run
+  MR  : correct 392/484->389/484 (80.99%->80.37%)  abst 29->28  delta -0.75/run
+  KU  : correct 234/288->239/288 (81.25%->82.99%)  abst 8->10  delta +1.25/run
+  TR  : correct 380/508->379/508 (74.80%->74.61%)  abst 26->25  delta -0.25/run
+  ABS : correct 119/120->119/120 (99.17%->99.17%)  abst 119->119  delta +0.00/run
+
+=== TR sub-kind attribution (turnDate affects deterministic kinds only) ===
+  relative    : 25 questions, control 83/100, treatment 88/100, delta +5  [YES (deterministic path)]
+  interval    : 26 questions, control 95/104, treatment 92/104, delta -3  [YES (deterministic path)]
+  ordering    : 40 questions, control 118/160, treatment 115/160, delta -3  [YES (deterministic path)]
+  eventLookup : 20 questions, control 48/80, treatment 48/80, delta +0  [no]
+  other       : 16 questions, control 36/64, treatment 36/64, delta +0  [no]
+
+=== deterministic-kind per-question movement ===
+  [DOWN c4/4 -> t0/4] How long had I been bird watching when I attended the bird watching worksho
+  [DOWN c1/4 -> t0/4] What is the order of the concerts and musical events I attended in the past
+  [DOWN c2/4 -> t1/4] Which event happened first, the purchase of the coffee maker or the malfunc
+  [DOWN c4/4 -> t3/4] Which task did I complete first, fixing the fence or trimming the goats' ho
+  [UP   c3/4 -> t4/4] How long had I been watching stand-up comedy specials regularly when I atte
+  [UP   c0/4 -> t1/4] How many days ago did I attend a baking class at a local culinary school wh
+  [UP   c0/4 -> t4/4] How many weeks ago did I attend the friends and family sale at Nordstrom?
+  deterministic kinds: 3 up, 4 down

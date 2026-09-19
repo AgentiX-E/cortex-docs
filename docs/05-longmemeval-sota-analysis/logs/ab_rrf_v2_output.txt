@@ -1,0 +1,26 @@
+=== IE per run (correct/abstained/total) ===
+  control  : correct [142, 143, 143, 142]  abst [3, 3, 3, 4]  acc 95.00%
+  treatment: correct [143, 138, 143, 143]  abst [4, 5, 4, 4]  acc 94.50%
+
+=== MR per run (correct/abstained/total) ===
+  control  : correct [91, 91, 90, 92]  abst [9, 12, 12, 10]  acc 75.21%
+  treatment: correct [97, 95, 96, 97]  abst [9, 8, 8, 9]  acc 79.55%
+
+=== KU per run (correct/abstained/total) ===
+  control  : correct [58, 56, 58, 59]  abst [3, 3, 2, 2]  acc 80.21%
+  treatment: correct [58, 57, 60, 59]  abst [3, 3, 2, 2]  acc 81.25%
+
+=== TR per run (correct/abstained/total) ===
+  control  : correct [94, 96, 95, 92]  abst [10, 7, 8, 8]  acc 74.21%
+  treatment: correct [94, 93, 94, 92]  abst [8, 7, 7, 7]  acc 73.43%
+
+=== ABS per run (correct/abstained/total) ===
+  control  : correct [30, 30, 30, 30]  abst [30, 30, 30, 30]  acc 100.00%
+  treatment: correct [30, 30, 30, 30]  abst [30, 30, 30, 30]  acc 100.00%
+
+=== OVERALL ===
+  control  : 1662/2000 = 83.10%
+  treatment: 1679/2000 = 83.95%
+
+MR: delta +5.25/run; exact permutation (increase) 1/70 = 0.0143; control [91, 91, 90, 92] vs treatment [97, 95, 96, 97] -> COMPLETE
+TR: delta -1.00/run; exact permutation (increase) 63/70 = 0.9000; control [94, 96, 95, 92] vs treatment [94, 93, 94, 92] -> REGRESSION

@@ -1,0 +1,26 @@
+=== CO-PRIMARY: MR accuracy (per run, out of 121) ===
+  control   [87, 89, 90, 88]  mean 88.50
+  treatment [90, 93, 91, 90]  mean 91.00  delta +2.50/run
+  exact permutation (one-sided, increase): 3/70 = 0.0429
+  separation: min(treatment)=90 vs max(control)=90  -> overlap at boundary (min treat == max control)
+
+=== MR abstention (per run) ===
+  control   [15, 12, 12, 14]  mean 13.25
+  treatment [11, 9, 12, 10]  mean 10.50
+  abstentions removed: 11 over 4 runs = 2.75/run
+  correct gained    : 10 over 4 runs = 2.50/run
+  recovery efficiency: 10/11 = 90.9%
+
+=== moved-set per-question (treatment, 4 runs each) ===
+  [4/4 correct, 0/4 abstained, 4/4 answered] 'How long have I been working in my current role?'  GOLD='1 year and 5 months'
+  [4/4 correct, 0/4 abstained, 4/4 answered] 'How many years older is my grandma than me?'  GOLD='43'
+  [4/4 correct, 0/4 abstained, 4/4 answered] 'How many years older am I than when I graduated from college?'  GOLD='7'
+  [4/4 correct, 0/4 abstained, 4/4 answered] 'How many minutes did I exceed my target time by in the marathon?'  GOLD='12'
+  [0/4 correct, 4/4 abstained, 0/4 answered] 'How many years will I be when my friend Rachel gets married?'  GOLD='33'
+
+=== moved-set per-question (control, 4 runs each, for contrast) ===
+  [0/4 correct, 4/4 abstained, 0/4 answered] 'How long have I been working in my current role?'
+  [4/4 correct, 0/4 abstained, 4/4 answered] 'How many minutes did I exceed my target time by in the marathon?'
+  [3/4 correct, 1/4 abstained, 3/4 answered] 'How many years older am I than when I graduated from college?'
+  [0/4 correct, 4/4 abstained, 0/4 answered] 'How many years older is my grandma than me?'
+  [0/4 correct, 4/4 abstained, 0/4 answered] 'How many years will I be when my friend Rachel gets married?'
