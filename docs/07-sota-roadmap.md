@@ -166,6 +166,23 @@ cortex-core  ←  cortex-memory  →  cortex-node
 `A4` 覆盖率门禁已同时落地，四条维度（statements / branches / functions / lines）
 在**全部四个包**均设为 95% 硬门禁，并已验证违反时进程退出码为 1。
 
+#### B1 的 A/B 阻塞已收窄到单一 secret（2026-09-20 实测）
+
+原记录为「需 rerank provider 凭据」，但**未区分三种在 CI 里长得一样的失败**：适配器缺陷、
+网络不通、缺 credential。三者只有第一种是代码问题，而混为一谈会让代码缺陷被当作
+「只是缺 key」长期搁置。已分开实测：
+
+| 检查项 | 方法 | 结果 |
+|---|---|---|
+| provider 连通性 | 直连 provider 根路径 | Cohere **403**、Voyage **404**——均可达（`api.jina.ai` TLS 被截断，不可用） |
+| 适配器传输/报文 | 以**无效 key** 调真实 `/rerank` | Cohere `403 Forbidden`、Voyage `400 Bad Request`——传输、路径、请求体、鉴权头**全部正确**，错误被正确上抛 |
+| 工厂状态机 | 直接调 `createRerankerFromEnv` | 未设/`off` → `undefined`；`on` 无 key → **抛错**；`on` + key → `RerankScoreFn` |
+
+**结论**：B1 的代码路径**已具备在 CI 中运行的条件**，唯一缺的是 `RERANK_API_KEY`
+org secret。workflow 的 5 个透传变量已就位，**加 secret 后无需改任何代码即可派发 A/B**。
+
+**可执行性**：这是本项**唯一**剩余的前置件，且是**运维动作而非工程动作**。
+
 ### B2 — 候选池宽度（测量仪器已落地并已实测）
 
 | 项 | 内容 |

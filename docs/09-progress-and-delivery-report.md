@@ -23,7 +23,7 @@
 | **第三个 BUG：报告无法从 JSON 重读** | **已发现、已修复、已加 6 测试** | `cortex@c17cf88`；见 §3.9 |
 | **CI 可跑性** | **已确认：GitHub Runner 可用** | PAT 具备 `workflow_dispatch` 权限；org secrets 齐备 |
 | **产物取出通路** | **已恢复并固化为可复用配方** | 见 §2.2：artifact/blob 主机需 pin 真实 IP |
-| B1 A/B | **未运行** | 需 rerank provider 凭据；透传已接好 |
+| B1 A/B | **未运行，但阻塞已收窄到一个 secret** | 代码/连通性/工厂均已实测通过；仅缺 `RERANK_API_KEY`。见 §4.4 |
 | A2 全量重测 | **在途** | run `35510619912`，`LIMIT=0` + `DIAGNOSTICS_LIMIT=0` |
 | A6 阅读器矩阵 | 未运行 | 需四个阅读器凭据 |
 
@@ -349,6 +349,26 @@ TypeError: Cannot read properties of null (reading 'toExponential')
 四个包中有三个根本没有 vitest config，所以「≥95% 每维度」一直是**可以被静默违反的约定**。
 现已全部加上 `thresholds`，并**实测验证**违反时进程退出码为 1。
 
+### 4.4 B1 阻塞已收窄到一个 secret（本轮新增实测）
+
+上一轮把 B1 A/B 记为「需 rerank provider 凭据」，但**没有区分三种可能**：适配器坏了、
+网络不通、还是缺 key。这三者在 CI 里都表现为「A/B 失败」，而**只有一种是代码缺陷**。
+本轮把三者分开实测：
+
+| 检查 | 方法 | 结果 |
+|---|---|---|
+| provider 连通性 | 沙箱直连 `api.cohere.com` / `api.voyageai.com` | **403 / 404 —— 均可达**（`api.jina.ai` 不可达，TLS 被截断） |
+| 适配器传输与报文 | 用**无效 key** 打真实 `/rerank` | Cohere `403 Forbidden`、Voyage `400 Bad Request`——**传输、URL 路径、请求体形态、鉴权头全部正确**，错误被正确上抛 |
+| 工厂四种状态 | 直接调 `createRerankerFromEnv` | 未设/`off` → `undefined`（阶段关闭）；`on` + 无 key → **抛错**；`on` + key → 返回 `RerankScoreFn` |
+
+**结论**：B1 的代码路径**已可在 CI 中工作**，唯一缺的是 `RERANK_API_KEY` org secret。
+workflow 的 5 个透传变量（`CORTEX_RERANK` / `RERANK_CANDIDATE_POOL` / `RERANK_BASE_URL` /
+`RERANK_MODEL` / `RERANK_API_KEY`）已就位，**加 secret 后无需改任何代码即可派发 A/B**。
+
+> **为什么这个区分重要**：如果不区分，「B1 因缺 key 未运行」与「B1 因代码缺陷未运行」
+> 在文档里长得一模一样，而后者会被误当作前者而长期搁置。**把 blocker 收窄到它真正
+> 的粒度，是让下一次派发可执行的前提。**
+
 ---
 
 ## 5. 本轮测试与验收证据
@@ -386,7 +406,7 @@ TypeError: Cannot read properties of null (reading 'toExponential')
 |---|---|---|---|
 | B2 实测 | 「阻塞于 provider 凭据」 | **已运行** | 上一轮的阻塞判断错误；凭据一直就绪 |
 | B2 产出 | 池宽决策数字 | **决策已定：不加宽** | ceiling 93.02% 平坦，gain 在 k≤10 内衰减完 |
-| B1 A/B | 未运行 | **仍未运行** | 需 rerank provider 凭据（org 仅有 DeepSeek/Zhipu/HF） |
+| B1 A/B | 未运行 | **仍未运行，阻塞已收窄** | 代码/连通性/工厂已实测通过（§4.4）；仅缺 `RERANK_API_KEY` |
 | 守卫行为 | 无此计划项 | **新增修复** | 靠运行发现的缺陷，计划阶段不可预见 |
 | 覆盖度可见性 | 无此计划项 | **新增修复** | 验证第一次修复时发现的缺陷 |
 | 报告可重读性 | 无此计划项 | **新增修复** | 重读真实归档产物时发现的缺陷 |
