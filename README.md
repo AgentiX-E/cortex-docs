@@ -14,6 +14,7 @@
 | [06 代码与文档一致性审计](docs/06-code-docs-consistency-audit.md) | 代码真实状态核对：哪些能力被验证、哪些未接入评测路径、偏差清单与证据 |
 | [07 SOTA 推进计划](docs/07-sota-roadmap.md) | 可执行的超车路线：优先序、前置契约、验收判据与消融设计（v2.0） |
 | [08 阅读器判断再研究](docs/08-reader-parity-analysis.md) | 证伪「阅读器是约束」：架构归因 4.7 倍于阅读器归因，附可复现脚本 |
+| [09 进度追踪报告](docs/09-progress-and-delivery-report.md) | 每轮迭代的交付、验收证据、发现的 BUG、对计划的修正与诚实差异清单 |
 
 ## 约定
 
