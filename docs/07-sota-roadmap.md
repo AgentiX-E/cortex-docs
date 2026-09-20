@@ -78,15 +78,21 @@ cortex-core  ←  cortex-memory  →  cortex-node
 
 | # | 举措 | 预期增益 | 依据 | 优先级 |
 |---|---|---|---|---|
-| B1 | **交叉编码器重排**（`bge-reranker-v2-m3` 或 Cohere rerank-v3.5） | **+1.5–3.0pp** | cortex **完全没有重排**；Exabase M-1 第三阶段即「一致性重排」 | **P0** |
-| B2 | **查询分解深度提升**（每查询 top-3 → 多通道并行，分维度检索） | **+1.5–3.0pp** | ASMR 用 **3 个搜索 Agent**（事实 / 语境 / 时间线）；M-1 用查询重写 + 多路并行 | **P0** |
-| B3 | **专用抽取通道**（按 6 维度分通道抽取，替代单一通用抽取） | +1.0–2.0pp | ASMR「专业化分工胜过通用模型」；M-1 多维抽取 | **P1** |
+| B1 | **交叉编码器重排**（`bge-reranker-v2-m3` 或 Cohere rerank-v3.5） | **+1.5–3.0pp** | cortex **完全没有重排**（全仓 `rerank` 零命中）；Exabase M-1 第三阶段即「一致性重排」 | **P0** |
+| B2 | **召回广度不足**：`DEFAULT_QUERY_EXPANSION_TOP_K = 3` 导致 `retrieveByQueries` 每查询只取 3 个候选进入 RRF | 待测（作为 B1 的输入池消融） | **修正**：管线已有 4 条召回通道（question 质心 / LLM 扩展短语 / 词汇变体 / turn-level），并非「单通道浅检索」。真正的窄口是**每查询 top-3 的候选池**，而重排正需要宽池 | P1（随 B1 一起做） |
+| B3 | **专用抽取通道**（按 6 维度分通道抽取，替代单一通用抽取） | +1.0–2.0pp | ASMR「专业化分工胜过通用模型」；M-1 多维抽取。**现状**：已有 temporal events 与 bitemporal facts 两套专用 schema，属部分具备 | **P1** |
 | B4 | **时序链解析 + 时间增强检索**（面向 TR） | +1.0–2.0pp（TR） | M-1 temporal chain resolution；HydraDB TR 90.97% | **P1** |
 | B5 | **上下文注入形态**（结构化/有序，替代截断 JSON） | +0.5–1.5pp | M-1「内部一致且顺序正确」；当前有 2000 char 截断 | P1 |
 | B6 | 多路答案 + 聚合裁决 | +0.5–1.0pp | ASMR 8 专家并行 98.6% / 12 Agent 投票 97.2%。**成本 ×N，需标注基准口径偏差** | P2 |
 
-> **B1 与 B2 的排序**：两者都纯检索侧、可 TDD。B1 先做，因为重排是其他召回扩展的
-> **放大器**——顺序反了会把噪声一起放大（`p3b-graph-verdict.md` 的教训）。
+> **B1 与 B2 的排序与耦合**：两者都纯检索侧、可 TDD。B1 先做，因为重排是其他召回扩展的
+> **放大器**——顺序反了会把噪声一起放大（`p3b-graph-verdict.md` 的教训）。且二者物理耦合：
+> 重排的收益上限由**候选池宽度**决定，所以 B1 的实现必须把「送入重排的池宽」做成显式参数，
+> 使 B2 成为 B1 的输入池消融，而不是另起一个特性。
+>
+> **对 v1.0 的自我修正**：v1.0 把 B2 描述为「每查询 top-3 → 多通道并行」，暗示管线只有单通道。
+> 读码后确认该描述不准确——`retrieve()` 已经融合了 4 条通道。此处保留修正痕迹，
+> 因为「先读码再下判断」正是本计划要求的方法（见 §4 预注册纪律）。
 
 ### C 级：阅读器（目标确认，而非冲高）
 
@@ -128,15 +134,48 @@ cortex-core  ←  cortex-memory  →  cortex-node
 **同一字段被两处读取**——RRF 改了排序，而单会话路径把 `hits[0].score` 读作弃权置信度。
 **重排同样会改排序，因此必须审计 `hits[0].score` 的所有读取点。** 这是 B1 最主要的失败模式。
 
+#### B1 实施记录（2026-09-20）
+
+已按上表契约落地，实现细节与**读码后修正的认知**如下：
+
+| 层 | 落点 | 内容 |
+|---|---|---|
+| 纯算法 | `cortex-core/src/retrieval/rerank.ts` | `rerankHits` / `fuseRerank`：排序、平局稳定、去重、受保护前缀、全部降级路径。零 I/O。**100% 四维度覆盖** |
+| 远程适配 | `cortex-llm/src/rerank/rerank.ts` | `OpenAICompatibleReranker`：`/rerank` 约定（Cohere / Jina / Voyage / 自建 bge 代理）。**100% 四维度覆盖** |
+| 本地适配 | 同上 | `CrossEncoderReranker`：transformers.js 序列分类，**离线兜底**（无 provider、无 key、无网络） |
+| 工厂 | `cortex-eval/src/rerank-factory.ts` | `createRerankerFromEnv`：默认**关闭**；开启但缺 key 时**抛错**而非静默降级 |
+| 接线 | `natural-language-memory.ts` | `applyRerank()` 共享助手，`retrieveTurns` 与 `retrieveSessionsForQuestion` **两条路径均接线** |
+
+**读码后必须修正的三点**（v1.0 计划中的描述不准确）：
+
+1. **管线不是「单通道浅检索」。** `retrieve()` 已融合 4 条召回通道：question 质心、
+   LLM 扩展短语、确定性词汇变体、turn-level 召回，且由 RRF 融合。B2 的原始表述有误。
+
+2. **真正的窄口是「候选池宽度」而非「通道数」。** `retrieveTopKByQueries` 在
+   **内部**就 `slice(0, topK)`，因此重排在默认配置下**只能对 top-K 做排列组合，
+   无法把余弦排名第 20 的答案捞回来**。这条限制已固化为测试
+   （`cannot promote beyond the pool when the pool is left at topK`），
+   并通过 `rerankCandidatePool` 选项解除。
+
+3. **弃权信号已经修好了。** `maxHitScore()` 已取代 `hits[0].score` 作为弃权置信度
+   （见源码注释），因此重排对弃权是**顺序无关**的。v1.0 计划把 RRF 回归列为
+   「B1 最主要的失败模式」属于过度预警——该风险在 RRF 集成时已被一并修复。
+   `rerankProtectedHead` 仍保留，用于需要固定首条证据的其他读取方。
+
+**测试覆盖**：新增 61 个测试（core 23 / llm 28 / eval 10），合计 **1048 个测试全绿**。
+`A4` 覆盖率门禁已同时落地，四条维度（statements / branches / functions / lines）
+在**全部四个包**均设为 95% 硬门禁，并已验证违反时进程退出码为 1。
+
 ### B2 — 查询分解深度
 
 | 项 | 内容 |
 |---|---|
-| 现状 | `queryExpansion` 存在，但 `DEFAULT_QUERY_EXPANSION_TOP_K = 3`，每查询仅取 3 |
-| 目标 | 多通道并行检索：按**事实 / 语境线索 / 时间线**分工，各通道独立 top-K 后再融合 |
-| 依据 | ASMR 三个搜索 Agent；M-1 查询重写 + 多路并行 |
+| **修正现状** | 管线已有 4 条召回通道（见上），**并非**「单通道、每查询仅 3 条」。真正的窄口是 `retrieveTopKByQueries` 内部的 `slice(0, topK)` 截断，即**候选池宽度** |
+| 目标 | (a) `rerankCandidatePool` 取 topK 的 3–10 倍，让重排有池可选；(b) 若仍不足，再考虑按事实 / 语境 / 时间线分工的多通道 |
+| 依据 | ASMR 三个搜索 Agent；M-1 查询重写 + 多路并行；两者都**先取宽池再收窄** |
 | 验收 | MR 分项 +≥1.5pp；且**不是**靠牺牲 IE 换来的 |
 | 反证条件 | IE 弃权率上升超过基线噪声底（3–4/轮）即回滚 |
+| 前置 | **B1 必须先接线**，否则加宽池只是把更多噪声送进上下文 |
 
 > **注意历史**：查询扩展已被改写过至少两次并被证伪（见 `natural-language-memory.ts`
 > 内注释引用的 `f39e7f9`）。**第三次尝试必须换机制（多通道分工），而不是改提示词措辞。**
