@@ -12,7 +12,8 @@
 | [04 知识字典](docs/04-knowledge-dictionary.md) | 心智模型、算法、数学工具、工程概念、参考文献、自学路径 |
 | [05 LongMemEval-S SOTA 分析记录](docs/05-longmemeval-sota-analysis/00-ANALYSIS-README.md) | 94 篇验收判决、根因审计与计划，附可复现脚本索引 |
 | [06 代码与文档一致性审计](docs/06-code-docs-consistency-audit.md) | 代码真实状态核对：哪些能力被验证、哪些未接入评测路径、偏差清单与证据 |
-| [07 SOTA 推进计划](docs/07-sota-roadmap.md) | 可执行的超车路线：优先序、前置契约、验收判据与消融设计 |
+| [07 SOTA 推进计划](docs/07-sota-roadmap.md) | 可执行的超车路线：优先序、前置契约、验收判据与消融设计（v2.0） |
+| [08 阅读器判断再研究](docs/08-reader-parity-analysis.md) | 证伪「阅读器是约束」：架构归因 4.7 倍于阅读器归因，附可复现脚本 |
 
 ## 约定
 
