@@ -1428,7 +1428,7 @@ summary 同时接受两种形状：旧产物是裸数组，而
 `considered` 与 `excluded[]` 不是为了测量自身而加的诊断——
 它们是「一个可被核对数字」与「一个只能被信任的数字」之间的差别。
 
-## 4. B1 与 A4（上一轮交付，本轮无变更）
+## 4. B1 与 A4（B1 本轮由「一个 secret」更正为三个阻塞并全部闭环）
 
 ### 4.1 读码后修正的三条计划前提
 
@@ -1454,25 +1454,95 @@ summary 同时接受两种形状：旧产物是裸数组，而
 四个包中有三个根本没有 vitest config，所以「≥95% 每维度」一直是**可以被静默违反的约定**。
 现已全部加上 `thresholds`，并**实测验证**违反时进程退出码为 1。
 
-### 4.4 B1 阻塞已收窄到一个 secret（本轮新增实测）
+### 4.4 B1 阻塞：上一轮的「已收窄到一个 secret」是**错的**（本轮更正）
 
-上一轮把 B1 A/B 记为「需 rerank provider 凭据」，但**没有区分三种可能**：适配器坏了、
-网络不通、还是缺 key。这三者在 CI 里都表现为「A/B 失败」，而**只有一种是代码缺陷**。
-本轮把三者分开实测：
+上一版这一节写的是：*「B1 的代码路径已可在 CI 中工作，唯一缺的是 `RERANK_API_KEY`
+org secret。workflow 的 5 个透传变量已就位，加 secret 后无需改任何代码即可派发 A/B。」*
 
-| 检查 | 方法 | 结果 |
+**这句话有两处不成立，其中一处是纯粹的文档-代码不一致。** 触发更正的是一次追问：
+*「我为什么需要 `RERANK_API_KEY` 的组织 secret？rerank 用 LLM 还是 embedding？如果是
+LLM，为什么不能复用现有通用 llmProvider 和 DeepSeek 的 secret？」*
+
+为了回答它，我重新实测了 workflow，结果是：
+
+```
+$ grep -c "RERANK" .github/workflows/benchmark.yml
+0
+```
+
+**那 5 个透传变量一个都不存在。** 加 secret 也进不了 bench 进程——`env:` 块里没有它们。
+上一版的「已就位」是未经实测的转述，且被写进了 roadmap 供人据此规划派发。
+
+#### 4.4.1 三个独立阻塞
+
+| # | 阻塞 | 实测证据 | 性质 | 上一版是否记录 |
+|---|---|---|---|---|
+| 1 | 缺 `RERANK_API_KEY` | org secret 不存在 | 运维 | ✅ 记录了 |
+| 2 | workflow **零**透传 | `grep -c RERANK …` = **0** | **工程** | ❌ 反向记录了 |
+| 3 | **无任何 A/B arm 拿到 reranker** | `runner.ts` 的 8 个消融函数签名均无 reranker 选项；`reranker` 只传给主基准 | **工程** | ❌ 未察觉 |
+
+第 3 项是最容易被漏掉、后果最重的一项：即便 1、2 都解决，也**没有任何一条路径能产出
+预注册验收所需的「MR 与 TR 分项配对 A/B」**——因为**不存在一个构造了「开 rerank」
+系统的 arm**。B1 的验收条件在代码层面**无法被满足**，这与有没有 secret 无关。
+
+#### 4.4.2 一个技术更正：rerank 既不是 LLM 也不是 embedding
+
+| | 编码方式 | 输出 |
 |---|---|---|
-| provider 连通性 | 沙箱直连 `api.cohere.com` / `api.voyageai.com` | **403 / 404 —— 均可达**（`api.jina.ai` 不可达，TLS 被截断） |
-| 适配器传输与报文 | 用**无效 key** 打真实 `/rerank` | Cohere `403 Forbidden`、Voyage `400 Bad Request`——**传输、URL 路径、请求体形态、鉴权头全部正确**，错误被正确上抛 |
-| 工厂四种状态 | 直接调 `createRerankerFromEnv` | 未设/`off` → `undefined`（阶段关闭）；`on` + 无 key → **抛错**；`on` + key → 返回 `RerankScoreFn` |
+| **embedding**（bi-encoder） | question / passage **各自独立**编码 | 向量，靠余弦比较——**无法表达交互** |
+| **rerank**（cross-encoder） | `question</s></s>passage` **拼成单序列联合**打分 | **相关性标量** |
+| **LLM** | 自回归 | token 序列 |
 
-**结论**：B1 的代码路径**已可在 CI 中工作**，唯一缺的是 `RERANK_API_KEY` org secret。
-workflow 的 5 个透传变量（`CORTEX_RERANK` / `RERANK_CANDIDATE_POOL` / `RERANK_BASE_URL` /
-`RERANK_MODEL` / `RERANK_API_KEY`）已就位，**加 secret 后无需改任何代码即可派发 A/B**。
+DeepSeek **未发布**任何名为 Reranker 的精排模型，也**不提供**独立 `/rerank` 接口
+（由其 endpoint 清单 + 检索双重确认；早先用无效 token 探 `/v1/rerank` 得 401 的探测
+**无效**，因为对一条肯定不存在的路由同样得 401——先鉴权后路由，401 对「路由是否存在」
+零信息量，已废弃该方法）。
 
-> **为什么这个区分重要**：如果不区分，「B1 因缺 key 未运行」与「B1 因代码缺陷未运行」
-> 在文档里长得一模一样，而后者会被误当作前者而长期搁置。**把 blocker 收窄到它真正
-> 的粒度，是让下一次派发可执行的前提。**
+**但这不是阻塞。** rerank 的本质是一个**打分函数**，不是一套协议。把 DeepSeek 接成
+**LLM caller** 即可复用其 secret——这正是 `LLMReranker` 的由来，也是用户那个问题的
+直接答案：**可以复用，且已实现。**
+
+#### 4.4.3 闭环清单（**零新增 secret**）
+
+| 修复 | 落点 | 消除了哪个阻塞 |
+|---|---|---|
+| 新增 `runRerankAblation`：同一 run 内构造 baseline/feature 双臂、共享 answer cache、复用 McNemar + Wilson，输出 MR / TR 分项 + `abstentionShift` | `cortex-eval/src/runner.ts` | #3 |
+| 新增 `LLMReranker`：listwise 打分（每 question 一次 complete，返回 JSON 分数组），复用现有 `DEEPSEEK_API_KEY` | `cortex-llm/src/rerank/llm-reranker.ts` | #1 |
+| 新增 `CORTEX_RERANK_PROVIDER=local`：离线 cross-encoder，**零凭据** | `cortex-eval/src/rerank-factory.ts` | #1 |
+| workflow 补齐 4 个 input 与对应 `env:` 透传 | `.github/workflows/benchmark.yml` | #2 |
+| `RERANK_PROTECTED_HEAD` 接入 bench（此前不可达） | `bench/run.ts` | —（弃权混淆控制） |
+| `OpenAICompatibleReranker` 改走 `retryableFetch` | `cortex-llm/src/rerank/rerank.ts` | —（一致性缺口） |
+
+#### 4.4.4 「离线兜底存在」这条验收项**名不副实**（同类缺陷第三次命中）
+
+B1 文档 §5 验收表把「Provider-agnostic; offline fallback exists」标为 **met**，依据是
+`CrossEncoderReranker` 已实现、已导出、有测试。三条都为真，**结论仍然为假**：
+`createRerankerFromEnv` 全文只有**一条**返回路径 `new OpenAICompatibleReranker(...)`，
+`CrossEncoderReranker` 全仓只被 `index.ts` 和它自己的测试引用；`@xenova/transformers`
+**不在任何 `package.json`**。
+
+即：这个兜底**存在、有测试、且不可达**。与本报告 §3 反复出现的缺陷类是同一个——
+「树里有，但没有一条会运行的路径」。现已变为真实分支，并补了一条**驱动闭包到首次打分**
+的测试（而非只断言「返回了一个函数」）。
+
+#### 4.4.5 一个自己写出来、又自己推翻的测试（值得记录）
+
+新增的 `runRerankAblation` 需要证明「baseline 真的没有拿到 reranker」。我先后写了两版
+断言，**两版都是静默无效的**，靠注入缺陷才发现：
+
+| 版本 | 断言 | 注入「baseline 也接线」后的表现 | 为什么无效 |
+|---|---|---|---|
+| v1 | baseline 名字含 `baseline` | **全绿** | 只查名字，与是否调用无关 |
+| v2 | 首次 rerank 调用晚于首次 answer 调用 | **全绿** | `runAblation` 逐个系统跑完，baseline 自己的 rerank 也发生在它自己的 answer 之后 |
+| v3 | reranker **调用次数**恰为 2 | **变红** ✅ | 接线到双臂时变为 4，可判别 |
+
+v3 的数字是**实测**的（正确实现 2 次、缺陷实现 4 次），不是推出来的——中途我曾把另一个
+更小 probe fixture 上测得的「1 / 2」套到正式 fixture 上，断言立刻变红，才发现**实测值
+必须按 fixture 记录**。
+
+> **这一节的意义**：一个「通过的测试」与一个「能发现 bug 的测试」是两回事。前两版都
+> 通过了，也都毫无价值。**唯一的判别手段是主动注入缺陷**，这也解释了为什么本仓库
+> 每一轮都要做注入验证。
 
 ---
 
@@ -1482,9 +1552,15 @@ workflow 的 5 个透传变量（`CORTEX_RERANK` / `RERANK_CANDIDATE_POOL` / `RE
 |---|---|---|---|---|---|
 | cortex-core | 127 | 98.48 | 98.34 | 100 | 98.48 |
 | cortex-node | 16 | 100 | 98.61 | 100 | 100 |
-| cortex-llm | 71 | 100 | 98.47 | 100 | 100 |
-| cortex-eval | 971 | 99.87 | 98.70 | 100 | 99.87 |
-| **合计** | **1185** | — | — | — | — |
+| cortex-llm | 90 | 99.05 | 97.60 | 100 | 99.05 |
+| cortex-eval | 995 | 99.85 | 98.67 | 100 | 99.85 |
+| **合计** | **1228** | — | — | — | — |
+
+> 测试数较上一版（1185）增加 **43**：`llm-reranker.test.ts` 15、`rerank-ablation.test.ts` 13、
+> `rerank.test.ts` 新增 4 条 retry 用例、`rerank-factory.test.ts` 新增 11 条（provider 选择 9 +
+> 本地加载器 2）。**新增模块全部 100%**：`llm-reranker.ts` 100/100/100/100、
+> `rerank-factory.ts` 100/100/100/100（此前 functions 维度 75%，低于门槛——由「未调用 local
+> 闭包」这一真实缺口造成，**补测试修复而非放宽阈值**）。
 
 > **关于 `cortex-core` 这一行的读数：它是那个 0.76pp 波动区间里的一个采样，不是常量。**
 > 同一份代码的 12 次运行落在 98.48–99.24 之间（§3.15），所以上表里的 98.48 **在下次运行时
@@ -1615,7 +1691,7 @@ workflow 的 5 个透传变量（`CORTEX_RERANK` / `RERANK_CANDIDATE_POOL` / `RE
 | 10 | ~~为五个守卫体写测试~~ **已完成，但结论变了** | §6.1 登记 | 测试写好了（`stats-guard-coverage.test.ts`，6 个）；写测试时挖出 §3.19.3/§3.19.4 两个真实 BUG；修完之后守卫**真的变成不可达**（§3.21.1），所以「删除假注解」这个动作的前提已经不成立 |
 | 10a | ~~用干净哨兵重测守卫可达性（修正假阳性）~~ **已完成** | §3.21.1 的证据被怀疑 | **保持注解逐字节不变、只换语句体**：四次运行全绿 = 0 个失败测试；原「6 个/守卫」降级为不可采信；见 §3.21.2 |
 | 10b | ~~把「测试从不进入其命名分支」与「性质测试硬编码参数」两个类别泛化并审计~~ **已完成** | §3.22 | 命中第二实例（`binomialCdf` 的 `p = 0.5`）；枚举旧调用 11/2/0 处证明盲区；改为生成 `p` 并验证在旧代码上四个种子全红 |
-| 11 | 执行 B1 A/B（`CORTEX_RERANK=on`，池宽不加） | `RERANK_API_KEY` org secret | 重排的存废判决（含负结论） |
+| 11 | **接线已全部完成（本轮）**：三个阻塞清零、零新增 secret、A/B arm 就位。**执行 A/B** 仍有待跑 | ~~`RERANK_API_KEY`~~ → **已解除**：三条触发路径互不依赖 | 重排的存废判决（含负结论） |
 | 12 | A6 受控阅读器矩阵 | 四个阅读器凭据 | 在本管线上验证架构归因 |
 | 13 | B3 专用抽取通道 | 8–12 完成 | 架构级改动，需先在单维度验证 |
 
@@ -1634,6 +1710,13 @@ workflow 的 5 个透传变量（`CORTEX_RERANK` / `RERANK_CANDIDATE_POOL` / `RE
 > **比没有性质测试更弱**，因为它读起来像普遍断言。
 > 加性质测试时要问：**「它要失败必须出现什么输入？生成器会产生它吗？」**
 > 配套的验证动作是**把修复回退、确认新测试变红**——否则新测试只是分母。
+
+> **本轮新增纪律之九**：**一个「通过的测试」不等于一个「能发现 bug 的测试」。**
+> §4.4.5 记录了我在同一处连续写了两版**都通过、都毫无价值**的断言（查名字、查调用
+> 顺序），直到第三版（查调用次数）才在注入缺陷下变红。前两版没有任何一处会因此报错。
+> **唯一的判别手段是主动注入缺陷并确认变红**——不是重读断言、不是增加断言数量。
+> 附带的一条：断言里的**实测数字必须按 fixture 记录**。我曾把一个小 probe fixture 上
+> 测得的「1 / 2」套到正式 fixture 上，断言立刻变红，才发现两个 fixture 的答案是不同的。
 
 ### 7.1 关于第 4 项的一个后续判断（改变了下游规划）
 

@@ -178,10 +178,41 @@ cortex-core  ←  cortex-memory  →  cortex-node
 | 适配器传输/报文 | 以**无效 key** 调真实 `/rerank` | Cohere `403 Forbidden`、Voyage `400 Bad Request`——传输、路径、请求体、鉴权头**全部正确**，错误被正确上抛 |
 | 工厂状态机 | 直接调 `createRerankerFromEnv` | 未设/`off` → `undefined`；`on` 无 key → **抛错**；`on` + key → `RerankScoreFn` |
 
-**结论**：B1 的代码路径**已具备在 CI 中运行的条件**，唯一缺的是 `RERANK_API_KEY`
-org secret。workflow 的 5 个透传变量已就位，**加 secret 后无需改任何代码即可派发 A/B**。
+**结论（已更正）**：上一版这里写的是「唯一缺的是 `RERANK_API_KEY` org secret；
+workflow 的 5 个透传变量已就位，加 secret 后无需改任何代码即可派发 A/B」。
+**这两句都不成立**，且第二句是纯粹的文档-代码不一致——派发前实测 `benchmark.yml`，
+`CORTEX_RERANK` / `RERANK_*` 出现次数为 **0**，即 5 个透传变量**一个都不存在**。
+加 secret 也进不了 bench 进程。已按代码实测更正为三个独立阻塞：
 
-**可执行性**：这是本项**唯一**剩余的前置件，且是**运维动作而非工程动作**。
+| # | 阻塞 | 实测证据 | 性质 |
+|---|---|---|---|
+| 1 | 缺 `RERANK_API_KEY` | org secret 不存在 | 运维 |
+| 2 | workflow **零**透传 | `grep -c RERANK .github/workflows/benchmark.yml` = **0** | **工程** |
+| 3 | **无任何 A/B arm 拿到 reranker** | `runner.ts` 的 8 个消融函数签名均无 reranker 选项 | **工程** |
+
+第 3 项是最容易被漏掉的一项：即便 1、2 都解决，也没有任何一条路径能产出预注册验收
+所需的「MR 与 TR 分项配对 A/B」——**不存在一个构造了「开 rerank」系统的 arm**。
+
+三项均已闭环，且**不再依赖任何新 secret**：
+
+| 修复 | 落点 |
+|---|---|
+| 新增 `runRerankAblation`（同一 run 内构造 baseline/feature 双臂，复用 McNemar + Wilson） | `cortex-eval/src/runner.ts` |
+| 新增 `LLMReranker`（listwise 打分，复用现有 `DEEPSEEK_API_KEY`，**不需要** `RERANK_API_KEY`） | `cortex-llm/src/rerank/llm-reranker.ts` |
+| 新增 `CORTEX_RERANK_PROVIDER=local`（离线 cross-encoder，**零凭据**） | `cortex-eval/src/rerank-factory.ts` |
+| workflow 补齐 4 个 input 与对应 `env:` 透传 | `.github/workflows/benchmark.yml` |
+| `RERANK_PROTECTED_HEAD` 接入 bench（此前不可达） | `bench/run.ts` |
+
+**关于第 1 项的一个技术更正**：rerank **不是** LLM、也**不是** embedding。cross-encoder
+把 `question</s></s>passage` 拼成单序列联合打分，输出相关性标量；bi-encoder（embedding）
+两侧独立编码，无法表达交互；LLM 输出 token 序列。DeepSeek **未发布**任何名为 Reranker 的
+精排模型，也**不提供**独立 `/rerank` 接口（已由其 endpoint 清单与检索双重确认）——所以它的
+secret 不能直接喂给现有 `/rerank` 客户端。但把它接成 **LLM caller** 即可复用：rerank 的
+本质是一个打分函数，不是一套协议。这正是 `LLMReranker` 的由来。
+
+**可执行性**：本项已**无任何剩余前置件**。A/B 现在有三条互不依赖的触发方式——离线
+（`local`，零凭据）、复用凭据（`llm`）、或原 `/rerank` 客户端（待其 key 到位）。三者结论
+不可互相替代，建议交叉验证。
 
 ### B2 — 候选池宽度（测量仪器已落地并已全量实测）
 
