@@ -16,6 +16,7 @@
 | [08 阅读器判断再研究](docs/08-reader-parity-analysis.md) | 证伪「阅读器是约束」：架构归因 4.7 倍于阅读器归因，附可复现脚本 |
 | [09 进度追踪报告](docs/09-progress-and-delivery-report.md) | 每轮迭代的交付、验收证据、发现的 BUG、对计划的修正与诚实差异清单 |
 | [10 A2 收口结果](docs/10-a2-closure-results.md) | 发布级 LongMemEval-S 全量测量（run `35523328949`，N=500）：主结果、独立复算、增量归因、召回曲线与优先级结论 |
+| [11 供应商限流审计](docs/11-provider-throttling-audit.md) | 那次 429 的根因**不是配额耗尽**：错误码 1305 是并发上限，附三个复合缺陷、诊断产物的来源缺口，与五项按依赖排序的修复需求 |
 
 ## 约定
 
