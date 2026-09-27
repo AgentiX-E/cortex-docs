@@ -280,3 +280,134 @@
 
 **第 5 次派发确实解决的事。** 安装与门禁链路已在**真实 runner** 上修复 ——
 那个连续失败八次的步骤现在通过，且是在**能够构建本沙箱无法构建的原生依赖**的环境里通过的。
+
+---
+
+## 10. §9 要的那个仪器
+
+§9 收尾于一个缺口：A/B 报不出限流率，因为流水线里没有任何东西在记录它。
+本节就是这个修复，而且**刻意收窄** —— 它是一台仪器，不是一次行为变更。
+
+### 10.1 新增了什么
+
+| 符号 | 包 | 职责 |
+| --- | --- | --- |
+| `RetryStats` | `cortex-llm` | 单次调用的计数：`attempts`、`retried`、`rateLimited`、`retryAfterHonoured` |
+| `RetryOutcome` | `cortex-llm` | `RetryStats` 加上最终 `Response` |
+| `retryableFetchWithStats` | `cortex-llm` | 重试循环，现在返回它自己的计数 |
+| `retryableFetch` | `cortex-llm` | **签名不变** —— 薄包装，委托给上面那个 |
+| `RetryStatsSnapshot` | `cortex-llm` | 跨调用聚合后的同一组计数，外加 `retryRate` |
+| `RetryStatsAggregate` | `cortex-llm` | `record()` / `snapshot()` / `reset()` |
+| `retryStats()` / `resetRetryStats()` | `cortex-llm` | 进程级聚合的**唯一读路径** |
+| `transportRetryReport()` | `cortex-eval` | 把快照格式化为产物字段 |
+| `embedding.transportRetry` | 产物字段 | 计数落地处 |
+
+`retryableFetch` 的签名与行为**完全未变**。所有既有调用方 —— 嵌入适配器、
+OpenAI-compatible LLM —— **无需任何修改**。这正是它算「仪器」而非「重构」的原因：
+唯一可观察的差别，就是多了几个数字。
+
+### 10.2 两个值得单独成段的设计决策
+
+**`retryRate` 按「调用」计，不按「重试」计。** 初版实现写的是 `retried / calls`。
+**一条测试抓住了它**：一个调用重试了 40 次，报出的率是 **40**。那不是率。
+分子改为 `retriedCalls` —— 至少重试过一次的调用数 ——
+于是这个指标回答的是「有多大比例的调用不得不重试」，
+而重试的**量**仍留在 `retried` 里，读者依然能区分
+「很多调用各重试一次」与「一个调用重试很多次」。两者**有意并存**，把它们合并才是那个 bug。
+
+**被预算拒绝的重试不计入。** 当墙钟预算拒绝一次重试时（§2），
+该分支提前返回且**不递增任何计数器**。记录它会报出一个**供应商从未收到**的请求，
+而这恰恰会在预算存在的意义所在的那个场景中虚增 `retried`。
+该分支唯一做的事，是在**没有响应可返回时**合成一个 `429` ——
+传输失败后 `resFromLastAttempt` 已被清空，没有这个回退，调用方会拿到 `undefined`
+然后去读 `res.ok`。该路径上 `rateLimited` **保持为零**：从未收到过任何 429。
+
+### 10.3 变异实验
+
+一个报错的计数器**比没有计数器更糟**，因为它看起来权威。
+`tools/inject-retry-stats.py` 注入 16 个貌似合理的记账错误，并要求测试集逐一抓住。
+
+| 变异 | 被谁抓住 |
+| --- | --- |
+| `retry-not-counted` | retry accounting |
+| `rate-limited-counts-5xx` | retry accounting |
+| `budget-refusal-counted` | retry accounting (budget) |
+| `budget-refusal-status-shifted` | retry accounting (budget) |
+| `retry-rate-per-retry` | retry stats aggregation |
+| `transport-failure-counted` | retry accounting |
+| `retry-after-always-honoured` | retry accounting |
+| `retried-call-recorded-clean` | retry stats aggregation |
+| `clean-call-recorded-retried` | retry stats aggregation |
+| `snapshot-drops-retried-calls` | 构建（类型）继而测试 |
+| `reset-leaves-retried-calls` | retry stats aggregation (reset) |
+| `reset-leaves-attempts` | retry stats aggregation (reset) |
+| `report-drops-rate-limited` | transport retry report |
+| `report-drops-retry-after` | transport retry report |
+| `report-relabels-scope` | transport retry report |
+| `report-drops-attempts` | transport retry report |
+
+**16 / 16 全部被抓住。** 每次变异后，文件都从内存逐字节还原并做 md5 校验，
+所以即使运行中断，也不可能有变异残留在树里。
+
+其中三个值得单独点出，**因为是这个实验发现了它们**：
+
+1. **有两个变异起初根本没有测试。** `reset()` 完全没有覆盖 ——
+   既有测试在重置后只断言了 `calls`，留下另外七个字段可以自由泄漏。
+   这在本场景里**尤其要紧**，因为重试率是 `retriedCalls / calls`：
+   陈旧的分子配上全新的分母，会报出**超过 100% 的率**。
+   现已补上断言整个快照的测试。
+2. **有一个变异作为空操作存活。** `snapshot-not-a-copy` 被写成
+   `attempts: this.#attempts + 0`，与原版**行为上完全相同**。
+   这是**标注错误的变异，不是测试缺口** —— 聚合的字段是私有数字，
+   所以返回原始值的快照**根本无法**产生别名可变状态。
+   它已被替换为**确实可表达**的变异。
+3. **有一个变异是由类型检查器抓住的，不是测试。** 变异工具在跑 eval 套件前会先构建，
+   而 eval 包解析的是 `cortex-llm` 的**已构建 `dist/`**。
+   没有这次构建，eval 测试会**一直对着变异前的代码通过**，
+   从而报出一批并不存在的「存活者」。
+   这一点是**踩坑踩出来的**：第一次运行正是因此报了 `BASELINE RED`。
+
+### 10.4 这个数字去了哪里
+
+计数被写到**两处**，这是刻意的：
+
+- `benchmark-diagnostics.json` 的 `embedding.transportRetry`，紧邻 `source` ——
+  `source` 说的是向量**从哪来**，`transportRetry` 说的是这些请求**代价几何**。
+- 步骤日志里的一行 `=== Transport retries (process scope) ===`。
+
+**需要下载一个 ZIP 才能读到的数字，是一个不会被比较的数字**，
+而这个 A/B 存在的全部意义就是**在两个运行之间比较一个数字**。同一个值，两个读者。
+
+该字段携带 `scope: 'process'`，因为 `retryableFetch` 是嵌入**与** LLM 流量的唯一收口，
+所以聚合是**进程级**的，事后**无法拆分**。
+把作用域写明白，是「不去编造一个计数器并不具备的分供应商明细」的诚实替代。
+`provider: 'embedding'` 记录的是这一节是**为了什么**被读的。
+
+### 10.5 状态
+
+**已实现、已验证、尚未派发。** §9 做不了的那个 429 率对比**仍然未做** ——
+仪器已经存在，但还没有任何一次运行产出过两组可比的计数。
+**改变的是：现在一次重派发能够回答这个问题，而在那之前它被证明无法回答。**
+
+门禁：四包 **1513 个测试**，每个维度 ≥95%。
+
+| 包 | 测试 | Stmts | Branch | Funcs | Lines |
+| --- | --- | --- | --- | --- | --- |
+| cortex-core | 127 | 98.48 | 98.34 | 100 | 98.48 |
+| cortex-node | 16 | 100 | 98.61 | 100 | 100 |
+| cortex-llm | 131 | 99.27 | 98.11 | 100 | 99.27 |
+| cortex-eval | 1239 | 99.87 | 99.03 | 100 | 99.87 |
+
+`retry.ts` 为 **100 / 100 / 100 / 100**。本节之前未覆盖的那个分支 ——
+预算拒绝返回上的 `??` 回退 —— 现在有了到达它的测试：
+通过**在传输失败后**（而非在 429 后）拒绝一次重试来构造。
+
+### 10.6 纪律之二十八
+
+**一个需要被比较的数字，必须先被写在两个运行都能读到的同一个地方。**
+
+§9 记下的教训是「没有被写下来的值，无法被审计」。这条是它的操作性补充：
+写下来还不够 —— 它必须写在**双方都在读的那个位置**。
+把计数只放进产物，等于把对比成本变成下载成本；
+只放进日志，则等于把对比成本变成日志留存成本。
+读写两侧的**位置**与数值本身一样，是设计的一部分。
