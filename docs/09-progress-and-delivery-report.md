@@ -66,8 +66,11 @@
 | **召回曲线分母静默缩小（本轮第 7 个 BUG）**          | **已修复、已加测试、已加注入验证**                               | 曲线对 428 算、报告对 500 算，无人说明。见 §3.23                                                                                                                                                                                                                             |
 | **B7 的 A/B 跑了两个一模一样的臂（本轮第 8 个 BUG）** | **已实测并记录：空结果，但属派发缺陷而非干预无效 —— B7 仍未被测量** | 见 §13；两臂产物**除时间戳逐字节相同**、`featureCorrect` 60 题逐字节相同；开关被读到但唯一消费者在 `CORTEX_RERANK=off` 的分支内（`run.ts:433` vs `:908/:926`）                                                                                                              |
 | **B7 判据的可执行形态已交付**                        | **新工具 + 9 测试 + 6/6 注入被捕获**                             | `tools/read-b7-criterion.mjs`；先重算台账对账、再判三条款；首轮 2 条注入存活，补 1 个用例**同时**杀死 → 同一个覆盖缺口                                                                                                                                                    |
+| **B7 的标注生产者零调用者（本轮第 9 个 BUG）**       | **已实测并记录：不是坏，是没接上 —— 且不能靠 spread 修**        | 见 §14；`discriminateContext` / `renderDiscriminatedContext` 在 `src/**` 全部引用为注释或 barrel 再导出；生产者本身正确（§14.3 直接探测）；系统从不接收真值（§14.5）                                                                                                          |
+| **主 benchmark 拿到 B7 开关**                        | **已修复、4 个 TDD 测试（改动前 2 个变红）**                     | `runner.ts` 转发 `candidateDiscrimination`；**必要但不充分**，feature 仍因 §14.2 失效                                                                                                                                                                                       |
+| **`runner` 中上次修复的文档与代码已漂移**            | **已发现并记录**                                                 | 选项注释称开关「set nowhere outside」，但构造函数从未收到它 —— 文档描述了意图，代码没有执行它                                                                                                                                                                                |
 
-测试总数：**982 → 1048 → 1077 → 1094 → 1099 → 1105 → 1112 → 1124 → 1137 → 1150 → 1154 → 1156 → 1164 → 1167 → 1185 → 1255 → 1273 → 1286 → 1296 → 1316 → 1319 → 1339 → 1423 → 1431 → 1440 → 1589 → **1598**。
+测试总数：**982 → 1048 → 1077 → 1094 → 1099 → 1105 → 1112 → 1124 → 1137 → 1150 → 1154 → 1156 → 1164 → 1167 → 1185 → 1255 → 1273 → 1286 → 1296 → 1316 → 1319 → 1339 → 1423 → 1431 → 1440 → 1589 → 1598 → **1604**。
 四个包全部通过，每维度 ≥95%。
 
 > **测试数字的增长不是目标**。本轮 1167 → 1185 的 18 个新增测试**全部**锚定 §3.23 这一个缺陷：
@@ -3738,3 +3741,149 @@ ranking gap 名册恰好差一道题：处理臂多出 `58bf7951`。检索诊断
 `computeTargetCohort`，这让模块自己的 `notGrounded` 桶在该读取器里**结构性为空**——
 一个永远读 0 的桶看起来像「什么都没被排除」，
 而真相是「排除发生在计数器能看到它之前」。**模块负责分类，读取器只负责转录。**
+
+## 14. B7 的标注没有生产者：一个「有测试、无调用者」的模块
+
+**状态：已实测。** 这是 §13 打开的那个缺陷的**更大的一半**，
+而且它把 §13 的结论往前推了一格：**即使修好 §13 的派发缺陷，B7 仍然什么都不会做。**
+
+### 14.1 一句话结论
+
+B7 加的是一句**指令**，告诉阅读器在**带标签的**候选之间做选择。
+而写出那些标签的 `renderDiscriminatedContext`、以及决定标记哪些轮次的
+`discriminateContext`，**在整个生产路径上没有任何调用者**。
+它们自己模块之外、以及本包 barrel 之外的全部引用**都是注释**。
+
+所以开关打开时，阅读器被要求去做一件**上下文并不支持**的事：
+它被要求参照的标签**从来没有被写出来**。
+
+### 14.2 调用者普查
+
+```
+$ grep -rn "discriminateContext\|renderDiscriminatedContext" packages/*/src/*.ts packages/*/src/**/*.ts \
+    | grep -v "__tests__" | grep -v "^packages/cortex-eval/src/candidate-context.ts"
+
+packages/cortex-eval/src/b7-cohort.ts:40:          * ... the three inputs `discriminateContext` takes ...
+packages/cortex-eval/src/index.ts:145:               discriminateContext,          <- barrel 再导出
+packages/cortex-eval/src/index.ts:148:               renderDiscriminatedContext,   <- barrel 再导出
+packages/cortex-eval/src/natural-language-memory.ts:146:   * ... labels `renderDiscriminatedContext` adds ...
+packages/cortex-eval/src/natural-language-memory.ts:1623:  * ... which `renderDiscriminatedContext` adds.
+```
+
+两个 barrel 再导出 + 三处注释提及。**零调用点。**
+
+**一个有测试、没有调用者的模块，语句覆盖率 100%、集成覆盖率 0%**，
+而覆盖率报告**看不出这两者的区别**。
+
+### 14.3 生产者是**正确的**，而这正是重点
+
+直接探测（两个侧面 + 两个带日期的轮次）：
+
+```
+sides:    [["4172"],["9930"]]
+clusters: [{"id":1,"indices":[0],"terms":["4172"]},
+           {"id":2,"indices":[1],"terms":["9930"]}]
+rendered: "...4172 for the north entrance [candidateCluster: 1]\n
+           ...9930 for the south entrance [candidateCluster: 2]"
+```
+
+生产者识别出了这对候选、分配了不同的簇 id，渲染器**写下了标签**。
+**没有任何东西是坏的。缺口完全在接线。**
+
+这一点必须写死，因为它改变了后续动作的性质：
+**要做的不是修 BUG，而是建立连接。**
+
+### 14.4 为什么它一直不可见
+
+三个互相独立的原因，**每一个单独就足够**：
+
+1. **单元测试直接调用生产者。** `candidate-context.test.ts` 用构造良好的输入驱动
+   `discriminateContext` 和 `renderDiscriminatedContext` 并断言其输出，**全部通过**。
+   这套测试**从来没有问过谁调用它们**。
+2. **覆盖率门禁看不见它。** 两个函数都被测试执行过，所以它们的行算作已覆盖。
+   **一个被直接测试的不可达函数，在本仓库所依赖的每一个覆盖率指标上，
+   与一个已接线的函数无法区分。**
+3. **开关确实到达了 prompt。** `candidateDiscrimination` 真的改变了 prompt 文本，
+   所以一个去查「这个选项接线了吗」的人会发现**接上了**：
+   它被读取、被转发、被消费。缺失的那一环在更外侧——在 prompt 所消费的**上下文构建**路径上。
+
+### 14.5 为什么再加一个 spread 也修不好
+
+`discriminateContext` 需要**两个**侧面：
+
+```ts
+export function discriminateContext(
+  turns: readonly TurnLike[],
+  options: DiscriminatedContextOptions,   // { question, groundTruth?, answer? }
+): DiscriminatedContext
+```
+
+没有 `groundTruth` 时它返回 `{ clusters: [], annotated: false }`——测试里已断言。
+而构建上下文、调用 prompt builder 的 `NaturalLanguageMemorySystem`：
+
+```
+$ grep -n "groundTruth" packages/cortex-eval/src/natural-language-memory.ts
+(no matches)
+
+async answer(question: string, context: string[], sessions?: string[][]): Promise<Answer>
+```
+
+**这个系统从来没有拿到过真值。** 它既没有这个字段，也没有任何参数承载它。
+所以标注路径不是被「再下一层的一个 spread」挡住，
+而是被**一条缺失的数据通道**挡住——从数据集到上下文构建层。
+
+**这是一个设计决定，不是一个机械修复。** 这也是本文档停在审计而不是把功能做完的原因：
+**真值如何到达系统，决定了这次 A/B 能意味着什么。**
+
+### 14.6 最顺手的通道很可能是错的
+
+诱人的修法是把 `groundTruth` 穿进 `answer()`。
+在有人真去那么做之前，值得先写下**为什么它可能是错的**，
+因为这个错误代价高、且事后很难看出来：
+
+**用真值去构建上下文，会让这一臂变成 oracle-assisted。**
+`discriminateContext` 用真值和答案作为两个侧面去做聚类。
+如果生产路径提供它们，那么这个 feature 的收益是在一个**任何部署都无法复现的条件**下测出来的：
+推理时正确答案是未知的——**而这恰恰是问题被问出来的原因**。
+这样跑出来的 A/B 会报出一个收益，而这个收益归属于**系统并不会拥有的信息**。
+
+一个非 oracle 的变体需要两个侧面来自别处——来自阅读器**可能识别出的**检索候选，
+或者来自问题自身的限定词与轮次的对照。那是**另一种聚类输入**，
+而 `discriminateContext` 按现在的写法**不接受它**。
+
+**这是关于正确设计的假设，不是一次测量。** 记在这里，
+是为了让这个决定被**有意地**做出，而不是由“哪条线最短”来替我们做。
+
+### 14.7 修了什么，没修什么
+
+**已修：** `runner.ts` 现在把 `candidateDiscrimination` 转发进主 benchmark 的 feature system。
+在此之前，这个选项在 `BenchmarkRunnerOptions` 上被声明、被一段注释文档化
+（那段注释说该开关「set nowhere outside」记忆类），**然后没有被传下去**——
+**上一次修复的文档和代码已经漂移开了**。
+对应 4 个 TDD 测试；改动前有 2 个以 `expected 0 to be greater than 0` 变红。
+
+**这个修复是必要的，但不是充分的。** 它移除了 feature 失效的**一个**原因。
+feature 因为 §14.2 的原因**仍然失效**。
+
+**没修：** 标注数据通道。按 §14.5 / §14.6，它需要一个本文档不做的决定。
+
+**明确不能主张：**
+
+- **不能**说「B7 没有效果」。B7 没有的是**生产者**。
+  这个区别很重要：前者是关于方法的断言，后者是关于缺失组件的断言。
+- **不能**说「标注实现是坏的」。它是正确的、有测试的；§14.3 展示了它工作。
+- **不能**说上一次审计的修复没有意义。它把开关接进了 rerank 臂，
+  而那是当时存在的臂。本文档说明**那个臂也不可能显示出效果**，原因独立。
+
+### 14.8 什么能一劳永逸地解决它
+
+**把调用者普查放进 CI。** 这里的缺陷类别是
+「**有测试、无生产调用者的导出函数**」，而它是**可机械检测的**：
+对 `src/**` 里每个导出符号（排除 `index.ts`），要求至少一个非测试引用。
+
+这样一个检查**在选项第一次被声明的那一刻**就会抓住它，
+也会抓住上一次审计发现的那四个无调用者函数，
+以及那两个审计**都没发现**的这个——因为他们看的是开关，而不是开关的依赖。
+
+在那个检查存在之前，§14.2 的那条命令是一个**读者必须记得去跑**的命令，
+这是一个比测试更弱的保证。记在这里，正是为此。
