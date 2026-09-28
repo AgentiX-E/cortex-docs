@@ -4866,3 +4866,244 @@ Top-level keys: embedding, dataset, questionCount, baseline, feature, ablation, 
 2. **让 A/B 免疫端点噪声**（P0）。可选路径：(a) 用确定性端点（离线 embedding + 确定性 reranker + 确定性 QA）；(b) 复用同一进程内的缓存跑两臂（一次 run 内跑 control 与 feature）；(c) 接受噪声但先量化它——用同一配置重复 N 次得到噪声分布，再看 B7 的 delta 是否超出该分布。**(c) 是最诚实的**，因为它同时给出「这次测量有没有分辨力」的答案。
 3. **判据三要在产物里可核对**（P0）：`featureConfig` 必须进 `benchmark-report.json`。
 4. 这三条都落地后重跑 C5，再谈 C6 判决。
+
+## 21. §20.7 第 1、3 条落地：两个缺陷，都让 C5 的差异无法解读
+
+§20 给下一步列了三件必做的事，本轮完成其中两件：**逐题记录所需的前提（配置可核对）** 与 **让 A/B 的两臂在产物里可区分**。过程中发现两个独立缺陷，都在 §20 的失败里起了作用。
+
+### 21.1 缺陷六：`CORTEX_RERANK=local` 静默关闭了整条 rerank 链路
+
+`CORTEX_RERANK` 回答**「这个阶段是否存在」**，`CORTEX_RERANK_PROVIDER` 回答**「用哪个后端」**。两个问题、两套词汇，而 workflow 的 `rerank_provider` 说明里明写 `local` 是后端名。enable 检查只认 `on/true/1/yes/enabled`，于是：
+
+```js
+createRerankerFromEnv({CORTEX_RERANK:'local'})   // -> undefined   （阶段关闭）
+createRerankerFromEnv({CORTEX_RERANK:'on'})      // -> constructed
+```
+
+而 `tools/dispatch-b7-ab.py` 里写的正是 `"rerank": "local"`。后果链条：
+
+1. reranker 为 `undefined` → reranking ablation 的守卫 `if (reranker === undefined)` 命中 → **整个臂被跳过**；
+2. job **仍然报 success**（跳过不是失败）；
+3. **`featureConfig` 的唯一写入点就在那个臂里** → 配置记录一并消失。
+
+所以 §20 观察到的「16 个产物里搜不到 `retrievalSides`」不是没写，是**写它的那条分支根本没跑**。而 `benchmark-rerank-ablation-report.json` 在 control 臂里确实不存在——这一点本轮核对确认。
+
+**修法**：把三种后果分开，而不是合并成「off」：
+
+| 输入 | 旧行为 | 新行为 |
+|---|---|---|
+| `off` / `disabled` / 未设置 | `undefined` | `undefined`（静默关闭，合法） |
+| `local` / `openai` / `llm` | `undefined`（**静默关闭**） | **抛错**，并在消息里点名 `CORTEX_RERANK_PROVIDER` |
+| 拼错的值（`ture`、`enable`） | `undefined`（**静默关闭**） | **抛错**，并列出全部合法拼写 |
+
+判据是：**一个拼错的值不能变成一次对别的东西的测量。** 这与 `resolveProvider` 对未知 provider 抛错是同一条理由——只是上一轮只给 provider 加了守卫，漏了 enable 标志。
+
+### 21.2 缺陷七：唯一记录配置的地方，在一个可能不跑的分支里
+
+`featureConfig` 原先只在 reranking ablation 里写。这一条本身就是缺陷：**任何没建 reranker 的 run 都丢失自己的配置记录**，而两臂产物形状完全相同，delta 无从归属。
+
+**修法**：把 `featureConfig` 提为 `AblationReport` 的字段，和 `cohortCoverage`、`retryFires` 同一处理——**它不是一个旁路返回值，而是报告的一部分**。理由与 cohort banner 完全相同：**它下面的每一个数字都以它为条件。**
+
+- 渲染在 Markdown **结果之上**（与 cohort banner 同位），因为印在统计表之后的告诫没人读；
+- 条目**排序后渲染**，这样两臂的该行只在开关处不同，可以直接肉眼 diff；
+- **`false` 必须记录**，不能省略：「这个开关是关的」与「这份产物早于这个开关」是两个不同的主张，只有前者能让数字可解读；
+- CLI 自己传一份（只有它知道 reranker 是**被请求过**还是从未请求，以及 `CORTEX_RERANK` 说了什么）；库调用方则由 runner 从收到的 options 推导，仍然得到真实记录。
+
+### 21.3 两臂现在在产物里可区分
+
+这正是 §20 缺的那个性质。control / feature 的 Markdown 现在分别含：
+
+```
+- Feature config: `candidateDiscrimination=on`, `retrievalSides=off`, ...
+- Feature config: `candidateDiscrimination=on`, `retrievalSides=on`, ...
+```
+
+### 21.4 验收
+
+| 项 | 结果 |
+|---|---|
+| 新测试对旧代码（`local` 不再静默） | **失败**：`expected [Function] to throw` ✅ |
+| 变异：删掉 provider 守卫 | **1 个测试失败** ✅ |
+| 变异：忽略调用方传入的 config | **1 个测试失败** ✅ |
+| `pnpm check` | **exit 0** |
+| CI 等价环境（无 `.git` 树 + 冻结安装） | **exit 0**，1711 tests |
+| census 门禁 | clean（**曾报 `describeFeatureConfig` 为孤儿**，见 §21.5） |
+| 语义复核（CI 环境内） | `local`→抛错 ✅ / `on`→构造 ✅ / `off`→undefined ✅ |
+
+用例数（eval 1378 → 1394，+16）：
+
+| 包 | Tests |
+|---|---|
+| cortex-core | 170 |
+| cortex-node | 16 |
+| cortex-llm | 131 |
+| cortex-eval | 1394 |
+| **合计** | **1711** |
+
+覆盖率（eval，四维门槛 95）：`report.ts` **100/100/100/100**；`rerank-factory.ts` **100/97.05/100/100**（行 107-112 曾被漏测，补了未知值用例后转绿）；全包 **99.88/98.97/100/99.88**。
+
+### 21.5 门禁又一次先于我发现了问题
+
+新写的 `describeFeatureConfig` 被导出后，`census:check` 立刻报：
+
+```
+1 NEW orphan(s) not in the baseline:
+  cortex-eval: describeFeatureConfig (packages/cortex-eval/src/runner.ts:246)
+```
+
+它是对的：这个函数**只有测试调用**，没有生产调用者。正确的处理不是加进台账（那不是债务，是设计失误），而是**取消导出**——它本来就是 `runner.ts` 的内部细节。测试随之改为**通过真实入口 `runNaturalLanguageBenchmark` 断言**，这比测内部函数更强：要验证的性质本来就在产出的报告上。
+
+### 21.6 一次「测试写错了契约」的更正
+
+我最初写了一个用例断言「调用方不传 config 时字段应缺省」。它对**实现**做断言，而不是对**应该成立的性质**。实跑告诉我 runner 会推导出一份真实的配置（两个 B7 开关 off、entity-identity clause **on**、reranker off），而这**更好**——其中三个开关的默认值从调用点是看不出来的，产物是唯一记录它们的地方。
+
+已把该用例改为断言**真实且更优的契约**：推导出的四个值逐一精确断言，并验证它确实渲染进了 Markdown。**测试服从性质，不是性质服从测试。**
+
+### 21.7 仍未做（§20.7 第 2 条）
+
+**逐题记录落盘**与**噪声量化**尚未做。本轮做的是它们的**前提**——配置可核对。没有第 2 条，C5 重跑仍会被端点噪声淹没（§20.2 已量化：噪声 ±2 题，两半同向同幅）。下一步仍是：优先量化噪声分布（同配置重复 N 次），再看 B7 的 delta 是否超出该分布。
+
+**本轮仍不能主张 B7 有效或无效**——开关的效应依然未被测量。
+
+## 22. §20.7 第 2 条落地：名册落盘与噪声量化，以及一个读者把缺口当成回归的缺陷
+
+§20.7 列的第 2 条是「让 A/B 免疫端点噪声」，第 1、3 条在 §21 已完成。本轮把第 2 条的两半都做实，并在做实的过程中发现：**两个消费同一份名册的读取器，会各自把「未记录」读成「弃答」**——而其中一个后果是**把记录缺口判成 regression**。
+
+### 22.1 为什么聚合数字永远无法替代名册
+
+三件事都卡在同一个缺失上，而它们都不能被聚合满足：
+
+| 需求方 | 它要什么 | 为什么计数不够 |
+|---|---|---|
+| B7 判据（`read-b7-criterion.mjs`） | 从产物自身输入**重算**目标名册 | 读不到逐题数组时直接抛 `no per-question array found`，16 份归档产物**没有一份能读** |
+| 噪声模型（`variance.ts`） | 两条按 id 对齐的 `boolean[]` | `compareQuestionVectors` 要吃向量，而**没有任何产物产生过向量** |
+| 「哪些题动了」 | 具体 id | §20 的 A/B 两臂差 2 题，产物**说不出是哪 2 题** |
+
+判据是：**一个无法执行的判据不是判据。** 所以本轮新增 `packages/cortex-eval/src/question-record.ts`，把逐题记录作为 `AblationReport` 的一等字段（`questions`），由 `runNaturalLanguageBenchmark` 从它收集到的 trace 流与 ablation 算出的正确性向量组装。
+
+落盘字段：`questionId`、`question`、`capability`、`groundTruth`、`answer`、`correct`、`grounded`、`turns`、`featureConfig`（**逐条戳记**，不是一个旁路变量）。
+
+### 22.2 两个字段设计决定，都是为了让下游不能误读
+
+**其一：`answer` 的缺省 ≠ `null`。**
+
+- `null` = **读者弃答**，这是一个发现；
+- 键**缺省** = **没有任何 trace 到达这道题**，没有人记录这个臂产出了什么，这是一个**缺口**。
+
+这两件事在类型上必须分开，而且 `exactOptionalPropertyTypes` 直接在编译器层面强制了这一点：`{ answer: undefined }` 是类型错误，表达「字段缺省」只能靠条件展开 `...(x === undefined ? {} : { answer: x })`。
+
+**其二：`groundTruth` 的 `null` 是真实的 gold。**
+
+`string | number | null`——`null` 表示数据集本身标注「无答案」，是一个真实值，不是缺失。因此 `85` 与 `"85"` 也**不做强制转换**，否则下游再也分不出来。
+
+### 22.3 缺陷八：读者把「没人记录」读成「弃答」，于是一个缺口变成一次 regression
+
+`ArmOutcome` 的契约写得很清楚（`b7-cohort.ts`）：
+
+> `answer`: The answer text, normalized by the caller. **`null` means the arm abstained.**
+
+而读取器当时的归一化是：
+
+```js
+answer: normaliseAnswer(q.answer ?? q.predicted ?? null)
+```
+
+那个 `??` 把 `undefined` 映射成 `null`——**一个字符，把缺口变成了弃答**。后果链条是致命的：
+
+1. feature 臂某题**没有 trace** → 产物里**没有 `answer` 键**；
+2. 读取器折叠成 `null` → 判据读到「这个臂弃答了」；
+3. 判据第二条（**非目标不得移动**）命中 → **`regression`**；
+4. 而 `regression` 是判据里**最严厉的结论**，且模块自己写明**不能被目标增益覆盖**。
+
+所以：**一份仅仅是漏记了一道题的产物，就能把一个臂判成回归并拒绝掉。** 缺口是产物的事实，不是管线的事实，它不能当作针对这个臂的证据来花。
+
+**修法**：在读两臂**之前**加一道记录完整性检查，且**拒绝判决**而不是给一个结论：
+
+```
+--- record completeness (BOTH arms must have recorded an answer) ---
+UNRECORDED: 1 question(s) have no recorded answer
+  feature:nt1
+
+REFUSING to judge. ...
+No verdict is printed above or below this line, so a consumer that scans the
+output for a verdict token will find none — a refusal is not a result.
+```
+
+三个后果同时成立：**按 id 与臂名报出缺口**、**不产生任何判决**、**退出码非零**（否则只读退出码的 shell 会把「拒绝」当成「结果」——旧读取器在这里退出 **0**，因为它打印了一个 regression，而判决就是成功退出）。
+
+### 22.4 一个连带的措辞缺陷，由我自己的测试抓出来
+
+拒绝信息的第一版里含字面量 **`REGRESSION`**（用来解释「这会造出一个 regression」）。断言 `not.toContain('REGRESSION')` 立刻失败——而且它是对的：
+
+> **一个在输出里 grep 判决词的消费者，会匹配到拒绝信息本身，并把它当成判据最严厉的判决。**
+
+所以拒绝必须与判决**在词汇上不相交**，而不只是语义上不同。已改为不使用任何判决词，并补一条测试专门钉住这条不变量。
+
+### 22.5 两个读取器统一到同一个 builder
+
+`read-b7-criterion.mjs` 原先有自己一套字段名 fallback（`q.questionId ?? q.id ?? q.question_id`），而 `quantify-endpoint-noise.mjs` 已经委托给包内 `buildQuestionRecords`。**一份产物两套解析器 = 两处可以各自漂移的地方**，而漂移是静默的：两个读取器会对同一个文件给出不同结论，却都看着是对的。现已统一。
+
+同时给噪声 CLI 加了**同一个缺口的检查，但理由不同**，因为它读的是 `correct` 而不是 `answer`：
+
+> 缺口在向量里是**看不见**的（builder 总是写 `correct`），但它**对向量做了什么**是看得见的：`correct` 对一道没人记录的题是 `false`，和一道**答错**的题完全一样。于是有缺口的 run 会把自己的缺失记录呈现为错答，比较时被计成 flip——**这会抬高 floor**，而 floor 是所有 A/B 判决的标尺。floor 偏高会拒绝真实效应；而部分由缺口构成的 floor，描述的根本不是端点。
+
+### 22.6 §20.2 的那条结论，现在被做成工具自己的 WARNING
+
+§20 无法解读的直接原因是：**基于计数的 range 可以是 0，而同时有大量题目真实移动。**
+
+```
+overall: min 2, max 2, mean 2.00, range: 0 questions (0.00 pp)
+.../clean.json vs .../clean2.json: compared 3, stable 1, changed: 2 (1 in, 1 out; 66.67%)
+  correct -> wrong  q2
+  wrong -> correct  q3
+
+WARNING: the count-based range is 0 questions but up to 2 questions moved between
+a pair of these runs. The range bounds how far the SCORE moves; it does not bound
+how much of the ROSTER moves.
+```
+
+两次 run 互换一个正确答案 → 精度完全相同（2/3）+ **两个不和谐对**。所以：
+
+> **range 只界定分数移动多少，不界定名册移动多少。** 一个只按 range 判定、且只动了一题的臂，可以在「端点自己就在动同一批题」的情况下过关。
+
+这条现在是工具主动输出的 WARNING，而不是留给读者自己发现。
+
+### 22.7 顺手偿还 6 笔孤儿债
+
+新产物让 6 个此前只有测试调用的导出**获得了真实生产调用者**，因此离开普查台账：`compareQuestionVectors`、`requiredEffectSize`、`summarizeVariance`、`RunObservation`、`runNaturalLanguageBenchmark`、`CohortQuestion`。
+
+台账 `note` 里明确记录这是 **PAYOFF RECORDED**，并写清**不是靠放宽台账**；`totals` 从 live census 重算，区分**声明行数**（447）与**身份数**（274），且 `locations` 总长与 `orphaned` 对齐。
+
+### 22.8 验收
+
+| 项 | 结果 |
+|---|---|
+| 新测试对**旧** `read-b7-criterion.mjs` | **4 failed / 11 passed**——4 条新测试精确失败，11 条既有测试全绿 ✅ |
+| 新测试对**旧** `quantify-endpoint-noise.mjs` | **1 failed / 13 passed**——正是缺口那条 ✅ |
+| 两个读取器对**同一份**无缺口产物 | 都产出可核对结果（reader 判决 + CLI floor）✅ |
+| 两个读取器对**同一份**有缺口产物 | **都拒绝**，理由一致 ✅ |
+| `pnpm check` | **exit 0** |
+| CI 等价环境（`git archive HEAD`，**NO `.git`** + `pnpm install --frozen-lockfile`） | **exit 0**，**1775 tests** ✅ |
+| 在 CI 等价树内实跑两个工具 | 无缺口 → 判决；有缺口 → 拒绝 ✅ |
+| census 门禁 | clean（no new orphans）✅ |
+| 格式化 | `All matched files use Prettier code style!` ✅ |
+
+覆盖率（eval，四维门槛 95）：`question-record.ts` **100/100/100/100**；`report.ts` **100/100/100/100**；`runner.ts` branch **95.2%**（基线 95.08%）；全包 **99.88/98.97/100/99.88**。
+
+用例数（CI 等价树实跑）：
+
+| 包 | Tests |
+|---|---|
+| cortex-core | 170 |
+| cortex-node | 16 |
+| cortex-llm | 131 |
+| cortex-eval | **1458** |
+| **合计** | **1775** |
+
+其中本轮新增：`read-b7-criterion.test.ts` 11 → **16**（+5）；`quantify-endpoint-noise.test.ts` 12 → **14**（+2）。
+
+### 22.9 仍未做
+
+- **`§20.7` 三条已全部落地**，但**C5 尚未重跑**。名册与配置现在都在产物里了，重跑后用 `node tools/quantify-endpoint-noise.mjs <产物目录>` 得到「端点自己移动多少题」的可核对数字，再判 B7 的 delta 是否**严格大于**该 floor。
+- 网络仍不可达：本轮 25 次隧道探测全败 + 三方复测一致，`9cbc18a`/`f05105b`/`ab82987` 仍未推送。
+- **本轮仍不能主张 B7 有效或无效**——开关的效应依然未被测量。
