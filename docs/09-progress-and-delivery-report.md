@@ -4688,3 +4688,181 @@ cortex-core 用例数 168 → 170（新增两个管道用例）：
 **「复现不出」不等于「不存在」——它可能只说明我的复现环境不是 CI 的环境。** 这一轮我造过「无 `.git`」这个等价环境并成功复现了第一个缺陷，却在第二个缺陷上退回到裸命令对比，于是把一个只差一个管道符的差异漏掉了整整一轮。正确的做法是：**把 CI 的那一行命令逐字复制下来跑，而不是跑它「大意上相同」的版本。**
 
 修复已推送：cortex `d94c5d38`（214 blobs 逐字节一致，Lambertyan 署名）。
+
+## 19. C5 A/B 派发：先把门禁清绿，再谈判决
+
+§17.15 给 C5 定了三条判据，但**在那之前 CI 必须是绿的**：一个红的 `Verify library` 意味着两臂可能跑在不同代码上，那样的 A/B 差异无法归属给功能。
+
+### 19.1 门禁已清绿
+
+| 项目 | 值 |
+|---|---|
+| 修复提交 | cortex `d94c5d38`（214 blobs 逐字节一致） |
+| 验证 run | `36398012861` @ `d94c5d38` |
+| `Build packages` | success |
+| `Verify library` | **success**（这是 B7 工作开始以来第一次） |
+| `Run benchmark` | success |
+| 整 run 结论 | **success** |
+| 等价 CI 环境（无 `.git` 树 + 冻结安装） | 170 passed / 0 failed，`exit 0` |
+| 全仓 | 1695 tests，`exit 0` |
+
+### 19.2 两臂的派发
+
+派发在**同一个 SHA**（`d94c5d38`）上，两臂唯一不同的输入是 `retrieval_sides`：
+
+| 输入 | control | feature | 为什么 |
+|---|---|---|---|
+| `retrieval_sides` | `0` | `1` | 被检验的那个开关 |
+| `candidate_discrimination` | `1` | `1` | 常量：`retrievalSides` 只在标注生产者内部被读，而该生产者仅在判别开启时运行。控制臂若关判别就会同时差两处，delta 不再可归属 |
+| `rerank` / `rerank_provider` | `local` | `local` | 常量：reranker 只进 feature 侧，跨臂恒定，不能承载 delta |
+| `limit` | `60` | `60` | 常量 |
+
+| 臂 | run | SHA |
+|---|---|---|
+| control | `36398433363` | `d94c5d384b` |
+| feature | `36398444047` | `d94c5d384b` |
+
+**两臂 SHA 相同这一点必须核对**，因为 §13 的空结果正是派发缺陷造成的：当时两臂落在不同代码上，产物逐字节相同，于是得出的是关于派发的结论而不是关于功能的结论。`dispatch-b7-ab.py` 现已 `allow_empty=True`（204 无正文），本轮一次调用只产生一个 run——上一轮「一次调用产生 6 个 run」的缺陷未复现。
+
+### 19.3 判决前置条件（§17.15 三条，照抄于此，按此执行）
+
+| 检查 | 通过条件 | 不过怎么办 |
+|---|---|---|
+| 两臂不再逐字节相同 | 除时间戳外应有差异 | **拒绝报告 B7 结果**（§13） |
+| 差异出现在标注上 | `[candidateCluster: N]` 可见 | 说明仪器仍盲（§17.5 形态） |
+| 启动行自洽 | `Retrieval sides` 行与 `featureConfig` 一致 | 说明接线仍有断裂 |
+
+**只有这三条都过，C6 的判决才是关于功能而不是关于派发的。**
+
+### 19.4 一次险些发生的跨仓污染
+
+推送 cortex-docs 时我复用了 `../cortex/tools/push-via-api.py`，而该脚本里 `REPO` 是**硬编码**的 `"AgentiX-E/cortex"`。在 cortex-docs 检出目录里跑它，会把 cortex-docs 的内容推到 **cortex 仓库的 master 上**。命令在完成前被终止，并已核对 cortex `master` 仍为 `d94c5d38`，未受污染。
+
+修法与「记住要改常量」相反：让仓库从 `origin` 推导。
+
+```python
+def _origin() -> tuple[str, str]:
+    for line in subprocess.run(
+        ["git", "remote", "get-url", "origin"], check=True, capture_output=True, text=True
+    ).stdout.splitlines():
+        url = line.strip()
+        if "github.com" in url:
+            path = url.split("github.com", 1)[1].lstrip(":/").removesuffix(".git")
+            owner, _, name = path.partition("/")
+            if owner and name:
+                return f"{owner}/{name}", "master"
+    sys.exit("origin is not a github.com remote; refusing to guess a repository")
+```
+
+两仓解析均已验证：`/workspace/cortex -> AgentiX-E/cortex`、`/workspace/cortex-docs -> AgentiX-E/cortex-docs`。**推错仓库从「需要记得」变成「无法表示」**——这与 §17.13 的形状是同一课：一个只靠纪律守住的不变量迟早会失守。
+
+推送结果：cortex `99302659`、cortex-docs `c5e8beb3`（均 214/339 blobs 逐字节核对，Lambertyan 署名）。
+
+## 20. C5 结果：判据一过，判据二过不了 —— 不能归因，拒绝报告 B7
+
+两臂都在 `d94c5d38` 上跑完，**均 success**。§17.15 定的三条判据逐条核对如下。
+
+### 20.1 判据一：两臂不再逐字节相同 —— **通过**
+
+§13 的病征（两臂产物逐字节相同）已消失。16 个 JSON 产物中 **14 个不同**：
+
+```
+DIFFERS: benchmark-conjunction-ablation-report.json
+DIFFERS: benchmark-diagnostics.json
+DIFFERS: benchmark-failure-census.json
+DIFFERS: benchmark-gap-attribution.json
+DIFFERS: benchmark-ku-bitemporal-ablation-report.json
+DIFFERS: benchmark-mr-ablation-report.json
+DIFFERS: benchmark-mr-diagnostics.json
+DIFFERS: benchmark-mr-retry-ablation-report.json
+DIFFERS: benchmark-recall-curve.json
+DIFFERS: benchmark-report.json
+DIFFERS: benchmark-single-session-diagnostics.json
+DIFFERS: benchmark-tr-ablation-report.json
+DIFFERS: benchmark-tr-coverage-ablation-report.json
+DIFFERS: benchmark-tr-window-ablation-report.json
+```
+
+产物大小也不同：control 535666 bytes / feature 537246 bytes。
+
+### 20.2 判据二：差异必须出现在 `[candidateCluster: N]` 标注上 —— **无法核对，且归因失败**
+
+这一条本来是「差异是否落在开关该影响的地方」。核对过程中发现了**更根本的问题**：这个差异**不是开关造成的**。
+
+| 半边 | control correct | feature correct | delta |
+|---|---|---|---|
+| **baseline** | 42 / 60 | 40 / 60 | **−2** |
+| **feature** | 51 / 60 | 49 / 60 | **−2** |
+
+**baseline 半边根本看不到 `RETRIEVAL_SIDES` 这个开关**——它构造时就不带该参数。可它偏偏也动了 2 题，而且方向、幅度与 feature 半边**完全一致**。
+
+按能力维度看，两半中不一致的能力**也完全相同**：
+
+| 能力 | baseline control→feature | feature control→feature |
+|---|---|---|
+| IE | 24/26 → 23/26 **DIFFERS** | 24/26 → 23/26 **DIFFERS** |
+| KU | 5/8 → 4/8 **DIFFERS** | 5/8 → 4/8 **DIFFERS** |
+| MR | 7/9 → 7/9 SAME | 7/9 → 7/9 SAME |
+| TR | 6/8 → 6/8 SAME | 6/8 → 6/8 SAME |
+| ABS | 0/9 → 0/9 SAME | 9/9 → 9/9 SAME |
+
+**结论：两臂之间的差异是 LLM 端点噪声，不是 `RETRIEVAL_SIDES` 的效应。** 按 §13 的规则，此时**拒绝报告 B7 结果**。
+
+### 20.3 这不是意外，代码里早就写着
+
+`natural-language-memory.ts` 的 `answerCache` / 结构化缓存注释原文：
+
+> The endpoint is not reproducible across calls even at `temperature=0`, so two arms that issue a byte-identical structured prompt must not each send it.
+
+缓存**正是为了应对这个已知的不可复现性**而引入的（当时 K U 提取提示在同一个 run 的多个臂之间被发了 6 次）。但缓存是**进程内**的：`control` 与 `feature` 是**两个独立的 CI run、两个独立进程**，缓存无法跨臂共享。于是每一臂各自承受一次端点噪声，噪声幅度（2 题）**大于**开关的效应。
+
+`temperature` 默认 0（`bench/TEMPERATURE ?? 0`）并不足以让端点可复现——这一点注释里已写明，只是当时没有把它当成**跨臂 A/B** 的阻塞项。
+
+### 20.4 判据三：启动行与 `featureConfig` 自洽 —— **无法核对**
+
+`benchmark-report.json` 的顶层键是：
+
+```
+embedding, dataset, questionCount, baseline, feature, ablation, generatedAt, decisionReasons
+```
+
+**没有 `featureConfig`**，也没有任何字段记录 `retrievalSides` / `candidateDiscrimination`。在全部 16 个产物中搜索 `retrievalSides` 与 `Retrieval sides`：**零命中**。
+
+启动行只写在 stdout，而 stdout 在 job 日志里，job 日志托管在沙箱不可达的主机上。所以**从产物无法证明这两臂确实一个开了、一个关了**。判据三因此**无法核对**——不是「不通过」，是「没有证据」。
+
+### 20.5 附带发现：判据读取器对真实产物不可用
+
+`tools/read-b7-criterion.mjs` 在真实产物上直接抛错：
+
+```
+Error: control: no per-question array found.
+Top-level keys: embedding, dataset, questionCount, baseline, feature, ablation, generatedAt, decisionReasons
+```
+
+它假定报告里有 `questions` / `perQuestion` / `results` / `details` 四者之一。**这些键一个都不存在。**
+
+进一步核对 `bench/run.ts` 的全部 `writeReportJson` 调用：逐题记录**从未落盘**。唯一含逐题数据的产物是 `benchmark-tr-failure-classes.json`（只有 2 题）。
+
+这与 §14 是**同一形状**：一个工具存在、有文档、有单元测试，但**从未对着真实产物跑通**。`judgeCriterion` 本身是好的（有自己的测试），缺的是「把逐题记录变成产物」这一步——没有它，C6 无论怎么跑都不可能得出关于功能的判决。
+
+### 20.6 当前状态
+
+| 项 | 状态 |
+|---|---|
+| CI 门禁 | **绿**（`36398012861`） |
+| 判据一 两臂非逐字节相同 | **通过** |
+| 判据二 差异落在标注上 | **不通过**——差异是端点噪声，归因失败 |
+| 判据三 启动行自洽 | **无法核对**——产物不含开关记录 |
+| B7 判决 | **拒绝报告**（§13） |
+
+**不能主张的东西**（明确写下来，避免下一轮误读）：
+- 不能主张 B7 有效。delta 已证明是噪声。
+- 也不能主张 B7 无效。**开关的效应从未被测量过**——被噪声淹没了，而不是被证明为零。
+- 不能主张两臂真的分别开了/关了开关。产物没有记录。
+
+### 20.7 下一步（按依赖顺序）
+
+1. **把逐题记录落盘**（P0）。不改这个，C6 永远无法执行。产物须含 `questionId`、`groundTruth`、`answer`、`grounded`、`retrieved`，且**必须含 `featureConfig`**。
+2. **让 A/B 免疫端点噪声**（P0）。可选路径：(a) 用确定性端点（离线 embedding + 确定性 reranker + 确定性 QA）；(b) 复用同一进程内的缓存跑两臂（一次 run 内跑 control 与 feature）；(c) 接受噪声但先量化它——用同一配置重复 N 次得到噪声分布，再看 B7 的 delta 是否超出该分布。**(c) 是最诚实的**，因为它同时给出「这次测量有没有分辨力」的答案。
+3. **判据三要在产物里可核对**（P0）：`featureConfig` 必须进 `benchmark-report.json`。
+4. 这三条都落地后重跑 C5，再谈 C6 判决。
