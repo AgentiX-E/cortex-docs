@@ -4301,3 +4301,200 @@ cortex-eval     ├ candidate-context.ts  新增 retrievalCandidateSides
 | C4 | 普查门禁须保持绿色 | 新函数必须有非测试调用者（§15 的门禁会强制这一点） |
 | C5 | A/B 重跑 | 先验证两臂**不再逐字节相同**——§13 教训的直接应用 |
 | C6 | 按判据判决 | 复用 `tools/read-b7-criterion.mjs` |
+
+---
+
+## 17. 通道 C 已实现、已穿线、已测量：C1–C4 全部结清
+
+§16.7 的优先级表是**先写下的判据**，不是事后的描述。本轮按它执行，
+并且**由门禁而非由偏好**推着走完了 C1 → C3。
+
+### 17.1 执行结果
+
+| # | 事项 | 判据 | 结果 |
+|---|---|---|---|
+| C1 | 实现 `retrievalCandidateSides` | TDD；注入变异被捕获 | ✅ **26 用例**；**14/14 live 变异被捕获** |
+| C2 | 真实产物上产 ≥2 侧 | 与通道 B 对照 | ✅ **B 产 1 侧、C 产 2 侧**（两套夹具均如此） |
+| C3 | 穿线到系统与 runner | 沿用 §14 的接线测试形态 | ✅ **10 用例**；**7/7 live 变异被捕获** |
+| C4 | 普查门禁保持绿色 | 新函数须有非测试调用者 | ✅ 门禁**先报红**，穿线后转绿 |
+| C5 | A/B 重跑 | 两臂不再逐字节相同 | ⏳ 单测层证据已备（见 §17.6） |
+| C6 | 按判据判决 | 复用判据读取器 | ⏳ 待 C5 |
+
+### 17.2 通道 C 的实现形态：按 head 分组，而不是按内容词袋
+
+§16.3 只说了「从内容词分歧中抽取两侧」，没说**粒度**。实现时才看清：
+`contentTerms` 是一个**袋式词集**，它丢掉了候选身份。
+
+三轮回合、`bike` 被两个修饰词限定：
+
+```
+cargo bike  (回合 0、1)
+racing bike (回合 2)
+```
+
+袋式词集给出 `{cargo, racing, bike, …}`——**看不出 `cargo` 与 `racing`
+在竞争同一个 `bike`**。正确粒度是**多词 span**：把**全部** span 按第二个词
+（head）分组，`head = bike` 一组里就同时坐着 `{modifier: cargo}`
+与 `{modifier: racing}`——**竞争关系在这个分组里是显式的**。
+
+这条不是实现细节。它解释了 §16.2 的失败为什么是**结构性**的：
+`discriminatingQuestionTerms` 产出的是词集，而词集**无法表达配对**。
+通道 B 不是「没调好」，它用的数据类型就不支持这个结论。
+
+### 17.3 我自己的两个 BUG，都由测试而非评审抓到
+
+**BUG 1：把递归当成每个修饰词的属性。**
+首版要求槽位在分组**之前**就已递归，于是 `cargo`/`racing` 从未成组，
+函数返回 `[]`。实现看起来完全合理，是**对照测试**
+（`yields >= 2 sides where candidateSides yields exactly 1`）对着它变红的。
+
+**BUG 2：修 BUG 1 时引入了同一类缺陷。**
+修法是 `group.some(entry => entry.turns.size >= 2)`。它会**丢弃**
+「三个备选各出现一次」的槽位，转而选中「两个备选、其一递归」的槽位——
+**与 BUG 1 是同一类错误**：把槽位级的属性错当成修饰词级的属性。
+
+最终判定要求**双向证据**：
+
+```
+group.length >= 2 && (group.some(turns.size >= 2) || headTurnCount(group) >= 2)
+```
+
+其中 `headTurnCount` 数的是**提到该槽位的不同回合数**。
+
+> **这两个 BUG 的价值在于它们的位置。** 两者都不在边界条件里，
+> 而在「哪个量是槽位的、哪个量是元素的」这一层。
+> 评审看不出，因为它们读起来都像正确的代码。
+
+### 17.4 一个语义决定：`mentioned.length !== 1` 而不是 `>= 1`
+
+备选多于两个时，用 `answer` 收窄到两个。判据是
+**答案是否点名了唯一一个候选**：
+
+```ts
+if (mentioned.length !== 1) return ordered.slice(0, 2);
+```
+
+必须是**严格等于 1**。一个同时点名两个候选的答案是**骑墙，不是承诺**；
+用 `>= 1` 会让存活的那一对**依赖骑墙的语序**。实测：
+
+```
+answer: "racing and touring bike"
+  !== 1  ->  [["cargo","bike"], ["racing","bike"]]
+  >=  1  ->  [["racing","bike"], ["cargo","bike"]]
+```
+
+同样的两侧，顺序相反——而顺序在这里是**答案内容的一部分**。
+
+### 17.5 第三个 BUG：功能生效了，但测量仪器看不见
+
+这是本轮最有价值的发现，也是这个测试套件存在的理由。
+
+C3 穿线后，`annotateWithCandidateSides` 确实产出了标注、prompt 确实吃到了它。
+但 `emitTrace` 报的是**原始的 `retrieved`**，而 prompt 用的是**标注后的 `context`**。
+
+> **功能生效，而仪器盲。** 这与「功能坏了」是**同一类缺陷**：
+> 两者的产物都让 A/B 读不出差异。
+
+修法是两处 emit 都改为 `retrieved: context`。锁住它的断言是
+`changes the injected context, so the two arms are not byte-identical`
+——§13 教训的直接应用，写成了断言而不是注释。
+
+### 17.6 C2 的对照，落在真实产物上
+
+单测里的断言只由定义夹具的测试作证——**一个只被断言它的测试见证的主张，还不是实测**。
+所以另加了 `tools/read-channel-c-contrast.mjs`，对**真实 `dist`** 读两臂：
+
+```
+=== discriminating retrieval (the B7 fixture) ===
+  B:      1 side(s)  [["bike","ride"]]
+  C:      2 side(s)  [["cargo","bike"],["racing","bike"]]
+  B annotates: false
+  C annotates: true
+
+=== five-word pool (the fixture that falsified B) ===
+  B:      1 side(s)  [["bike","ride"]]
+  C:      2 side(s)  [["cargo","bike"],["racing","bike"]]
+  B annotates: false
+  C annotates: true
+
+CONFIRMED: non-oracle, and C clears the two-side bar B cannot.
+```
+
+两套夹具都被报告，**不只是好看的那一套**。附带读到一件事：
+C 在两套夹具上给出同一结果，说明它对诱饵回合（`car` 槽位）是**稳健**的。
+诱饵槽位有三个备选、按「备选最多者胜」本会被选中——但没有发生。
+
+### 17.7 第四件事：门禁推着我走，不是我自己选的
+
+`retrievalCandidateSides` 一被导出，`census:check` 立刻报：
+
+```
+1 NEW orphan(s) not in the baseline:
+  cortex-eval: retrievalCandidateSides (packages/cortex-eval/src/candidate-context.ts:558)
+A new orphan is an export nothing calls. Either wire it to a caller, delete it,
+or add it to tools/export-census-baseline.json with a reason and a roadmap reference.
+```
+
+门禁给了三条路，我走了 **wire it to a caller**，因为
+`retrievalCandidateSides` **不是债务而是 C3 的产出**——
+§16.6.2 已经要求穿线。把它记进基线台账会是把一件待办伪装成一条豁免。
+
+**这就是门禁该有的样子**：它不是事后检查，它**改变了下一步做什么**。
+
+### 17.8 三个死守卫：删除，而不是测试
+
+`candidate-context.ts` 里有三个分支**在任何可达输入下都不可达**：
+`splitSpan` 的 `space === -1`、`head === undefined`、
+`pickWithAnswer` 的 `other === undefined`。
+
+给不可达分支写测试只会得到**装饰性的覆盖率**。三个守卫连同
+死函数 `splitSpan` 一起删除后，覆盖率从 98.29% 升到 **100/100/100/100**
+——**靠删除代码，不是靠 `v8 ignore`**。
+
+### 17.9 三个等价变异：证明了它们不可见，然后从计数里剔除
+
+变异验证报了「3 个漏抓」。漏抓有两种原因，
+**不能默认是测试不够**：
+
+| 变异 | 为什么不可见 |
+|---|---|
+| `accept-one-turn-as-a-slot` | 放宽递归要求，但收缩分支与基线在**每个可达槽位状态**上逐字节相同 |
+| `require-all-modifiers-to-recur` | 收紧递归要求，同上 |
+| `drop-the-empty-retrieval-guard` | 空检索与 `userTurns.length === 0` 已在下一行拦下 |
+
+用**枚举可达状态**证明，而不是「想不出反例」。
+harness 现在输出 `CONFIRMED-EQUIVALENT` / `CONTRADICTED` 标签，
+后者会**报红**——因为把可观测的变异误标成等价，
+比漏抓一个变异更糟。
+
+### 17.10 验收数据
+
+| 项 | 数值 |
+|---|---|
+| 测试总数 | **1687**（core 166 / node 16 / llm 131 / eval 1374） |
+| `candidate-context.ts` 覆盖率 | **100 / 100 / 100 / 100** |
+| `natural-language-memory.ts` 覆盖率 | **100 / 98.53 / 100 / 100** |
+| 通道 C 变异 | **14 live 全捕获** / 3 等价已证 |
+| 接线层变异 | **7 live 全捕获** / 1 等价已证 |
+| `census:check` | **no new orphans beyond the recorded baseline** |
+| `pnpm check` | **exit 0** |
+| 推送 | `a4c4202`，**212 blobs 逐字节一致** |
+
+### 17.11 明确不能主张的（延续 §16.6）
+
+- **不能**说通道 C 会提升 B7 的成绩。**A/B 还没跑**（C5/C6 未完成）。
+  已证的是「C 能产两侧而 B 不能」——这是**前置条件**，不是成绩。
+- **不能**说 C2 的对照等价于 A/B 结果。对照证明**开关有效**，
+  A/B 才能回答**开关有没用**。
+- **不能**说接线层已完备。`natural-language-memory.ts` 的
+  聚合路径（`SessionHit[]`）**刻意未穿线**，理由已写在代码里：
+  `SessionHit` 没有 `index`，其 `text` 是拼接的整段会话而非 `TurnLike`。
+  **这是一处已知缺口，不是遗漏。**
+
+### 17.12 下一步
+
+| # | 事项 | 判据 |
+|---|---|---|
+| C5 | A/B 重跑，两臂须**不再逐字节相同** | 逐字节比对两臂产物；相同即**再次拒绝报告**（§13） |
+| C6 | 按判据判决 | `tools/read-b7-criterion.mjs`；非目标题回退**优先于**目标题增益 |
+| — | 可选：按普查台账裁 `eval-harness-surface` 的 120 条 | 逐条判「删」或「接」 |
