@@ -5433,3 +5433,98 @@ stderr: ModuleNotFoundError: No module named 'requests'
 这是**首次**能算出真正 floor 的配置——按 §23.9，floor 只能来自**各臂内部**的重复，而不是两臂之间。拿到后即可判定：C5 的 delta 是否**严格大于**端点自身的抖动。
 
 在结果返回前，**仍不能主张 B7 有效或无效**。
+
+## 25. floor 首次实测：C5 的净效应是零，而 B7 本身是 +9 题
+
+§24.7 发起的 4 次派发全部完成且全部 green（CI `#386`–`#389`，同 SHA `4837759b`）。两次 control（`retrieval_sides=off`，`#386`/`#388`）、两次 feature（`retrieval_sides=on`，`#387`/`#389`），其余开关一致：`candidate_discrimination=on`、`entity_identity_clause=on`、`reranker=on`、`limit=60`、60 题。
+
+这是**第一次**能按 §23.9 的要求从**臂内部**算 floor 的配置。
+
+### 25.1 臂内 floor（每臂 2 次，同配置）
+
+| 臂 | 运行 | correctness | 题级移动 | 计数区间 |
+|---|---|---|---|---|
+| control（`sides=off`） | #386 / #388 | 52 / 51 | 1 题（`32260d93`，correct → wrong） | 1 题（1.67 pp） |
+| feature（`sides=on`） | #387 / #389 | 51 / 50 | 3 题（`0a995998`、`6aeb4375` correct→wrong；`32260d93` wrong→correct） | 1 题（1.67 pp） |
+
+两条臂的 floor 都是 **`minQuestionsStrictlyGreaterThan: 2`**（`floorPp: 1.67`）。工具对 feature 臂额外发出它自己的警告，且这次不是形式上的：
+
+> `WARNING: the count-based range is 1 questions but up to 3 questions moved between a pair of these runs.`
+
+**这就是 §21 记下的缺陷形状在真实数据上复现**：计数区间**不能**约束名册移动。feature 臂 3 题换手、净额 −1 题，所以只看分数会严重低估抖动。
+
+### 25.2 三题不稳定是随机，不是信号
+
+把四次运行的 baseline 臂逐题排开，**只有 3 题**跨运行翻转，其余 **57 题全稳**：
+
+| questionId | capability | #386 off | #388 off | #387 on | #389 on |
+|---|---|---|---|---|---|
+| `0a995998` | MR | ✅ | ✅ | ✅ | ❌ |
+| `6aeb4375` | KU | ✅ | ✅ | ✅ | ❌ |
+| `32260d93` | IE | ✅ | ❌ | ❌ | ✅ |
+
+关键是它们**不按臂分组**：`0a995998`、`6aeb4375` 只在 `sides=on` 的一次里翻，另一次正常；`32260d93` 在**两臂各翻一次**。翻转模式与 `retrieval_sides` 不相关，与 LLM 采样的不稳定性一致。
+
+`6aeb4375` 的答案文本直接展示了机制——它是**串话**：
+
+```
+#386  'four'                                                    ✅
+#388  'The question has no time qualifier, so report the value from the latest turn: fo…'  ✅
+#387  'The question has no time qualifier, so report the value from the latest turn: fo…'  ✅
+#389  'Let me work through this chronologically.'               ❌
+```
+
+`#389` 输出了一段**推理过程而非答案**。这是解码轨迹的偶发截断，与检索配置无关。
+
+**注意 `6aeb4375` 正是 §23.9 里那个「两臂间唯一移动的题」。** 它在旧分析里被当作 C5 的效应证据；现在有了臂内重复，它被证明是噪声。**旧结论是错的，原因正是 §23.9 的诊断：跨配置 delta 被当成了对判决的约束。**
+
+### 25.3 C5 的净效应：0.00 题，精确零
+
+`ablation.delta` 在**四次运行中逐字相同**：
+
+| 运行 | `sides` | baseline acc | feature acc | delta | McNemar p | B→W | W→C |
+|---|---|---|---|---|---|---|---|
+| #386 | off | 0.7167 | 0.8667 | **+9.0 题** | 0.003906 | 0 | 9 |
+| #388 | off | 0.7000 | 0.8500 | **+9.0 题** | 0.003906 | 0 | 9 |
+| #387 | on | 0.7000 | 0.8500 | **+9.0 题** | 0.003906 | 0 | 9 |
+| #389 | on | 0.6833 | 0.8333 | **+9.0 题** | 0.003906 | 0 | 9 |
+
+```
+mean control delta = +9.00 题
+mean feature delta = +9.00 题
+C5 (retrieval_sides) effect = +0.00 题
+```
+
+**四次运行的名册不一致集合（discordant set）是同一个 9 题集合**——恰好是 9 个 `_abs` 后缀题（abstention 题），B→W 恒为 0、W→C 恒为 9。这就是 B7 的净贡献：**+9 题，McNemar p = 0.0039，在四次独立运行上完全可重复。**
+
+### 25.4 判决
+
+| 问题 | 答案 | 依据 |
+|---|---|---|
+| B7 有效吗？ | **有效：+9 题 / +15 pp，p=0.0039，4/4 可重复** | δ 区间 **0.0 题** < 单次运行内 9 题的效应 |
+| C5（`retrieval_sides`）有贡献吗？ | **没有：0.00 题** | 两臂 δ 均值相同；效应量**小于 floor**（0.00 < 2） |
+| C5 应当上线吗？ | **不应** | 零效应、零可重复性收益，却增加一次检索分支 |
+
+**C5 结论是「不采纳」，判据是效应量严格小于 floor。** 这次不是「测不出」——是**测得出，且测出来是零**。
+
+> **本节新增的规则。** **一个恰好为零的效应，和一个测不出的效应，是不同的结论；区分它们的唯一办法是把同一配置重复跑。** §23 只做到「拒绝报告」；本节做到了「拒绝这个特性」。
+
+### 25.5 方法学补记：净额隐藏换手
+
+本轮同时验证了 §21 警告的方向，且规模比预期大：feature 臂**净额 1 题、换手 3 题**，是区间的 3 倍。判据若只看 `delta`（净额），会认为抖动是 1 题；真实抖动是 3 题。**`minQuestionsStrictlyGreaterThan` 从计数区间导出，因此对换手型抖动系统性偏低。** 这是一条**测量局限**，不是缺陷——工具明确发出了警告——但所有基于该阈值的判决都继承这个偏低。
+
+### 25.6 验收
+
+| 门禁 | 结果 |
+|---|---|
+| CI `#386`–`#389` | **4/4 success**、同 SHA `4837759b` ✅ |
+| artifact 完整性 | 4/4 `longmemeval-s-report` 下载、60 题名册齐全、roster 跨运行逐位相同 ✅ |
+| 本工具 refuse 条件 | 未触发（名册完整、`answer` 键齐全）✅ |
+| 臂内 floor | control 1 题 / feature 1 题，阈值均 **2 题** ✅ |
+| C5 判决 | 效应 **0.00 题 < 2** → **不采纳** ✅ |
+| B7 判决 | **+9 题、p=0.0039、4/4 一致** → **有效** ✅ |
+
+### 25.7 仍未做
+
+- **谱系台账 `eval-harness-surface` 的 119 条**仍未逐条分诊（§15 最大一类）。
+- **`minQuestionsStrictlyGreaterThan` 对换手型抖动系统性偏低**（§25.5）：应由 `maxPairwiseChanged` 而非计数区间导出。这是一个**已测出的工具缺陷**，修复会改变既往判决的阈值。
