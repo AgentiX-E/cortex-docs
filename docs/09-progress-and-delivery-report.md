@@ -5328,3 +5328,108 @@ census 门禁在 `outcomeMoved` 接线前抓到了它——**这是门禁在正�
 - **C5 的噪声 floor 尚未测量，且当前无法测量**：需要每臂**重复派发 ≥2 次**（§23.9）。在拿到 floor 之前，delta 是否**严格大于**噪声无法判定。当前可核对的数字：control 50/60、feature 49/60，两臂间 1 题移动（`6aeb4375`）。
 - **谱系台账里 `eval-harness-surface` 的 119 条**仍未逐条分诊（§15 记录的最大一类）。
 - **本轮仍不能主张 B7 有效或无效**——判据现在可读了，判决仍是 `REGRESSION`，且其基准（floor）尚不存在。
+
+> **§24 已推进第 1 项**：floor 所需的重复派发已发起，途中修掉三个工具缺陷。
+
+---
+
+## 24. 为测 floor 重复派发，途中修掉三个「守卫看不见自己该守的东西」的缺陷
+
+§23.9 的结论是：floor 无法从一对 A/B 臂算出，必须每臂内部重复。本轮据此发起**每臂两次**的派发。派发前必须先让网络可用，而**这一步就暴露了三个缺陷**——它们同属一类：**检查的问题比它要确立的性质更宽，于是在坏输入上也通过**。
+
+### 24.1 缺陷十一：pin 脚本一直在静默地「反向 pin」
+
+§23.1 的修复手段（`pin-github-hosts.py`）本次运行后报告：
+
+```
+pinned 5 hosts in /etc/hosts
+verified through the system resolver
+```
+
+**两句都是真的，而主机仍然是坏的。**
+
+`git ls-remote` 依旧 `gnutls_handshake() failed`。查 `/etc/hosts`，里面有**两组**记录：
+
+```
+140.82.112.6   api.github.com                  ← 无标记，上一次会话手写的
+20.205.243.168 api.github.com  # doh-pin       ← 本脚本写的
+...
+```
+
+`strip_previous_pins` **只删带 `# doh-pin` 的行**，所以那 4 条无标记的行**每次都活下来**。于是 `getent hosts api.github.com` 打印**两个地址**：
+
+```
+20.205.243.168  api.github.com
+140.82.112.99   api.github.com     （复现时注入的那条）
+```
+
+**一个名字有两条 A 记录不是「修了一半」。** 解析器返回两条，调用方拿到先命中的那条，可观测症状就是**在一个解析正常的主机上出现间歇性 TLS 失败**——**与 condition A 本身的症状完全一致**，所以它被诊断成了 condition A。
+
+### 24.2 比「陈旧行残留」更糟：它把已验证的地址换成了未验证的
+
+旧 `strip_previous_pins` 删掉**带标记**的那行、**保留**无标记的那行。对真实文件实测：
+
+```python
+OLD strip kept the stale row?  True
+OLD count of api.github.com lines: 1
+```
+
+所以重跑不只是「没清干净」——它**用一条从未被测试过的地址，替换掉了经过 `select()` 三次尝试排序验证过的地址**，并报告成功。**一个被请来修复、却把对象留在它自己都没验证过的状态里的工具，比什么都不做更糟**，因为这次运行被报成了成功。
+
+### 24.3 为什么验证没抓到：它问的问题比要确立的性质更宽
+
+旧检查问的是**「有没有任何一个地址是真的」**：
+
+```python
+if any(is_synthetic(line.split()[0]) for line in output.splitlines() if line.split()):
+    print(f"FAIL  {name}: still synthetic after pinning")
+```
+
+一条真实地址 + 一条陈旧真实地址 → `False`，通过。**问题的答案集错了**：要确立的性质不是「存在一个真实地址」，而是**「这个名字有几个来源」**——文件刚刚被重写成每个 host 恰好一行，所以**第二个答案就意味着 pin 没有生效**。现在改为计数并要求**恰好为 1**。
+
+### 24.4 修复
+
+| 项 | 改动 |
+|---|---|
+| `strip_previous_pins` | 删除**任何**指名受管 host 的行，不论来源。名字取**第二个字段**（`ADDRESS host alias` 可识别），**整字段匹配**（`api.github.com.evil.example` 不受影响） |
+| 写后验证 | 从「至少一个真实」改为**计数且必须等于 1** |
+| `existing_pins` | 解析注释前的部分，`ADDRESS # doh-pin`（截断写入）不再变成名为 `#` 的 host |
+
+### 24.5 为什么它能活下来：这九个脚本零测试、零 CI
+
+`tools/` 下有**九个** Python 脚本——包括**唯一的发布器**、**唯一的派发器**、以及这个解析器修复工具——**没有任何测试，也没有 CI job**。
+
+本次与修复一同写下**首批 21 条测试**（`tools/__tests__/test_pin_github_hosts.py`），并接入 `pnpm check`，使本地与 runner 跑**同一条命令**。
+
+**加上测试后立刻又抓到两个缺陷**，两者都是同一形状：
+
+**缺陷十二：依赖清单不完整。** `pnpm check` 在干净 runner 上挂了 4 条 `fetch-artifact.test.ts`，报 `expected 1 to be 2` 且 stdout 为空。用 `python3 -S tools/fetch-artifact.py` **精确复现**：
+
+```
+exit=1
+stderr: ModuleNotFoundError: No module named 'requests'
+```
+
+`fetch-artifact.py` 在**模块作用域** `import requests`，所以没有它连自己的 usage 都打不出来；而**开发沙箱恰好装过 `requests`**，因此**任何本地运行都失败不了**。`tools/requirements-dev.txt` 自称「完整集合」却只列了 pytest。
+
+**缺陷十三：测试宿主把证据吞了。** 它捕获 stderr 却**从不打印**，于是一次 `main` 之前的 import 失败表现为「退出码不对、没有任何消息」。这与 §18 的 `process.exit` 截断、以及 workflow 缺 `tee` 是**同一类**：**失败对机器可见，对读日志的人不可见**。新增两条测试断言：任何 stderr 非空的运行必须被展示；`-S`（无 site-packages，即「依赖缺失」的形状）必须**点名那个模块**，而不是只报一个裸状态码。
+
+### 24.6 验收
+
+| 门禁 | 结果 |
+|---|---|
+| `tools/` 首批测试 | **21 passed**（本地 + `pnpm check` + 干净 venv）✅ |
+| 干净 venv（只装 `requirements-dev.txt`） | pytest 21 passed、`fetch-artifact.py` usage+exit 2 ✅ |
+| `pnpm check` | green（含 `test:tools` 前置）✅ |
+| 故障复现 | 旧 strip 保留陈旧行 → 计数断言会 FAIL；新脚本清理后 `getent` 每 host **恰好 1** ✅ |
+| CI `Verify library` | #382–#385 **failure** → #386–#389 **success** ✅ |
+
+> **本节新增的规则。** **一个答案集比预期更宽的验证，会在坏输入上通过。**「有没有任何地址是真的」被一条**不是你刚写入的**真实地址满足。检查必须针对**被确立的那个性质**发问，而不是它更弱的推论。
+
+### 24.7 本轮发起的实验
+
+4 次派发全部落在同一 SHA `4837759b`：**control × 2、feature × 2**，均为 `limit=60`、`rerank=on/local`、`candidate_discrimination=1`，唯一变量 `retrieval_sides`。
+
+这是**首次**能算出真正 floor 的配置——按 §23.9，floor 只能来自**各臂内部**的重复，而不是两臂之间。拿到后即可判定：C5 的 delta 是否**严格大于**端点自身的抖动。
+
+在结果返回前，**仍不能主张 B7 有效或无效**。
