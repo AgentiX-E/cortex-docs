@@ -5104,6 +5104,227 @@ how much of the ROSTER moves.
 
 ### 22.9 仍未做
 
+> **本节的过期陈述已在 §23 更正。** C5 已在同一 SHA `72f0ef23` 上重跑完成（控制臂 #380、feature 臂 #381，均 success），网络也已恢复（根因是 DNS 劫持，见 §23.1）。以下是写下时的真实状态，保留以显示当时的边界。
+
 - **`§20.7` 三条已全部落地**，但**C5 尚未重跑**。名册与配置现在都在产物里了，重跑后用 `node tools/quantify-endpoint-noise.mjs <产物目录>` 得到「端点自己移动多少题」的可核对数字，再判 B7 的 delta 是否**严格大于**该 floor。
 - 网络仍不可达：本轮 25 次隧道探测全败 + 三方复测一致，`9cbc18a`/`f05105b`/`ab82987` 仍未推送。
 - **本轮仍不能主张 B7 有效或无效**——开关的效应依然未被测量。
+
+---
+
+## 23. C5 重跑完成，以及判据在真实 A/B 上暴露的缺陷九
+
+§22 落地的名册与配置，让「重跑 C5 并用真实产物验收 §20.7 三条」成为可能。本轮做完了这件事，并在**第一次用真实产物读取判据**时发现：**判据无法通过——不是因为臂没效果，而是因为它把「措辞变了」当成了「答案变了」。**
+
+### 23.1 先修网络：根因是 DNS 劫持，不是沙箱不可达
+
+§22.9 记录「网络仍不可达」，而我此前把这件事诊断为「沙箱 egress 整体不通」，为此做了 25 次隧道探测、多方复测——**全部是复杂化**。用户直接给出了正确方向：**这很可能是 DNS 劫持**。
+
+一条命令即确认：
+
+```
+$ getent hosts api.github.com
+198.18.0.5      api.github.com
+```
+
+`198.18.0.0/15` 是 **RFC 2544 的基准测试网段**，不是 GitHub 的任何真实地址。TCP 能连上（沙箱代理接住），TLS 永远失败（`SSL_ERROR_SYSCALL`）。**不是路由问题、不是证书问题、不是配额问题，就是一个错误的 A 记录。**
+
+一条命令即证伪「不可达」：
+
+```
+$ curl -sS -o /dev/null -w '%{http_code} %{time_total}s\n' \
+    --resolve api.github.com:443:140.82.113.6 https://api.github.com/user
+200 0.677175s
+```
+
+**同一时刻、同一命令，只换解析结果。**
+
+修法同样是一条命令：仓库自带 `tools/pin-github-hosts.py`（走未被污染的 DoH 解析）。**我先前手写 `/etc/hosts` 是重复造轮子**——脚本用 `# doh-pin` 标记管理自己的行、可重入，手写的行会被它每次运行重复追加。
+
+修复过程中我**两次基于单次采样得出相反结论**（先因 DoH 曾成功过一次就直接 pin 它，又因单次 `curl` 失败断言「DoH 被污染、证书才是判据」），一次额外请求完全推翻。改为按**实测成功率**排序后写入脚本与 `OPS-SANDBOX-EGRESS-STATE.md` §7.4，如实记录这次错误。**n=1 不是对间歇性量的测量。**
+
+网络恢复后，积压提交全部推送：cortex `72f0ef23`（13 提交）、cortex-docs `894489d4`（9 提交）、cortex `562310e1`，均 `verified: N blobs byte-identical`，并用 **REST API 与 git ls-remote 两个独立协议**核对远端 SHA 一致。
+
+### 23.2 C5 重跑：两臂同 SHA、均 success
+
+| 臂 | run | 结果 |
+|---|---|---|
+| control（`retrievalSides: false`） | #380 | success |
+| feature（`retrievalSides: true`） | #381 | success |
+
+同一 ref `72f0ef23`，唯一变量是 `retrievalSides`。
+
+### 23.3 §20.7 三条在真实产物上验收：全部通过
+
+| 条 | 内容 | 结果 |
+|---|---|---|
+| 1 | 逐题名册字段齐全 | **60/60 条**，`questionId`/`question`/`capability`/`groundTruth`/`answer`/`correct`/`grounded`/`turns`/`featureConfig` 全在 ✅ |
+| 2 | 有名册 → 噪声工具可算向量 | `quantify-endpoint-noise.mjs` 正常产出 floor ✅ |
+| 3 | `featureConfig` 顶层 + 逐条戳记 | 顶层有、逐条 **60/60**，两臂配置可肉眼 diff（只差 `retrievalSides`）✅ |
+
+数据语义正确：**10 条显式 `null`（真实弃答）、0 条缺键**。
+
+判据读取器也**首次在真实产物上完整执行到底**：
+
+```
+control questions: 60
+feature questions: 60
+--- recomputed cohort ---
+targets: 15 | identical: 21 | unseparable: 14 | notGrounded: 10
+--- record completeness ---
+complete: both arms recorded an answer for all 60 questions
+```
+
+### 23.4 缺陷九：判据用「答案文本」判定 movement，于是它无法通过
+
+判据当时的核心是这个比较：
+
+```ts
+const changed = before !== after;   // 纯字符串比较
+if (targetIds.has(id)) { if (changed) moved.push(id); continue; }
+if (changed) regressed.push(id);    // 非目标：任何变化都是 regression
+```
+
+在真实 C5 两臂上它给出：
+
+```
+REGRESSION — non-target questions moved: 4
+  6aeb4375  71017276  945e3d21  6ae235be
+```
+
+而这 4 题里，**没有一题的正确性发生了改变**——真实情况是 **1 题**（`6aeb4375`）改变了，**而它恰好是 target**：
+
+| id | control | feature | 正确性 |
+|---|---|---|---|
+| `6aeb4375` | `…report the value…: four.` | `Let me work through this.` | **true → false** |
+| `71017276` | `4 weeks ago` | `4` | true → true |
+| `945e3d21` | `three times a week` | `Three times a week` | true → true |
+| `6ae235be` | `…alkylation, and hydrotreating` | `…alkylation, hydrotreating` | true → true |
+
+`945e3d21` 只差**一个大写字母**。`6ae235be` 只差**一个连词**。
+
+**严重性在于顺序**：非目标条款被**最先检查且不可被目标增益覆盖**（§12 的设计）。所以两处拼写级差异，就用判据能返回的**最严厉结论拒绝了整个臂**。
+
+**而 LLM 永远不会逐字节复现自己的措辞。** 一个在大小写上就会触发的守卫，会在模型能产出的**每一个臂**上触发——**这等同于没有守卫：判据变成不可能通过，`REGRESSION` 变成它的默认答案。**
+
+### 23.5 修法：把相等判据收进一个函数，两个 clause 共用
+
+`ArmOutcome` 增加可选 `correct`，相等判据收进 `outcomeMoved`，**两个 clause 共用同一个**：
+
+1. **两侧都有评分** → 比较评分。这是唯一能直接观测「结果变了」的情形。
+2. **任一侧无评分** → **只**比较是否弃答。一个臂停止产出答案确实移动了，且无需 scorer 即可见；仅改写措辞则没有移动，主张它需要判据没有的证据。
+
+`correct` **缺省表示未评分，不表示答错**——把缺省读成 `false`，正是让记录缺口看起来像读者失败的那种替换（§22.3 的缺陷八）。
+
+修复后在真实 C5 两臂上：
+
+| | 修复前 | 修复后 |
+|---|---|---|
+| 报为非目标移动 | 4 | **1** |
+| 其中正确性真变化 | 1 | **1** |
+| 仅措辞但被报出 | 3 | **0**（另有独立普查报出 **9** 条） |
+
+活下来的那条 regression 是**真的**：
+
+> `6aeb4375` — *How many Korean restaurants have I tried in my city?* — gold `four`。控制臂答 `four` 且判对；feature 臂输出 `Let me work through this.` 且判错。
+
+所以判决**仍是 `REGRESSION`，但理由现在可核对**。判据从「不可能通过」变成「有信息量」，**且没有被削弱**：它当初要抓的每一种情形仍然被抓到，它从没打算抓的（scorer 判过的改写）不再触发它。
+
+### 23.6 顺带解决：两个工具用不同的相等判据
+
+缺陷九还解释了一个此前看着像矛盾的分歧。**同一对 C5 臂**：
+
+| 工具 | 比较什么 | 报出移动 |
+|---|---|---|
+| `read-b7-criterion.mjs` | 答案**文本** | 4 |
+| `quantify-endpoint-noise.mjs` | **正确性** | 1 |
+
+两者都叫「movement」，都没有说明指的是哪个。这与 §20 记录的「两臂差 2 题、产物说不出哪 2 题」同族——**计数不是定义**。
+
+读取器现在调用 `outcomeMoved`，并打印一份**移动普查**，把 9 条仅改写的题**显式列出**而不是让它们从所有计数里消失：
+
+```
+--- movement census (both arms, one question at a time) ---
+reworded but not moved: 9 question(s) — the text differs, the
+  scorer's verdict does not. These are NOT movement and are excluded above.
+  8a2466db 75832dbd 71017276 945e3d21 32260d93 6ae235be 195a1a1b afdc33df caf03d32
+```
+
+没有这一行，它们的消失与「两臂完全相同」无法区分。
+
+### 23.7 两条测试把缺陷固化成了契约
+
+```ts
+it('reports regression when a non-target changes at all', () => {
+  const verdict = judgeCriterion({
+    cohort: cohortOf(['t1']),
+    control: arm(['t1', 'wrong'], ['n1', 'a']),
+    feature: arm(['t1', 'right'], ['n1', 'b']),
+  });
+  expect(verdict).toEqual({ kind: 'regression', regressed: ['n1'] });
+});
+```
+
+`'a'` 与 `'b'` **都未评分**，所以在这个 fixture 里「文本变了」与「结果变了」是同一个观测：**无论判据比字节还是比评分，它都同样通过，因此它给缺陷盖了章。** 这与 `read-b7-criterion.test.ts` 里那条「把记录缺口记成读者行为」是同一类失败。两条现在都改用**已评分**的 fixture。
+
+一般化的教训：**一个无法区分两种状态的 fixture，无法测试代码在读哪一种。**
+
+### 23.8 缺陷十：噪声工具把「跨配置差异」当成「端点自己的 floor」
+
+读噪声 floor 时暴露了**第二个缺陷，而且它比缺陷九更要紧**——因为**每一个 A/B 判决都是拿这个数字作基准的**。
+
+工具先打印了每个 run 的 `featureConfig`，然后在下一块的标题里写：
+
+```
+--- endpoint movement (same configuration, repeated) ---
+overall: min 49, max 50, mean 49.50, range: 1 questions (1.67 pp)
+```
+
+而这两个 run 正是 **C5 的 control 臂与 feature 臂**，配置差在 `retrievalSides`（off vs on）。
+
+**细节打印出来了，标题却与它矛盾。** 这比不打印细节更糟：信任标题的读者拿到了一个**量的是开关**的 floor；核对配置的读者也没被告知下面那个数字不可用。
+
+**配置不同的两个臂，量到的是开关。** floor 要约束的是端点自己的抖动，而抖动只有在别的一切都没变时才可见。
+
+修法：标题取决于比较结果。
+
+| run 记录的配置 | 标题 | 警告 |
+|---|---|---|
+| 相同 | `(same configuration, repeated)` | 无 |
+| 不同 | `(runs with DIFFERENT configurations -- NOT a floor)` | 点名差异键：`retrievalSides (off vs on)` |
+
+配置按**键逐个**比较，不按 JSON 文本：`featureConfig` 从对象字面量序列化，键序在不同生产者间不稳定，文本比较会在**相同配置**上报警——那会训练读者忽略这个警告。
+
+**4 条新测试里有 3 条在旧代码下也通过，而这正是要点**：它们断言守卫**不得**在配置相同的 run 上触发，而旧代码「从不触发」恰好满足。只有那条断言警告存在的测试能区分两版。**一个无法区分两种状态的 fixture，无法测试代码在读哪一种**（与 §23.7 同一个教训）。
+
+### 23.9 方法学结论：floor 无法从一对 A/B 臂算出
+
+追这个缺陷追出的是一条**方法学**结论，不只是工具缺陷：
+
+> **floor 根本无法从一对 A/B 臂算出**，因为 A/B 臂**按定义就是配置不同的一对**。
+
+floor 必须来自**每一臂内部**的重复运行。工具自己的 docstring 早就写了这一点（"Every input must be the SAME configuration: this tool measures noise, and a set of runs that differ in their switches measures the switches instead"）——**然后代码做了相反的事**，因为第一次喂给它的输入正是 docstring 警告的那种形状。**docstring 是对的，调用是错的，而输出里没有一个字说这件事。**
+
+所以 **C5 的 floor 至今未被测量**，在每一臂重复派发至少两次之前也测不出来。现有那个数字——两臂间移动 **1 题**（`6aeb4375`，correct → wrong）——是一个**跨配置 delta**，它恰恰**就是判据判决所讨论的量，而不是对它的约束**。
+
+### 23.10 门禁与验收
+
+| 门禁 | 结果 |
+|---|---|
+| `b7-cohort.ts`（stmt / branch / fn / line） | **100 / 100 / 100 / 100** ✅ |
+| `b7-cohort.test.ts` | 45 → **56** |
+| `read-b7-criterion.test.ts` | 16 → **17** |
+| `quantify-endpoint-noise.test.ts` | 14 → **18** |
+| `pnpm check` | green ✅ |
+| CI 等价环境（`git archive HEAD`，**NO `.git`**） | 48 files / **1483 tests**，exit 0 ✅ |
+| census 门禁 | **no new orphans** ✅ |
+
+census 门禁在 `outcomeMoved` 接线前抓到了它——**这是门禁在正常工作**。处理方式是**给它一个真实调用者**（读取器的移动普查），而不是记一笔新债。需要它的正是那个与判据分歧的工具。
+
+两个工具现在**在同一对臂上给出一致的移动集合**（`changed: 1` / `correct -> wrong 6aeb4375`），这是相等判据收敛的直接证据。
+
+### 23.11 仍未做
+
+- **C5 的噪声 floor 尚未测量，且当前无法测量**：需要每臂**重复派发 ≥2 次**（§23.9）。在拿到 floor 之前，delta 是否**严格大于**噪声无法判定。当前可核对的数字：control 50/60、feature 49/60，两臂间 1 题移动（`6aeb4375`）。
+- **谱系台账里 `eval-harness-surface` 的 119 条**仍未逐条分诊（§15 记录的最大一类）。
+- **本轮仍不能主张 B7 有效或无效**——判据现在可读了，判决仍是 `REGRESSION`，且其基准（floor）尚不存在。
