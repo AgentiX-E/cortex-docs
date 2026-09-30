@@ -6519,3 +6519,227 @@ cortex-eval: resolveTimeoutMs            ← report-runner.test.ts
 两个问题之间隔的，是一次 barrel 查找加一次导入扫描，各一条命令。**不问它们的代价**，
 是一份**已批准的计划：改动 206 条声明，其中 187 条要么是一个包的已发布 API，
 要么是一个测试的依赖。**
+
+---
+
+## §32 `ProvenanceNode` 的裁决：一个没有被读过的图，和它掩盖的那个真缺口
+
+§28 留下三条待办，本轮之前只剩这一条未动。它的措辞是「需要一次路线图裁决，不是一次普查裁决」——
+而它的**表面**恰恰最像一个机械动作：`unreferenced` 类里**只有它一条**。
+
+裁决结果：**删除**。理由不是「没人用」，而是**它已被取代（superseded）**。
+
+### 32.1 三轴定位先说清楚
+
+| 轴 | 结论 | 方法 |
+|---|---|---|
+| 无调用者 | `packages/*/src` 中除自身文件外无一处提及 | 普查 `unreferenced` 类 |
+| 无测试 | 无测试文件导入或断言它 | 全仓名字检索 |
+| 无同文件使用 | 模块内容即该类型声明本身 | 文件只有 13 行 |
+| 无活的兄弟 | 仓库中无任何函数/常量/类型操作它 | §32.2 |
+
+### 32.2 决定性的那条证据：DAG 的边只出现了一次
+
+让它成为**节点**而非**记录**的字段是 `parents`：
+
+```ts
+/** Optional parent provenance node ids (forming a DAG). */
+parents: string[];
+```
+
+全源码树检索 `parents`，命中 = 这一处声明 + 四个无关命中（三处是测试夹具里
+`'How many parents do I have?'` 这种亲属关系英文词，一处是同一个词的词法正则）。
+**没有遍历、没有拓扑序、没有祖先查询、没有环检测。**
+
+> **一个没有任何代码读取其边的 DAG 类型，是一个没有图的形状。**
+
+### 32.3 逐个字段对照：为什么「种子」这一路走不通
+
+路线图读法必须回答：**要在这上面建什么，而那个东西是不是已经建好了？**
+
+provenance tracking 具体是四种能力：来源、派生、双时钟、可重构过去状态。
+**其中三种已经在运行**：
+
+| `ProvenanceNode` 字段 | 已经承载它的东西 |
+|---|---|
+| `id` | `Fact.id` / `MemoryValue.id` |
+| `memoryId` | `Fact.subject` + `Fact.predicate`（fact 本就是关于某个记忆的） |
+| `kind: string`（`"user-message"` / `"llm-extraction"` / `"consolidation"`） | `MemoryValue.source` / `Fact.source`，文档原文即 *"Origin of the memory, used for provenance and poisoning defense"* |
+| `timestamp: number`（一个时钟） | `Fact.validFrom` + `Fact.systemFrom`——**两个**时钟 |
+| `parents: string[]`（DAG） | **无**（这才是真缺口） |
+| `metadata?: Record<string, unknown>`（无类型逃生口） | `Fact.confidence` + `Fact.sourceTrust`——**有类型**的 [0,1] 刻度 |
+
+对照并不接近。`ProvenanceNode` 更「通用」的地方，恰恰是**更不类型化**的地方：
+无约束的 `kind` 字符串 vs 有文档的 `source`；无类型 metadata 袋 vs 两个标定过的数值刻度。
+而在时间上它**严格更差**：一个时间戳，对手是两个——正是让 as-of 重构成为可能的那一对。
+
+**唯一的缺口是第 2 项（派生），而 `ProvenanceNode` 也没补上它**——§32.2 证明它声明了那条边却从不读它。
+
+### 32.4 它本该需要的机制，已经存在
+
+`packages/cortex-core/src/temporal/bitemporal.ts` 实现的正是 provenance tracking 所需的查询：
+
+```ts
+currentFacts(facts, worldTime?, systemTime?)   // 什么是真的，以及截至何时为真
+currentValue(facts, subject, predicate, ...)   // 最高可信度的当前 fact，按 trust 加权
+findContradictions(facts)                      // (subject, predicate) 上的冲突
+```
+
+`isFactCurrentAt` 用 `systemUntil` 标记取代关系，而该字段的文档原文是
+*"the system learned (or superseded) the fact"*。**那就是一份带 as-of 查询的不可变审计日志。**
+
+`AUDIT-CODE-VS-DOCS.md` 把「Provenance-DAG / immutable audit log」列为
+广告有而实际无，并以 `provenance.ts` 为证据——但那份证据真正该指向的是：
+**日志那一半早已以另一个名字交付，缺的只有 DAG 的边。**
+
+### 32.5 删除带走了符号，留下了缺口
+
+三点，第 3 点最重要：
+
+1. **派生缺口是真的。** `Fact` 记录**结论是什么**和**多可信**，但不记录
+   **从哪些先验 fact 推出的**。一个由三条检索记忆推出的事实，与一条直接断言的事实，
+   除了 `source` 字符串之外无法区分。
+2. **正确的修法不是并列一张 `ProvenanceNode` 表**，而是 `Fact` 上的一个字段：
+   `derivedFrom?: string[]`。派生边必须与事实同处一行，否则两条记录可以互相矛盾而无从裁决。
+   `ProvenanceNode` 的结构性错误就在这里：它把 provenance 做成了领域类型的**兄弟**而非**属性**，
+   所以没有任何消费者——**没有任何类型指向的节点，无法被任何东西消费。**
+3. **`ARCHITECTURE.md` 的状态表现在明确记录这一条**，与 TD(λ) 未实现、`sinkhorn` 已实现但无调用
+   同一个语气。这比留一个没人读的类型诚实。
+
+同时更正两处文档承诺：`ARCHITECTURE.md` 的 `domain/` 层不再列出已删除的符号；
+`README.md` 的「Provenance & trust」不再暗示派生已被记录——来源与信任那一半是真的，
+派生那一半是这个缺口。
+
+### 32.6 验收
+
+**删除前的四项阴性检查**（全部为命令，全部为空）：
+
+1. 无值导入（模块只导出类型，值导入不可表达）。
+2. 无类型导入：检索 `domain/provenance.js` → **1 命中，即 barrel**；检索 `ProvenanceNode` → **1 命中，即 barrel**。
+3. 无 barrel 重导出链：`cortex-node` / `cortex-llm` / `cortex-eval` 的 barrel 均不涉及。
+4. 无 bench / tool 消费者：`tools/` 中唯一命中是普查基线自身（一份测量记录，不是消费者）。
+
+**普查移动，与预测逐位一致：**
+
+| | Before | After | Δ |
+|---|---|---|---|
+| Exports | 431 | **430** | **−1** |
+| Orphaned | 215 | **214** | **−1** |
+| `unreferenced` | 28 | **27** | **−1** |
+| `referencedLocally` | 187 | 187 | **0** |
+| `withCaller` | 216 | 216 | **0** |
+
+不变量全部成立：`knownOrphans = locations = sum(groups) = orphanClass = 214`，
+`referencedLocally + unreferenced = orphaned`（187 + 27 = 214）。`census:check` exit 0。
+
+**三次缺陷注入，第三次跑第一遍时没触发——那才是本轮最有价值的发现：**
+
+| 注入 | 结果 |
+|---|---|
+| 把 barrel 行加回去 | `2 failed \| 5 passed`——两条断言分别报出「仍是公开 API」与「barrel 仍命名该符号」 |
+| **删掉状态表那一行**（而不是符号） | `1 failed \| 6 passed`——**「整洁清扫」这个失败模式被抓住了** |
+| 把 `Fact` 的 `systemUntil` 声明改名 | **第一遍 `7 passed`——没触发** |
+
+第 3 条注入没触发，暴露出一个真实漏洞：断言写的是 `\bsystemUntil\b`，而**任何对该名字的使用**
+都能满足它。把声明改成 `systemUntilRenamed: number` 之后，使用处
+`fact.systemUntil === Infinity` 仍在文件里，测试于是**在字段本身已消失的情况下保持绿色**。
+
+> 一个字段是否存在，是**声明事实**，所以断言也必须是声明断言。
+
+改为匹配声明形态 `(?:^|\n)\s*NAME\s*[?]?\s*:\s*(?:number|Number)\s*;` 后重跑注入，
+`1 failed | 6 passed`，报出
+`Fact no longer DECLARES systemUntil; as-of reconstruction needs the field, not just a use of the name`。
+
+### 32.7 一处构建脆弱性：验证过程自己暴露的，不是这次改动造成的
+
+删除的验证是 `pnpm check` 通过。再验证是一次**干净**构建——
+`rm -rf packages/*/dist packages/*/tsconfig.tsbuildinfo` 后 `pnpm build`——**也**通过。
+但一个**中间状态**失败了，而它可由一条很自然的命令到达：
+
+```
+rm -rf packages/cortex-core/dist      # 然后，没有清理 cortex-node 的状态：
+pnpm build
+→ packages/cortex-node build: src/storage/sqlite.ts(86,16): error TS7006:
+  Parameter 'k' implicitly has an 'any' type.   （另有五条）
+```
+
+**成因。** `cortex-node` 经项目引用解析 `StorageTransaction`，读的是 `cortex-core` **已产出**的
+`dist/*.d.ts`。当 `cortex-core/dist` 缺失而 `cortex-node/tsconfig.tsbuildinfo` 仍在时，
+`tsc` 信任了过期的 buildinfo，导入解析失败，`StorageTransaction` 退化为 `any`。
+于是 `const tx: StorageTransaction = { ... }` 这个标注不再约束任何东西，
+`strict` 的 `noImplicitAny` 便报出那六个箭头参数。
+
+**为什么它是潜伏的而不是可见的。** `tsconfig.base.json` 同时设置了
+`composite: true` 与 `incremental: true`，而每个包的构建是 `tsc -p tsconfig.json`，
+**不是** `tsc -b --force`。增量状态缓存了解析结果。CI 中 `dist/` 与 `.tsbuildinfo` 同来同走，
+这种不一致状态不会出现。代价是：**任何部分清理都成了对构建顺序敏感的操作**，
+而症状（一个无关文件里的六条 `TS7006`）指向了错的地方。
+
+**本次改动对它做了什么。** 没有动 `sqlite.ts`——那里**没有缺陷**，代码如写法所意图地正确
+（参数由那个标注提供上下文类型，正是正确的惯用法）。发现记录在此，以便下一个人
+在部分清理后看到这六条错误时，认得出这是过期 buildinfo 状态，而不是存储层的 `any` 泄漏。
+永久性防护是构建脚本改用 `tsc -b --force`，或让 `clean` 同时清除两者——
+那是一次自带影响半径的构建配置变更，超出一次「证据是一次普查移动」的删除的范围。
+
+### 32.8 §29 的清单从六个改成五个
+
+`coverage-annotations.test.ts` 里那张「只含类型、因此编译为零语句、因此无需豁免」的文件清单，
+原本六个，`provenance.ts` 是第六个。删除它意味着清单变五个。
+
+这不是测试开了个洞：断言是「清单上每个文件都编译为零语句」，**已删除的文件无法违反它**，
+从清单里去掉就是全部改动。改动处写了注释说明计数为何变，而不是静默改数字。
+
+### 32.9 逐项结果
+
+| 项 | 结果 |
+|---|---|
+| `packages/cortex-core/src/domain/provenance.ts` | **删除**（13 行） |
+| `cortex-core` barrel 导出行 | 移除 |
+| `ARCHITECTURE.md` 分层图 | `domain/` 不再列该符号 |
+| `ARCHITECTURE.md` 状态表 | **新增**派生未实现一行，含 `derivedFrom` 修法 |
+| `README.md` | 来源/信任保留，派生改为明确未记录 |
+| `docs/DECISION-PROVENANCE-NODE.md` | 新建（285 行，8 节） |
+| `provenance-decision.test.ts` | 新建，7 条断言 |
+| `coverage-annotations.test.ts` | 六个文件 → 五个 |
+| `docs/README.md` | 索引新增一行，列对齐 |
+| 5 份既有审计报告 | 交叉引用更新（其中两份就地更正结论） |
+| `export-census-baseline.json` | 重建，214 |
+
+**仓库测试 1854 → 1861**（+7）。**四个包 × 四个维度覆盖率全部 ≥95%**，
+逐项与 §31 相同（98.74/98.66/100/98.74、100/98.61/100/100、
+99.27/98.11/100/99.27、99.88/99.05/100/99.88）。`pnpm check` exit 0。
+
+推送：`cortex` → `2486d116d796aa82fb6217535a663e2375650aa4`（232 blobs byte-identical，14 条变更路径）。
+
+### 32.10 仍未做
+
+- **182 条 barrel 条目**未收敛（承 §31.1.1）：这是关于四个包**已发布接口**的产品决策，
+  带兼容成本。`DECISION-PROVENANCE-NODE.md` 的删除**不是**它的先例——
+  §32.5 与 `AUDIT-REFERENCED-LOCALLY-CONVERGENCE.md` 都已写明这一点：
+  一个是无人读的多余类型，另一个是有兼容成本的公开面。
+- **`unreferenced` 类 27 条**未逐条裁决（承 §30.7）：其中 26 条是公开面，1 条零引用。
+  本轮把该类从 28 降到 27，**没有**改变「未逐条裁决」这个事实。
+- **派生缺口本身**未实现。§32.5 给出了修法（`Fact.derivedFrom`），但实现它需要先有
+  一个真正做派生推理的调用方——那是路线图项，不是本轮范围。
+- **`tsc -b --force` / `clean` 同时清除 buildinfo** 未做（§32.7）。
+
+### 32.11 可推广的结论
+
+> **「零引用」和「未实现」是两个不同的发现，其中**只有一个是工作项**。**
+
+`ProvenanceNode` 躺在普查里作为唯一一条零引用导出，这让它看起来像那个「修法机械」的符号。
+实际情况相反：它是**最需要设计裁决**的符号，因为**它无人引用的原因，是它命名的能力
+已经由别处一个类型更好的机制交付了**。
+
+有生产力的问题从来不是「谁该调用它」，而是
+**「它说了什么 `Fact` 没说的事」**——答案是 `derivedFrom` 一个字段，而它属于 `Fact`。
+
+规则：**当一个类型无人引用时，先判定它是 pending 还是 superseded。**
+pending 的类型有等着它的消费者；superseded 的类型有一个活的同思想实现，
+而**普查不会把它和它连起来**——再多的调用者检索也找不出这一点，
+因为它要求问的是符号**意味着什么**，然后去检索那个**意义**，而不是那个**名字**。
+
+同一轮里更小的一条，同样值得记：
+**一个字段是否存在，是声明事实；断言一个字段存在，就必须断言它的声明。**
+用 `\bNAME\b` 去检查「字段还在不在」，会被任何一处使用满足——
+本轮第三次注入正是这样在字段已消失时保持绿色，直到断言改成匹配声明形态。
