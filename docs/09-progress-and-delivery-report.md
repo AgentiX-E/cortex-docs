@@ -6102,3 +6102,221 @@ census 门禁：`no new orphans`，台账 `452 = 216 + 236`、`236 = 206 + 30` �
    目录的测试，是**用从一个零头里采到的证据，对全仓库下结论**。
 2. **匹配得比能执行的更多。** 对**管制型**模式，过度匹配是安全方向：误报会到达一个人，
    漏报谁也到不了。
+
+
+---
+
+## 30. 30 条零引用导出：**「有测试无接线」不是一个类别，是四个**
+
+§28 给出的分类是两分的：30 条里 **29 条「有测试、无生产调用者」**，1 条零引用。
+用户再次说「**全部都要，你来决定最优路径**」。我在上一轮结尾提出的判断是
+**先做这项（缺陷），再做 206 条 `export`（风格债）**——这一轮按此执行。
+
+**结论先行：那个两分法测量正确，读法错误。**「有测试、无调用者」这个描述**同时覆盖四种
+互不相干的情况**，而其中一种**是真缺陷，且被这个分类主动掩盖了**。
+
+### 30.1 两分法为什么不够用
+
+| 情况 | 特征 | 正确处置 |
+|---|---|---|
+| **库的公开面** | 一个以库形式被消费的包的公开 API | **保留**。「仓库内无调用者」正是它的设计。 |
+| **测试仪器** | 存在的目的是让测试能观察/重置某物 | 保留，但 docstring 必须停止暗示一个生产消费者 |
+| **已建未接线** | 实现完整、无调用者 | 接线，或连同测试一起删除。这是 B7 类。 |
+| **被取代** | 一个更早的实现，被更新者**就地替换** | **删除。** 保留它比死代码更糟——它是对一个**已经回答过的问题**的第二份、**发散的**答案。 |
+
+只有最后一种是有机械修法的缺陷，而它在两分法下**完全不可见**。
+
+### 30.2 方法：三个问题，全部用命令回答
+
+1. **测试之外，谁提到它？** —— 扫全部 `packages/` 下的 `.ts`/`.mjs`，排除 `__tests__` 与 `*.test.ts`。
+2. **有测试提到它吗？** —— 同一支脚本，限定测试文件。
+3. **同一个问题有活的实现吗？** —— 对每条符号，同包内是否有**另一个导出**在做同一件事、
+   且**有生产调用者**。
+
+问题 1 给出了一个让后续变得干净利落的结果：
+
+> **30 条全部只有一个非测试提及，且每一条都恰好是包 barrel 的重导出。**
+> **没有任何一条有生产调用者。**
+
+所以 census 的 `unreferenced` 类正是它字面上的意思，没有擦边情况。问题 2 复现了 §28：
+**29 有测试，1 没有**。
+
+```python
+un = [re.match(r'([\w-]+): (\S+) \((.*):(\d+)\)', e) for e in census['unreferenced']]
+def mentions(name, pool):
+    p = re.compile(r'(?<![A-Za-z0-9_$])' + re.escape(name) + r'(?![A-Za-z0-9_$])')
+    return [f for f in pool if p.search(open(f, encoding='utf8').read())]
+```
+
+边界守卫（`(?<!…)` / `(?!…)`）不是装饰：没有它们，`currentValue` 会匹配进
+`previousCurrentValue`，整个分类会反向。
+
+### 30.3 问题 3 找到了那个被掩盖的缺陷
+
+**`cortex-eval: isTemporalQuestion` 与 `cortex-eval: extractDate`**
+
+`packages/cortex-eval/src/temporal.ts` 的模块 docstring 做出一个主张：
+
+```ts
+/**
+ * Temporal-reasoning primitives for LongMemEval-style benchmarks. Temporal
+ * questions require reasoning over turn timestamps: ...
+ * extract the turn date, compute elapsed days, and detect the question shape so
+ * the system can route temporal questions to a dedicated answering path.
+ */
+```
+
+**这条路由存在。** 它不在这份文件里，在 `temporal-engine.ts`：
+
+```
+packages/cortex-eval/src/temporal-engine.ts:81
+export function classifyTemporalQuestion(question: string): TemporalKind { … }
+
+packages/cortex-eval/src/natural-language-memory.ts:581
+    const kind = classifyTemporalQuestion(question);
+```
+
+所以真实情况**不是**「一个被描述、却从未构建的功能」——那正是 §28 给全部 29 条贴上的
+B7 标签。**功能被建了两次。** `classifyTemporalQuestion` 取代了 `isTemporalQuestion`，
+而**更旧那份文件的 docstring 至今在描述更新那份的职责**。
+
+#### 30.3.1 替代者是严格更强的，而且可以证明
+
+`isTemporalQuestion` 由三条正则返回一个布尔：
+
+```ts
+export function isTemporalQuestion(question: string): boolean {
+  return /\b(how many (days|weeks|months|hours)|ago|before or after|happened first|which .* first|order from first)/i.test(question);
+}
+```
+
+`classifyTemporalQuestion` 返回五分类，而它多出来的结构不是装饰——它编码了一个
+**布尔无法表达、且更旧的实现会答错的消歧**：
+
+```ts
+// Only "how many X ago/since/passed" asks for an elapsed-time count. An
+// event-lookup question ("Which book did I finish a week ago?") asks for the
+// event itself, not a number, so it must NOT be classified as relative.
+if (/\bhow many\b/i.test(question) && /\b(ago|since|passed)\b/i.test(question)) {
+  return 'relative';
+}
+```
+
+更旧那个的 `ago` 分支会匹配 *"Which book did I finish a week ago?"* 并返回 `true`，
+把一条**事件查找**类问题路由向**日期算术**——**正是替代者的注释点名要避免的错误**。
+两者不是「精度不同」，而是**互相矛盾，且更旧那个在更新那个明文记录的场景上是错的**。
+
+#### 30.3.2 为什么被取代比死代码更贵
+
+死代码的代价是维护成本，以及让读者对**仓库**产生误判。被取代的导出让读者对**答案**产生
+误判：它是这个包**已经回答过的问题的第二份、发散的实现**，躺在公开 barrel 里、
+任何消费者都能拿到，而且**有测试**——于是那些测试**认证的是错误的分类器**。
+
+测试文件的成本变得具体：
+
+```
+packages/cortex-eval/src/__tests__/temporal.test.ts
+  describe('isTemporalQuestion')    ← 2 项测试，认证被取代的分类器
+  describe('extractDate')           ← 2 项
+  describe('daysBetween')           ← 4 项，认证的是活函数
+```
+
+四项属于活的 `daysBetween`，必须保留；四项认证被取代的那一对，随它一起去。
+
+#### 30.3.3 死的是三分之二，不是文件
+
+`temporal.ts` 本身**保留**。`daysBetween` 被活的引擎导入：
+
+```
+packages/cortex-eval/src/temporal-engine.ts:16
+import { daysBetween } from './temporal.js';
+```
+
+这正是 census 分类到**函数**而非**文件**的原因：一个按文件读的做法，要么会删掉一个活的
+依赖，要么会留下两个被取代的。
+
+### 30.4 另外 27 条：没有缺陷，以及 census 为什么说不出这一点
+
+其余每条都是其包合法的公开 API。census 的 `unreferenced` 类是一个**关于调用点的测量事实**，
+对这些符号它测的正是**设计意图**：
+
+| 组 | 成员 | 为何「仓库内无调用者」是正确的 |
+|---|---|---|
+| 存储后端 | `PgStorage`、`SqliteStorage`、`ensurePgSchema` | `interfaces/storage.ts` 定义契约，这两个是它的实现，由仓库外的消费者或 `bench/` 选择。 |
+| 认知原语 | `cortex-core` 的 13 条（`consolidate`、`createMemory`、`decideWrite`、`decideRetrieval`、`resolveContradiction` …） | 从 barrel 导出，因为这个包**就是**认知库。`index.test.ts` 断言其中 13 个是函数，所以 barrel 面本身处于测试之下。 |
+| 测量助手 | `candidateSpanCount`、`flattenTurns`、`sidesLandInDistinctClusters` | 产出的是**供人阅读**的数字，不是供程序分支的值。它们的消费者是解读报告的人。 |
+| 环境适配器 | `createEmbeddingFromEnv`、`createLongMemEvalMini`、`generateSyntheticBenchmark` | 评测 harness 的工厂/构造入口，由 `bench/` 与运维命令驱动。 |
+| 聚合 | `createRetryStatsAggregate`、`runEmbeddingBenchmark` | 与上一组同形，分别属于 LLM 层与 runner 层。 |
+
+`cortex-eval: FactMemorySystem` 需要单独一段：它是 `MemorySystem` 接口的一份**完整参考实现**，
+用于通过 harness 演示 M2 特性，被**六个**测试文件引用。它是本组里「公开面、无仓库内调用者」
+最清晰的例子，删掉它等于删掉这个接口的可执行文档。
+
+`cortex-eval: clearJudgeCache` 是唯一需要改 **docstring** 而非改代码的一条。它的注释写着：
+
+> Clear the shared judge-verdict cache (used by tests and long-running processes).
+
+只有测试调用它。这句话的后半句与 §30.3 是**同一种主张形状**，但后果不同：这个函数的分解是
+正确的（一个长生命周期进程**确实**会需要它），那句话是对**未来调用者**的预测，
+而不是对一个**已删除调用者**的描述。记在这里是为了让分类完整，docstring 已就地更正。
+
+### 30.5 验收
+
+| 项目 | 修改前 | 修改后 |
+|---|---|---|
+| `unreferenced` 类 | 30 | **28** |
+| 导出总数 | 452 | **450** |
+| 孤儿总数 | 236 | **234** |
+| `cortex-eval` 测试数 | 1504 | **1506** |
+| 仓库测试总数 | 1846 | **1848** |
+| census 台账不变量 | — | `234 = 206 + 28`，`knownOrphans` = `locations` = `sum(groups)` = **234** ✅ |
+
+**TDD 顺序**：先写 `temporal-consolidation.test.ts`（6 项），跑出 **4 failed / 2 passed**
+——两项通过的正是 `daysBetween` 的正向断言，符合预期；再实现；再转绿。
+
+新测试钉住三条性质，**修改前全部为假**：
+
+1. 被取代的分类器**不再从模块和 barrel 导出**（不是 `deprecated` 别名——别名会让那份发散答案
+   继续可达，正是本次要移除的成本）。
+2. `daysBetween` **仍然导出**——反向断言，也是本次不是「删掉那个文件」的原因。
+3. 模块 docstring **现在描述它实际做的事**（说明算术在 `temporal-engine.ts`），
+   且那句假话被禁止回归。
+
+第 3 条值得解释：**自动化检查无法验证一句注释是否准确**——这是 `coverage-annotations.test.ts`
+与 §28 的既有教训。它能做的是**拒绝让那句具体的假话回来**，这样一次「从旧 revision 恢复文件」
+的编辑不会把更正静默撤销。
+
+| 门禁 | 结果 |
+|---|---|
+| `pnpm check` | exit 0 ✅ |
+| 覆盖率（四包 × 四维度） | **逐项未动**：98.74/98.67/100/98.74、100/98.61/100/100、99.27/98.11/100/99.27、99.88/99.05/100/99.88，全部 ≥95% ✅ |
+| census 门禁 | `no new orphans beyond the recorded baseline` ✅ |
+
+覆盖率**再一次逐项未动**：删除一个被取代的导出，把一个**被正确认证的错误答案**移出公开面，
+不该移动任何一个关于**被测代码**的百分比——**这正是它没有移动的意义**。
+
+### 30.6 §28 的结论被修订，而非推翻
+
+`AUDIT-UNREFERENCED-EXPORTS.md` 的 29/2 **测量正确**，被修订的是对那个 29 的**读法**。
+该文档已就地标注：那段「nearly every member」的措辞**方向对、结论弱**，
+并记下两个成员**从来就不是 B7 类**。
+
+### 30.7 仍未做
+
+- **`ProvenanceNode` 需路线图裁决**（承 §28.8 / §29.8）：provenance tracking 的种子，
+  还是一个该删的推测性类型。**这是 §28 三条待办里唯一仍未动的。**
+- **206 条多余 `export` 未清理**（承 §27.7）：用户已批准，**是下一项**。
+  侦察结论：需先裁决 `packages/*/src/index.ts` 的 barrel 面边界。
+- **27 条公开面未逐个论证**：本轮给出的是**分组证据**，不是逐条论证。若某个仓库外消费者退役，
+  这些问题会重新打开。
+- **census 无法报告「被取代」**：判断两个函数回答同一个问题需要理解它们**算出什么**，
+  调用点普查只能数引用。本轮的机制是：普查把 452 条**收窄到 30 条候选**，
+  这才让「逐条提问」变得足够便宜。
+
+### 30.8 可推广的结论
+
+> **一个描述符号「怎么被引用」的分类，不能用来决定「该不该保留」。**
+> 29/2 回答的是「有谁碰过它」；处置需要的是「它是不是这个问题的**唯一**答案」。
+
+那条用来找到缺陷的问题——**「同一个问题，有没有别的、活的实现？」**——是调用点普查
+**结构上问不出**的，因为它需要理解语义。但它也**只在这份普查把 452 缩到 30 之后**才可行。
