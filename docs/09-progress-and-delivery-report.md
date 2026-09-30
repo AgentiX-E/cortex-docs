@@ -5796,3 +5796,309 @@ export const CANDIDATE_ANNOTATION_VERSION = 1;
 - **29 条「有测试无接线」未处置**：这是 **API 面问题，不是缺陷问题**——处置方式是接线、或在删除的同时删掉它的测试，两者都不是机械操作，批量做会变成一次不可审查的大改动。
 - **206 条多余 `export` 未清理**（承 §27.7）。
 - **注解保证只是「被记录」，不是「被强制」**：读者现在能看到 artifact 由哪个 revision 渲染，这是「必须不可区分」可被检查的前提。真正的强制需要一个比较两个 artifact 并在「context 相同而 revision 不同」时失败的新仪表——**没有构建，也不声称已构建**。
+
+
+---
+
+## 29. 覆盖率注解门禁看守着一个它看不见、也管不动的洞
+
+§28 留下三个 P1 待办，用户回复「**全部都要，你来决定最优路径**」。我宣布的顺序是
+**先出审计报告 → 再收敛 206 条多余 `export` → 最后删死代码**，理由是风险从零递增。
+但真正开始动手时，第一件事不是这三项里的任何一项——而是**侦察过程中撞到的一个洞**，
+它比三项待办都更该先修，因为它**污染的是测量层本身**。
+
+### 29.1 门禁承诺了什么，实际覆盖了什么
+
+`packages/cortex-core/src/__tests__/coverage-annotations.test.ts` 的 docstring 里有一句
+很窄但很有价值的承诺：
+
+> **the set cannot grow silently**，所以每一个新的抑制注解都必然经过评审。
+
+两条独立的原因让这句承诺不成立，**两条都是测出来的，不是看出来的**。
+
+#### 29.1.1 范围：四个包里只扫了一个
+
+扫描根是一行表达式：
+
+```ts
+const SRC = join(__dirname, '..');   // packages/cortex-core/src
+```
+
+于是「the set」的真实含义是**cortex-core 这一个包里的集合**。而仓库里最强的两个注解
+在 `cortex-llm`：
+
+```
+packages/cortex-llm/src/embedding/transformers-pipeline.ts:1
+    /* c8 ignore start -- optional-peer loading shim; ... */
+packages/cortex-llm/src/rerank/transformers-rerank-pipeline.ts:1
+    /* c8 ignore start -- optional-peer loading shim; ... */
+```
+
+`start` 块是**最强**的注解形式：它把语句从覆盖率**分母**里移除，于是报告的百分比不再是
+关于被测代码的陈述，而变成关于「排除了什么」的陈述。**唯一以「抑制」为主题的那个门禁，
+恰恰没有读它们。**
+
+#### 29.1.2 拼写：四种写法只认两种
+
+```ts
+const ANNOTATION = /(?:\/\/|\/\*)\s*(?:c8|v8)\s+ignore\b[^\n]*/g;
+```
+
+`istanbul` 不在候选里。六个文件带这个前缀：
+
+```
+packages/cortex-core/src/domain/provenance.ts:1
+packages/cortex-core/src/interfaces/embedding.ts:1
+packages/cortex-core/src/interfaces/llm.ts:1
+packages/cortex-core/src/interfaces/storage.ts:1
+packages/cortex-core/src/interfaces/vector.ts:1
+packages/cortex-eval/src/types.ts:1
+```
+
+把两种写法直接对比，它们在**门禁自己扫的那个目录内**就有五个文件的分歧：
+
+```
+现有正则看到 : {'graph/memory-graph.ts': 2, 'math/stats.ts': 6}
+修正后看到   : {'domain/provenance.ts': 1, 'graph/memory-graph.ts': 2,
+                'interfaces/embedding.ts': 1, 'interfaces/llm.ts': 1,
+                'interfaces/storage.ts': 1, 'interfaces/vector.ts': 1,
+                'math/stats.ts': 6}
+```
+
+#### 29.1.3 门禁还明令禁止了其中五处的写法
+
+同一个文件里有这条断言：
+
+```ts
+it('does not suppress a whole file or block', () => {
+  for (const [file, matches] of scan()) {
+    for (const annotation of matches) {
+      expect(annotation, `${file}: blanket suppression is not allowed: ${annotation}`)
+        .not.toMatch(/\bignore\s+(?:file|start)\b/);
+    }
+  }
+});
+```
+
+六个隐形注解里有**五个正是 `ignore file`**。规则和违规同处一个文件，谁也看不见谁：
+规则看不见，是因为扫描器对它们返回空集；违规看不见，是因为规则写成了双重否定、
+读起来像是已满足。
+
+### 29.2 第二个发现：这些注解根本不起作用
+
+在决定「枚举」还是「删除」之前，真正值得回答的问题是**它们实际做了什么**。答案来自
+删除后重跑。
+
+**实验**：删掉 `cortex-core` 的五个注解，跑 `vitest run --coverage`，与未改动的基线对比。
+
+| 状态 | 报告行 | 原始计数器 |
+|---|---|---|
+| 带注解（基线） | `98.74 / 98.67 / 100 / 98.74` | **946/958 = 98.7474%** |
+| 删掉注解（实测） | `98.74 / 98.67 / 100 / 98.74` | **946/958 = 98.7474%** |
+
+**逐位相同。** 不是「接近」，不是「落在配置里记的 ±0.8pp 噪声带内」——是同样的 946 落在
+同样的 958 上。
+
+解释在原始产物里。`coverage/coverage-final.json` 对 `cortex-core` 记录 20 个文件，
+其中恰好五个的语句表为空：
+
+```
+src/domain/provenance.ts      statements: 0
+src/interfaces/embedding.ts   statements: 0
+src/interfaces/llm.ts         statements: 0
+src/interfaces/storage.ts     statements: 0
+src/interfaces/vector.ts      statements: 0
+```
+
+这些文件只有 `export type` 与 `export interface` 声明，**编译后不产生任何 JavaScript**，
+所以没有任何语句可供覆盖率工具漏掉——它们**根本不出现在渲染出的文本表里**。
+
+#### 29.2.1 为什么是「惰性」而不只是「多余」
+
+两条独立的原因，任一条成立就够了：
+
+1. **没有东西可抑制。** 零语句的文件对分子分母都贡献零，`ignore file` 不改变任何数字。
+2. **前缀不是这个 provider 的词汇。** `istanbul ignore` 是 **nyc** 读的，不是 vitest 的
+   v8 provider 读的。v8 provider 认 `v8 ignore` 与 `c8 ignore`，文件级的 `istanbul`
+   注释不在它的词表里。
+
+而让这件事值得单独写一节的是它的**后果形状**：这个注解对测得数字的影响**恰好为零**，
+而它对读者产生的影响是**「这里被考虑过、并已豁免」**。这与
+[`AUDIT-B7-DEAD-SWITCH.md`](../docs/AUDIT-B7-DEAD-SWITCH.md) 是同一个形状——被设置、
+无人消费的机制——**唯一的区别是：这里的惰性机制是一条关于测量的注释，而它待的那个文件
+的职责正是管制关于测量的注释。**
+
+### 29.3 为什么修法是删除，不是枚举
+
+显而易见的修法是放宽正则、把六条加进 `EXPECTED`。**否决，两条理由指向同一边。**
+
+**它会把一个空集固化进登记表。** `EXPECTED` 是一份**已评审变更登记表**：每一条都在说
+「这个抑制存在，理由如下」。对这六条没有「理由」可写，因为没有抑制。理由文本只能写成
+*「这条注解什么也不做」*——一条内容是在承认自己不该出现在登记表里的登记项。
+
+**它会让规则和例外互相矛盾。** 文件断言不允许整体抑制。保留六个 `ignore file`，就必须
+要么删掉那条断言，要么加一个豁免——而为「无效果的」这一特例加豁免，等于一条写着
+「禁止整体抑制，除了没意义的时候」的规则。
+
+**删除还让规则变得诚实。** 六条消失后，整体抑制的禁令**不是被削弱，而是被实现**：
+两个真正的块抑制从此要接受比之前**更严**的标准（见 §29.4.3）。
+
+**那这些文件靠什么豁免？** 什么也不靠。它们**不需要**豁免，而让这件事成立的性质现在是
+**被断言的**，不再是假定（见 §29.4.4）。
+
+### 29.4 修正后的门禁
+
+三处改动，一处刻意不改。
+
+#### 29.4.1 范围：从工作区推导，而非从测试文件的位置
+
+```ts
+function repoRoot(): string {
+  let dir = join(__dirname, '..');
+  for (let i = 0; i < 8; i += 1) {
+    if (existsSync(join(dir, 'pnpm-workspace.yaml'))) return dir;
+    const parent = join(dir, '..');
+    if (parent === dir) break;
+    dir = parent;
+  }
+  throw new Error('pnpm-workspace.yaml not found above this test; ...');
+}
+```
+
+向上找到工作区清单，再遍历**每一个** `packages/*/src`。找不到标记时**响亮失败**，
+而不是静默地只扫一棵子树。`dist` 不扫——那是构建产物，其中的注解是 `src` 里那条的副本，
+会被重复计数。
+
+范围本身由一条专门的断言钉住：
+
+```ts
+it('scans every workspace package, not only the one this file lives in', () => {
+  const packages = new Set(sourceFiles().map(packageOf));
+  expect([...packages].sort()).toEqual([
+    'cortex-core', 'cortex-eval', 'cortex-llm', 'cortex-node',
+  ]);
+});
+```
+
+没有它，退化成单包扫描会让「扫描范围」和「期望值」**同步缩小**，计数断言仍然通过。
+
+#### 29.4.2 前缀：匹配得比运行时承认的更多
+
+```ts
+const ANNOTATION = /(?:\/\/|\/\*)\s*(?:c8|v8|istanbul)\s+ignore\b[^\n]*/g;
+```
+
+**即使 provider 不认 `istanbul`，也要匹配它。** 只匹配「已知有效」的前缀的模式，
+对**最容易被写错的那类注解**恰好是盲的——六个注解就是这么攒起来的。看到比运行时承认的
+更多，是**安全方向**：多出来的匹配会落到断言上，必须被论证掉或删掉。
+
+```ts
+it('uses no `istanbul` prefix, because the v8 provider does not honour it', () => {
+  expect(counts(scan().istanbul)).toEqual({});
+});
+```
+
+#### 29.4.3 块抑制：独立登记表，更严标准
+
+`next` 与 `start`/`file` 现在**分开收集、分开钉住**，因为它们做出的**主张不同**。
+`next` 断言一条语句不可执行；`start` 块断言**整个文件**在该套件运行的**所有配置下**都不可执行。
+后者强得多，因此有独立的 `EXPECTED_BLOCK`：
+
+| 站点 | 数量 | 理由 |
+|---|---|---|
+| `cortex-llm: embedding/transformers-pipeline.ts` | 1 | 可选 peer 加载 shim：动态 import `@xenova/transformers`，它是 `optionalDependency`，CI 中不存在。被测试的路径是 `TransformersEmbedding` 上可注入的 `pipelineFactory`。 |
+| `cortex-llm: rerank/transformers-rerank-pipeline.ts` | 1 | 同一个 peer、同一个理由。被测试的路径是 `CrossEncoderReranker` 上可注入的 `pipeline`。 |
+
+**两个方向都断言**：未声明的块站点失败；已声明但**不再**带注解的站点也失败——因为那意味着
+这个文件**变得可测了**，是一件值得评审的变更，而不是一个悄悄变好的数字。
+
+#### 29.4.4 纯类型文件：性质由编译器回答
+
+「这些文件没有运行时代码」这个主张此前是一句注释。现在是一次解析：
+
+```ts
+const source = ts.createSourceFile(path, readFileSync(path, 'utf8'),
+  ts.ScriptTarget.ESNext, /* setParentNodes */ false);
+const runtime = source.statements.filter((node) => !isTypeLevelExport(node));
+expect(runtime.map((node) => ts.SyntaxKind[node.kind]), `...`).toEqual([]);
+```
+
+**这条断言第一版写错了，而它的失败很有教育意义。** 初版用**逐行模式匹配**，要求每行以
+`type` / `interface` / `import type` 开头。它立刻在 `cortex-eval/src/types.ts` 的
+`answerTemporal?: (` 上失败——那是接口里一个**跨行的函数类型成员**，任何逐行规则都会把它
+读成运行时代码。这与本文件自己的 `math/stats.ts` 一节是同一个教训：
+**关于代码的主张，无法通过匹配代码的拼写来验证。** AST 是编译器自己的答案，所以由 AST 提问。
+
+第二处更正来自**构建**而非测试：`ts.NodeFlags.Declare` 根本不存在，而真名
+`ts.NodeFlags.Ambient` 在公开发布的 typings 里被标为 internal，于是它**通过 vitest、
+却在 `tsc` 上失败**——因为 vitest 不做类型检查。helper 改为检查修饰符列表。
+两处更正都记在这里，因为**错误的形状是同一个**：运行时的答案和 typings 的答案是两个
+不同的问题，只跑其中一个的测试，报告的是错的那个。
+
+### 29.5 验收：三次缺陷注入，而非一段论证
+
+**一个门禁的价值等于它抓到的东西。** 每条新断言都对着一个刻意制造的缺陷跑过，
+**没有任何一条是靠「它通过了」被接受的**。
+
+| 注入 | 位置 | 结果 |
+|---|---|---|
+| 1. 重新引入 `istanbul ignore file` | `cortex-core/src/domain/provenance.ts` | **4 条断言同时触发**：计数表 / 理由缺失 / `istanbul` 前缀 / 未声明块抑制。`4 failed / 4 passed` |
+| 2. 给纯类型文件加运行时代码（`export const DEFAULT_K = 10;`） | `cortex-core/src/interfaces/vector.ts` | AST 断言语义命中：`expected [ 'FirstStatement' ] to deeply equal []`。`1 failed / 7 passed` |
+| 3. 在无注解的包里塞一个未声明块抑制 | `cortex-node/src/storage/pg.ts` | **3 条断言触发**，且证明范围修正生效——这是旧扫描器**从不访问**的包。`3 failed / 5 passed` |
+
+### 29.6 结果
+
+| 项目 | 修改前 | 修改后 |
+|---|---|---|
+| 扫描的包 | 4 个中 1 个 | **4 个中 4 个** |
+| 匹配的前缀 | `c8`, `v8` | **`c8`, `v8`, `istanbul`** |
+| `istanbul` 注解 | 6（全部隐形） | **0** |
+| 行级注解被钉住 | 8 | 8 |
+| 块抑制被钉住 | 0（未读） | **2** |
+| 纯类型豁免由 AST 断言 | 否 | **是** |
+| `cortex-core` 测试数 | 192 | **195** |
+| 仓库测试总数 | 1843 | **1846** |
+
+覆盖率**每一个维度都移动了零**——这就是把本轮的发现重新表述成数字：
+
+| 包 | Stmts | Branch | Funcs | Lines | 门限 |
+|---|---|---|---|---|---|
+| `cortex-core` | 98.74 | 98.67 | 100 | 98.74 | 95 ✅ |
+| `cortex-node` | 100 | 98.61 | 100 | 100 | 95 ✅ |
+| `cortex-llm` | 99.27 | 98.11 | 100 | 99.27 | 95 ✅ |
+| `cortex-eval` | 99.88 | 99.05 | 100 | 99.88 | 95 ✅ |
+
+`pnpm check` exit 0（tools / build / lint / typecheck / census / tests / format 全绿）。
+census 门禁：`no new orphans`，台账 `452 = 216 + 236`、`236 = 206 + 30` 自洽。
+
+### 29.7 一个被连带修正的旧结论
+
+`docs/AUDIT-UNREFERENCED-EXPORTS.md` §3.1 在论证 `ProvenanceNode` 是唯一的**三轴孤立**符号时，
+把文件开头那行 `/* istanbul ignore file ... */` 当作「它还带一个覆盖率豁免」的**证据引用**。
+
+**它不是豁免。** 按 §29.2，这条注解两重失效。该文件的**结论不受影响**——`ProvenanceNode`
+零引用是 census 的测量结果——但**那句引文是错的**，因此在该文档里**就地标注更正**，并把
+引文替换成类型声明本身。旧结论不删、标注为错，是本文件的既定约定（见文首阅读约定）。
+
+### 29.8 仍未做
+
+- **`ProvenanceNode` 需路线图裁决**（承 §28.8）：provenance tracking 的种子，还是一个该删的推测性类型。
+- **29 条「有测试无接线」未处置**（承 §28.8）：API 面问题，不是缺陷问题。
+- **206 条多余 `export` 未清理**（承 §27.7）：用户已批准，是本轮的**下一个**动作；
+  侦察结论是它需要先裁决 `packages/*/src/index.ts` 的 barrel 面边界，否则会缩小公开面。
+- **30 条 `unreferenced` 未逐条裁决**（承 §28.8，减去本轮没有触及的任何一条）。
+- **注解的「理由」仍未被验证**：本测试保证的是**集合无法静默增长**，不保证理由为真。
+  `math/stats.ts` 的历史就是标准证据——六条注解写下的理由当时为假，只因两个无关缺陷被修好
+  才偶然成真。可达性必须**测量**（扰动代码、从外部观察），模式匹配做不到。
+
+### 29.9 可推广的结论
+
+> **一个用被监管对象的同一套词汇写成的门禁，会继承那个对象的盲区。** 这个门禁按**名字**
+> 枚举抑制注解，因此对**任何用别的拼法写成**的抑制都是盲的——包括一种**什么都不抑制**的拼法。
+
+两条习惯随之而来，且都很便宜：
+
+1. **把扫描范围定到容器，而非测试文件自己的位置。** 一个说「集合已被枚举」、却只枚举了一个
+   目录的测试，是**用从一个零头里采到的证据，对全仓库下结论**。
+2. **匹配得比能执行的更多。** 对**管制型**模式，过度匹配是安全方向：误报会到达一个人，
+   漏报谁也到不了。
