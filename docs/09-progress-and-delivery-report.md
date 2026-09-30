@@ -5598,3 +5598,101 @@ C5 (retrieval_sides) effect = +0.00 题
 
 - **普查无法区分「只在本文件内被引用」与「谁都没引用」**——这正是条数停在 235 而缺陷数为 0 的原因，是这套测量下一步该学会说的话。
 - **`eval-harness-surface` 的 79 条 barrel-only 与 79% 的本地引用**未清理：它们是多余的 `export`，清理属于 API 面收敛，不是缺陷修复。
+
+## 27. 孤儿两类：235 这个数里第一次有了「死」和「多余」的区别
+
+§26.6 留下的第 1 项——**普查无法区分「只在本文件内被引用」与「谁都没引用」**——已落地。
+
+### 27.1 为什么这是一个缺陷而不是一个改进
+
+修复前，下面两条在输出里**逐字相同**：
+
+```ts
+// 本文件内三个函数在用它。`export` 是多余的，代码是活的。
+export function logGamma(z: number): number { /* ... */ }
+
+// 任何文件、任何一行都没提到它。这是一个可以删掉的函数。
+export function consolidate(...): ConsolidationStats { /* ... */ }
+```
+
+第一条是删一个关键字，第二条是删一个函数。**工具若分不清，就无法被用来清扫**——每一次 review 都要从零论证。
+
+这也是「**235 条孤儿、0 个缺陷**」这句话的真实结构：它成立，但建立在一个**尚未被区分**的观测之上。「0 个缺陷」中的「0」，指的是**用旧口径能看见的那部分**是 0。
+
+### 27.2 判定规则与实测二分
+
+规则：**出现位置不在声明行、且不在该符号自身声明所在的函数体区间内**。
+
+函数体排除是承重的那一半。没有它，`export function f() { return f(); }` 会把**自递归**读成「有外部引用」——而针对这条的哨兵测试（`does NOT count the declaring file itself`）**早就在**，新字段直接挂在同一个 fixture 上断言，两条规则因此无法各走各的。
+
+| 类别 | 条数 | 含义 |
+|---|---|---|
+| `referenced-locally` | **206** | 本文件内有活调用点，**多余的 `export` 关键字** |
+| `unreferenced` | **31** | 任何地方都没提及，**死代码候选** |
+| 合计 | **237** | 旧口径的那个未分类数字 |
+
+31 条由**独立写的第二个扫描器**复核：对每个名字问「非测试、非 barrel、非 `dist` 的文件里还有几个提到它？」答案是 **31 个全部为「恰好 1 个——它自己的声明文件」**，两个分类在**每一个 key 上都一致，零 diff**。
+
+它们在仓库里只存在于三个地方，而这三处**正是普查有意排除的**：自己的 `export` 行、barrel 的 `export {} from`、测试的 `import`。**这就是「235 条孤儿、0 个缺陷」的全部解释：工具一直看得见这份名单，只是没有语句能把它说出来。**
+
+### 27.3 注释边界：一处测出来才敢定的取舍
+
+一条实测，直接决定了规则：**把注释和字符串排除出「本地引用」是错的。**
+
+| 符号 | 证据 | 严格规则下 |
+|---|---|---|
+| 文本哈希 helper | 在 `retrieval.ts` 的**模板串里被真实调用 6 次** | 误报为**死** |
+| candidate schema key | `appendLabel` 体内 **2 处模板插值** | 误报为**死** |
+| `sinkhorn` | 2 处注释/错误串，函数体内无自引用 | — |
+| `retrieveTopK` | **全仓库唯一一处提及是一行注释** | 判为死，正确 |
+
+严格规则会让**两个活的高频符号被报成死**，换来**一个真死的符号被报对**。**一个会喊狼来了的普查，是没人再信的普查**，所以严格规则是更差的那笔交易。代价是 `retrieveTopK` 靠一行注释留在 `referenced-locally` 类里，这一条**记录在案，不粉饰**。
+
+### 27.4 改动自己引入的缺陷：文档把四个发现静默注销了
+
+写新函数的 docstring 时，我**把四个真实孤儿的名字当例子写进了注释**。普查匹配整个文件文本、**含注释**，于是 `export-census.ts` 成了这四个符号的调用者。结果：
+
+```
+NEW orphans vs baseline: 2   (只有两个真正新增的函数)
+GONE orphans vs baseline: 4  ← sinkhorn / hashText / retrieveTopK / CANDIDATE_RECORD_SCHEMA_KEY
+```
+
+四个发现**从孤儿名单里消失**，`--check` 报 **`no new orphans beyond the recorded baseline`** 并 **exit 0**，而台账里它们还在——**工具与台账不一致，且没有任何东西失败**。
+
+> **发现的形状和 B7 那个未见线的 annotation producer 完全一样：一次测量的失败模式，是一次干净的结果。**
+
+抓到它的唯一原因，是把新的孤儿集合与台账做 diff、并追问「为什么少了四条」。修法是把这些符号**描述而非命名**，并把行为钉死在测试里（`counts a docstring mention as a caller, which is why prose must not name orphans`），让下一个为这条 over-count 写文档的人**无法用散文注销一个发现**。
+
+修复后复测：**`GONE: []`**，且 `sinkhorn` / `hashText` / `retrieveTopK` / `CANDIDATE_RECORD_SCHEMA_KEY` 四条全部回到 `referenced-locally`，与手工分析一致。
+
+### 27.5 门禁没有变松
+
+`--check` 的强制语义**一字未改**：台账里没有的孤儿照样红。这条是用**植入缺陷**验证的，不是论证的：
+
+```
+植入 `export function __censusProbeLeak()`  →  GATE EXIT 1
+  cortex-core: __censusProbeLeak (packages/cortex-core/src/math/vector.ts:59)
+还原                                        →  GATE EXIT 0
+```
+
+新增部分全部是**加法**：`--json` 多两个键而 `orphans` **形状与语义逐字不变**（台账重建脚本与所有既有消费者零改动）；台账多 `totals.referencedLocally` / `totals.unreferenced` / `orphanClass`，并由 schema 自检断言 **`orphanClass` 的 key 集合严格等于 `knownOrphans`**。
+
+### 27.6 验收
+
+| 门禁 | 结果 |
+|---|---|
+| `pnpm check` | green（exit 0）✅ |
+| census 门禁 | `no new orphans`；`452 = 215 + 237`，`237 = 206 + 31` ✅ |
+| 台账四处自洽 | `knownOrphans` = `locations` 站点 = `sum(groups[].count)` = `orphanClass` 键数 = **237** ✅ |
+| `export-census.ts` 覆盖率 | **100 / 100 / 100 / 100** ✅ |
+| `index.ts` 覆盖率 | **100 / 100 / 100 / 100** ✅ |
+| `export-census.test.ts` | 28 → **45** ✅ |
+| `export-census-gate.test.ts` | 18 → **20** ✅ |
+| 植入新孤儿 → 门禁拦截 | exit **1** ✅ |
+| 还原 → 门禁放行 | exit **0** ✅ |
+
+### 27.7 仍未做
+
+- **31 条死代码候选未删除。** 点名是这一轮的交付物；删除应当是一次独立、可回滚、逐条论证的改动——其中一些可能是为路线图有意保留的面。普查现在**按需给出名单**，这是它此前做不到的事。
+- **206 条多余的 `export` 未清理。** 那是 API 面收敛而非缺陷修复，是下一项 P1；它现在已经是机械工作：`listReferencedLocally` 直接产出工作单。
+- **可达性仍未度量。** 只被另一个孤儿引用的符号，仍然算「被调用」。这需要一个 root set，属于路线图判断而非机械门禁。
