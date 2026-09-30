@@ -6320,3 +6320,202 @@ import { daysBetween } from './temporal.js';
 
 那条用来找到缺陷的问题——**「同一个问题，有没有别的、活的实现？」**——是调用点普查
 **结构上问不出**的，因为它需要理解语义。但它也**只在这份普查把 452 缩到 30 之后**才可行。
+
+
+---
+
+## 31. 206 条「多余 export」：**分类说不了「该不该改」，只说了「引用在哪」**
+
+§27 把孤儿债拆成两类时，给 `referenced-locally` 写的读法是「live call site in its own file;
+the `export` is unnecessary」，并在 §6 承诺：**「It is now mechanical: `listReferencedLocally`
+produces the worklist.」** 用户批准了 206 条清理。
+
+**那句话是错的，本轮更正。** 分类回答的是**引用在哪**；清理需要回答的是**这个 `export`
+是否承重**。对 206 条里的 187 条，它是承重的。
+
+### 31.1 两个问题，就把 206 分成三组
+
+两个问题，各一条命令：
+
+**问题 A —— 它是否被包 barrel 重导出？**
+
+```python
+barrels = {p: open(f'packages/{p}/src/index.ts').read() for p in PACKAGES}
+in_barrel = re.search(r'(?<![A-Za-z0-9_$])' + re.escape(name) + r'(?![A-Za-z0-9_$])', barrels[pkg])
+```
+
+**问题 B —— 是否有测试从它的声明模块具名导入它？**
+
+```python
+pat = re.compile(r'import\s*(?:type\s*)?\{[^}]*\b' + re.escape(name) + r'\b[^}]*\}'
+                 r'\s*from\s*[\'"][^\'"]*' + re.escape(basename) + r'\.js[\'"]')
+```
+
+| 组 | 数量 | `export` 为何在那儿 | 处置 |
+|---|---|---|---|
+| 被 barrel 重导出 | **182** | 它**就是**该包的已发布接口 | **不动。**移除会缩小 API。 |
+| 测试具名导入 | **5** | 测试需要它可达 | **不动。**移除会弄坏测试套件。 |
+| 两者皆非 | **19** | `export` 在宣称一个不存在的消费者 | **移除关键字。** |
+
+**分组本身就是发现：工作单是 19 条，不是 206 条。**
+
+#### 31.1.1 那 182 条是产品决策，不是清理
+
+barrel 条目是对**仓库外消费者**的承诺。`packages/*/src/index.ts` 声明的面：
+
+| 包 | barrel 行数 | `export` 语句数 |
+|---|---|---|
+| `cortex-core` | 105 | 21 |
+| `cortex-eval` | 325 | 35 |
+| `cortex-llm` | 54 | 8 |
+| `cortex-node` | 3 | 2 |
+
+收敛它们会改变这四个包**发布什么**。那是有兼容成本的产品决策，属于**路线图裁决**（形状同
+`ProvenanceNode`），**不属于普查驱动的清理**。本轮**完全未动 barrel**，并有测试断言这一点。
+
+#### 31.1.2 那 5 条必须钉住，因为机械清扫会弄坏它们
+
+```
+cortex-eval: classifyCurveMembership     ← recall-curve.test.ts
+cortex-eval: detectBareAbstention        ← natural-language-memory.test.ts
+cortex-eval: formatStructuredContext     ← natural-language-memory.test.ts
+cortex-eval: overlapScore                ← fact-memory.test.ts
+cortex-eval: resolveTimeoutMs            ← report-runner.test.ts
+```
+
+它们都在「不在 barrel」那一组里，所以一个按「不在 barrel 且别处不用 ⇒ 去掉 `export`」执行的
+清扫会**全部剥掉**。代码**两种写法都能编译**；失败会以**与本次改动看起来毫无关系的 import
+错误**出现在另一个测试套件里。因此它们在测试里被**反向显式列举**：断言它们**必须保留
+`export`**。
+
+### 31.2 那 19 条，以及每条为什么安全
+
+每一条**在自己的模块内至少有一处引用**——这正是它落入 `referencedLocally` 而非
+`unreferenced` 的原因——所以没有一条是删除候选，只是**去导出**候选。
+
+| 模块 | 符号 | 种类 |
+|---|---|---|
+| `cortex-core/src/graph/memory-graph.ts` | `EdgeKind`、`EdgeAttributes` | 同文件内类使用的类型 |
+| `cortex-eval/src/rerank-factory.ts` | `DEFAULT_LOCAL_RERANK_MODEL`、`DEFAULT_LLM_RERANK_BASE_URL`、`DEFAULT_LLM_RERANK_MODEL`、`RERANK_PROVIDERS`、`RerankProvider` | 配置默认值及其派生联合类型 |
+| `cortex-eval/src/llm-factory.ts` | `THINKING_TIMEOUT_MS` | 单次尝试截止时间 |
+| `cortex-eval/src/judge.ts` | `JudgeQuestionType` | 模板选择联合类型 |
+| `cortex-eval/src/variance.ts` | `PairwiseMovement` | 运行间分析记录 |
+| `cortex-eval/src/retrieval-diagnostics.ts` | `RetrievalDiagnosticOptions` | 选项包 |
+| `cortex-eval/src/natural-language-memory.ts` | `QaPromptOptions`、`ConservativeQaPromptOptions`、`buildAggregationCritiquePrompt`、`buildRevisedAggregationPrompt`、`extractAggregationLedger`、`AggregationKind`、`projectSessions`、`QueryExpansionOptions` | 选项包与内部 prompt/parse 助手 |
+
+#### 31.2.1 改动前做的三项验证（全部为命令，全部为负）
+
+1. **无具名导入**——任务文件都不从它的声明模块具名导入它。
+2. **无命名空间导入**——无 `import * as ns` 该模块后再裸用它。**这是只查具名导入会漏掉的情形。**
+3. **无任何裸引用**——包括 `bench/`、`tools/`，以及**不在 barrel**。
+
+第四项验证确认了相反方向：每条符号**在自己模块内确有使用**，所以声明不能随关键字一起删。
+
+> 一个**潜在陷阱**被专门检查过：`RerankProvider` 由
+> `(typeof RERANK_PROVIDERS)[number]` 派生。从一个 `const` 上移除 `export`、同时同文件内有
+> 派生类型消费它是安全的——类型在本地仍可解析——但如果那个派生类型是**唯一**消费者且位于
+> 另一个模块，就**不安全**。此处不是：`rerank-factory.ts` 另有四处本地使用。
+
+### 31.3 改动内容
+
+19 处 `export` 关键字被移除，跨 7 个模块。**其余一律不动**：声明保留、签名保留、行为保留。
+
+每个受影响模块的 docstring 新增一段短说明：
+
+```
+ * ## Module-private exports
+ *
+ * Some declarations below are deliberately not exported. They are used only inside
+ * this file, appear in no package barrel, and are referenced by no test or tool —
+ * so `export` would advertise a consumer that does not exist.
+```
+
+这段说明有明确职责：一个落在 `rerank-factory.ts`、看到五个未导出常量的读者，**无法分辨**它们
+是决策还是残留。没有解释时，下一个人**最省事的修法就是加回 `export`**——而本状态正是这样攒
+起来的。
+
+### 31.4 验收
+
+测试文件：`packages/cortex-eval/src/__tests__/export-surface.test.ts`（6 条断言）。
+
+它**从两个方向**钉住：
+
+| 断言 | 方向 |
+|---|---|
+| 19 条不携带 `export` | 正向 |
+| 19 条仍声明其符号 | **去导出 ≠ 删除** |
+| 5 条测试导入的保留 `export` | **反向** |
+| 四个 barrel 仍在重导出 | 范围边界 |
+| 无 barrel 提及被去导出的符号 | 前两条无法被同时规避 |
+| 每个受影响的模块带有说明 | 可发现性 |
+
+**三次缺陷注入，没有任何一条断言是靠「它通过了」被接受的：**
+
+| 注入 | 结果 |
+|---|---|
+| 在 `rerank-factory.ts` 重新导出 `RERANK_PROVIDERS` | `1 failed | 5 passed`——报出文件、符号与行 |
+| 在 `fact-memory.ts` 去导出测试导入的 `overlapScore` | `1 failed | 5 passed`——**反方向生效** |
+| （构建）测试文件里的未使用导入 | `tsc` 抓到两处，而 `vitest` **跑绿了** —— 见 §31.5 |
+
+### 31.5 本次改动自己的构建暴露的一条流程发现
+
+我写的测试文件初版导入了 `readdirSync` 与 `relative` **却都没用到**。
+**`vitest` 跑绿；`tsc` 失败。** 抓到它的是 `pnpm check` 的 **build 步骤**，不是测试运行。
+
+这与 `AUDIT-COVERAGE-ANNOTATION-BLIND-SPOT.md` §4.4 是**同一个形状**：测试运行器与编译器回答
+**不同的问题**，只跑其中一个的套件，报告的是**错的那个**。它同时提醒：
+**这里的验证单位是 `pnpm check`，不是 `vitest`**——那个局部门禁对一个**编译不通过**的改动
+是绿的。
+
+### 31.6 逐项结果
+
+数字由**「stash 后重测」**得到，而不是对上一份文档的数字做算术——§31.1.1 引用的 `452` 属于更早
+的 revision，已经过时，这也是本表两侧都实测的原因。
+
+| | 修改前 | 修改后 | Δ |
+|---|---|---|---|
+| 导出数（`totalSymbols`） | 450 | **431** | **−19** |
+| 孤儿总数 | 234 | **215** | −19 |
+| `referencedLocally` | 206 | **187** | **−19** |
+| `unreferenced` | 28 | 28 | **0** ← **不许动** |
+
+前三行各下降恰好 19，而 `unreferenced` **未动**。最后一行是**承重的那一条**：去导出一个内部
+符号**不应**让它变成 `unreferenced`，因为它在模块内的使用仍在。**若这个数上升，说明这次编辑
+移除的是引用而不是可达性**——那是另一种、且糟糕得多的改动。
+
+台账不变量成立：`215 = 187 + 28`，`knownOrphans` = `locations` = `sum(groups)` =
+`orphanClass` = **215**。
+
+| 门禁 | 结果 |
+|---|---|
+| `pnpm check` | exit 0 ✅ |
+| 仓库测试总数 | 1848 → **1854** ✅（新增 6 条） |
+| 覆盖率（四包 × 四维度） | **逐项未动**：98.74/98.67/100/98.74、100/98.61/100/100、99.27/98.11/100/99.27、99.88/99.05/100/99.88，全部 ≥95% ✅ |
+| census 门禁 | `no new orphans beyond the recorded baseline` ✅ |
+
+覆盖率**再次逐项未动**：去导出一个声明，不改变任何一行**被测代码**，**这正是它不该动的意义**。
+
+### 31.7 §27 的结论被修订，而非推翻
+
+`AUDIT-ORPHAN-CLASS-CONFLATION.md` 的两分**测量正确**；被修订的是 §6 那句
+**「It is now mechanical」** 与分类表里「the `export` is unnecessary」的措辞。两处都已**就地
+标注更正**，旧结论不删。
+
+### 31.8 仍未做
+
+- **182 条 barrel 条目未收敛**（承 §31.1.1）：这是关于四个包**已发布接口**的产品决策，
+  带兼容成本。若路线图判定面过宽，那是**独立的一次改动**，有自己的证据——而普查会像本轮一样
+  为它产出工作单。
+- **`ProvenanceNode` 需路线图裁决**（承 §28.8 / §29.8 / §30.7）：**§28 三条待办里唯一仍未动的。**
+- **`unreferenced` 类 28 条未裁决**（承 §30.7）：其中 27 条是公开面（已给出分组证据），
+  1 条零引用。
+
+### 31.9 可推广的结论
+
+> **一个「引用在哪」的分类，不追问每个引用是干什么用的，就不能变成工作单。**
+> `referenced-locally` 回答「谁读这个名字」——206。可执行的问题是
+> 「这个 `export` 承重吗」——19。
+
+两个问题之间隔的，是一次 barrel 查找加一次导入扫描，各一条命令。**不问它们的代价**，
+是一份**已批准的计划：改动 206 条声明，其中 187 条要么是一个包的已发布 API，
+要么是一个测试的依赖。**
