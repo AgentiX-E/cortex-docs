@@ -5696,3 +5696,103 @@ GONE orphans vs baseline: 4  ← sinkhorn / hashText / retrieveTopK / CANDIDATE_
 - **31 条死代码候选未删除。** 点名是这一轮的交付物；删除应当是一次独立、可回滚、逐条论证的改动——其中一些可能是为路线图有意保留的面。普查现在**按需给出名单**，这是它此前做不到的事。
 - **206 条多余的 `export` 未清理。** 那是 API 面收敛而非缺陷修复，是下一项 P1；它现在已经是机械工作：`listReferencedLocally` 直接产出工作单。
 - **可达性仍未度量。** 只被另一个孤儿引用的符号，仍然算「被调用」。这需要一个 root set，属于路线图判断而非机械门禁。
+
+## 28. 31 条零引用导出的逐条审计，以及其中一条的闭合
+
+§27.7 留下的第 1 项——**31 条死代码候选**——已交付审计。结论与预期相反，且这个反转本身是这一节的重点。
+
+### 28.1 审计问的三个问题
+
+普查已能证明一个符号**零引用**。它无法证明一个符号**不要**。中间隔着的正是这份审计。对每一条问三件事，因为三者的处置完全不同：
+
+| 问题 | 是 | 否 |
+|---|---|---|
+| 有测试在跑它吗？ | 建好了但没接线 —— **缺陷** | 死重量 |
+| 是包 barrel 的公开面吗？ | API 面 —— **一个决定** | 内部残留 |
+| 同文件里有活着的兄弟符号吗？ | 模块活着，它是多余的那个 —— **修剪** | 整个文件是孤岛 |
+
+### 28.2 实测结果
+
+| 答案 | 条数 | 读法 |
+|---|---|---|
+| 被测试引用 | **29** | 建好了但没接线 —— B7 缺陷类 |
+| 零引用 | **2** | 真正无人提及 |
+| 在包 barrel 里 | **31** | 每一条都是公开面 |
+
+> **头条数字是 29，不是 31。**
+
+这个类别里几乎每一条都是**有测试通过、没有生产调用点**的符号。**这不是死代码，是「实现了但没接线」**——正是本仓库已经付过一次代价的那个形状（未见线的 annotation producer）。
+
+### 28.3 真正零引用的两条
+
+**`ProvenanceNode`（`domain/provenance.ts:3`）**：三条轴全孤立——无测试、无调用者、无本地使用、无活兄弟。它是整个文件的唯一内容，且文件开头带 `/* istanbul ignore file */` 覆盖率豁免。**这是路线图决定，不是普查决定**：要么是 provenance tracking 的种子，要么是一个该连同决定一起删除的推测性类型。
+
+**`CANDIDATE_ANNOTATION_VERSION`（`candidate-context.ts:45`）——已闭合，见 §28.4。**
+
+### 28.4 闭合的那一条：一个「有契约无机制」的常量
+
+它的 docstring 自己写明了契约：
+
+```ts
+/**
+ * Bumped when the annotation's shape changes in a way a reader could observe.
+ * Two revisions that render the same context must be indistinguishable, so this
+ * is a schema version rather than a library version.
+ */
+export const CANDIDATE_ANNOTATION_VERSION = 1;
+```
+
+而**没有任何渲染出的 context、没有任何报告携带这个值**。全仓库搜 `annotationVersion` / `schemaVersion` / `ANNOTATION_VERSION`，只找到这一处声明和它的重导出。于是那条保证**在构造上就不可验证**：两个由不同 revision 渲染的 artifact 无法区分，**恰好是 docstring 禁止的那种无法区分**，而且没有任何东西能发现。
+
+> **形状与 `AUDIT-B7-DEAD-SWITCH.md` 完全相同：一个被描述、却没有机制的契约。**
+
+**关键判断：删还是补？** 深挖发现渲染路径**是活的**——`renderDiscriminatedContext` 被 `natural-language-memory.ts:1334` 调用，注解真的在跑，**缺的只是记录**。所以修法是**补全契约，而不是撤回它**；删掉常量等于删掉「曾经宣称过一个未兑现的保证」的证据，那会让仓库比修前更差。
+
+三段式闭合：
+
+| 段 | 位置 | 作用 |
+|---|---|---|
+| 事实 | `annotateWithCandidateSides` 返回 `{ context, applied }` | 在**做出决定的那一点**上报，而非调用方推断 |
+| trace | `DecisionTrace.candidateAnnotationApplied` | **逐题**携带（注解是逐题拒绝的，属于检索的属性而非臂的属性） |
+| 报告 | `AblationReport.candidateAnnotationVersion` | 从 **trace** 导出，而非从选项 |
+
+第三段是最容易做错的地方：**选项说的是「要求了什么」，trace 说的是「发生了什么」**。`retrievalSides: true` 完全可以对应一次什么都没注解的运行（某题检索不到两个竞争候选时生产者就会拒绝），报告若读选项就会**宣称使用了它从未用过的 revision**。
+
+`0` 与「字段缺失」是两个不同的断言：`0` 说「本次运行没有注解」，缺失说「这份 artifact 早于该字段」。折叠二者，会让一份早于该字段的报告冒充一份声明「注解已关」的报告。
+
+### 28.5 验收：靠测量，不靠论证
+
+| 层级 | 内容 |
+|---|---|
+| 单元 | `report-annotation-version.test.ts`（4 项）：有值渲染 / `0` 显式渲染 `not applied` / 旧 artifact 不渲染 / JSON 往返后仍是数字（`0` 不能像 `NaN` 那样变成 `null`） |
+| 接线 | `b7-main-path-wiring.test.ts` 新增 2 项：flag 在**两臂**上都跟随开关（恒真与恒假同样无用，只有对照有信息量）；开关为 `on` 而生产者在单轮 context 上拒绝时 flag 为 `false` |
+| 端到端 | `report-runner.test.ts` 新增 2 项：驱动真实 `runNaturalLanguageBenchmark`，断言报告记 `0`、Markdown 说 `not applied` |
+| **普查闭环** | `CANDIDATE_ANNOTATION_VERSION` **离开 `unreferenced` 类**：`GONE: ['cortex-eval: CANDIDATE_ANNOTATION_VERSION']`，`unreferenced` **31 → 30** |
+
+`unreferenced` 类**恰好缩小了这一条**，而 `ProvenanceNode` 仍在——**这是正确的**，因为它的处置是路线图决定而非接线修复。
+
+### 28.6 为什么这份审计一条都不删
+
+普查能证明一个符号**零引用**，不能证明它**不要**。三条理由不做批量删除：
+
+1. **两条不是死代码。** `ProvenanceNode` 是路线图决定，`CANDIDATE_ANNOTATION_VERSION` 是缺机制的契约。静默删掉任一条，等于删掉「有一笔决定未结」的证据。
+2. **二十九条有测试。** 有测试通过的符号被本仓库自己的质量门禁计入覆盖率，批量删除会**因为与正确性无关的原因**移动覆盖率数字。
+3. **三十一条全在包 barrel 里。** 它们都是公开面。
+
+### 28.7 验收
+
+| 门禁 | 结果 |
+|---|---|
+| `pnpm check` | green（exit 0）✅ |
+| census 门禁 | `no new orphans`；`452 = 216 + 236`，`236 = 206 + 30` ✅ |
+| 台账自洽 | `knownOrphans` = `locations` 站点 = `sum(groups[].count)` = `orphanClass` 键数 = **236** ✅ |
+| `report.ts` 覆盖率 | **100 / 100 / 100 / 100** ✅ |
+| `runner.ts` 分支覆盖率 | **95.34%** ✅ |
+| `unreferenced` 类 | **31 → 30**，缩减量恰为 §28.4 闭合的那一条 ✅ |
+
+### 28.8 仍未做
+
+- **`ProvenanceNode` 需路线图裁决**：provenance tracking 的种子，还是一个该删的推测性类型。
+- **29 条「有测试无接线」未处置**：这是 **API 面问题，不是缺陷问题**——处置方式是接线、或在删除的同时删掉它的测试，两者都不是机械操作，批量做会变成一次不可审查的大改动。
+- **206 条多余 `export` 未清理**（承 §27.7）。
+- **注解保证只是「被记录」，不是「被强制」**：读者现在能看到 artifact 由哪个 revision 渲染，这是「必须不可区分」可被检查的前提。真正的强制需要一个比较两个 artifact 并在「context 相同而 revision 不同」时失败的新仪表——**没有构建，也不声称已构建**。
