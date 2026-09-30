@@ -6743,3 +6743,214 @@ pending 的类型有等着它的消费者；superseded 的类型有一个活的�
 **一个字段是否存在，是声明事实；断言一个字段存在，就必须断言它的声明。**
 用 `\bNAME\b` 去检查「字段还在不在」，会被任何一处使用满足——
 本轮第三次注入正是这样在字段已消失时保持绿色，直到断言改成匹配声明形态。
+
+---
+
+## §33 27 条 `unreferenced` 的分组：26 条是接口，1 条是**伪开关**
+
+§32 收尾时我给的下一步是「把 `unreferenced` 这个笼统标签拆成可裁决的子类」。本轮做完了，
+结论**推翻了类名给人的第一印象**。
+
+`unreferenced` 有 27 条。重新独立推导（不依赖普查自身的分类），结果是：
+
+| 检查 | 结果 |
+|---|---|
+| 非测试、非 barrel 的源码文件提及它 | **27 条全为 0** |
+| `tools/` 消费者 | **27 条全为 0** |
+| `bench/` 消费者 | **27 条全为 0** |
+| 位于某个包的 barrel | **27 / 27** |
+| 被测试具名导入 | **27 / 27** |
+
+后两行才是发现。**这 27 条同时是「已发布的 API」和「被具名测试驱动」，且零真实消费者。**
+这恰恰是「接口」的定义——在一个不含消费者的仓库里，接口零引用是它的**存在方式**，不是缺陷。
+
+### 33.1 三个判别器试过、都失败了——失败方式比成功那个更值得记
+
+三次尝试，每次看起来都像决定性证据：
+
+**a. 「数生产引用」——测错了东西。** 得到**全部 27 条都恰好等于 2**。这种整齐本身就是提示：
+那是 barrel + 声明文件，正是普查已经排除的两项。一列每个值都相同的测量不是判别，
+是在复读它自己的框架。
+
+**b. 「测试是否断言了输出」——近邻启发式，且是错的。** 找「调用点后四行内出现 `expect(`」，
+标出三条从未被断言。三条**全是假阳性**：
+
+| 符号 | 启发式漏掉了什么 |
+|---|---|
+| `squaredEuclideanCostMatrix` | 断言在 `math.test.ts:84-85`，调用点下第六行，断言的是返回的矩阵 |
+| `clearJudgeCache` | 它**就是**被测行为——先 clear，再断言 `calls === 1` |
+| `defaultValueFunction` | 它**从不被具名调用**，只作为参数传给 `decideWrite`，通过它产生的决策被断言 |
+
+第三条是教益所在：**它对任何调用点启发式永久不可见。**
+断言不是某一行的属性，**是某条执行轨迹的属性**，而本轮没有测量轨迹。
+
+**c. 「docstring 是否在承诺什么」——27 / 27 全中。** 因为本仓标准要求每个导出都有 docstring。
+一个对 27 条全亮的判别器，测的是标准，不是符号。
+
+### 33.2 活下来的那个问题：这个符号是**描述**能力，还是**闸门**能力？
+
+> **描述能力、零内部调用者 = 接口。闸门、零内部调用者 = 缺陷**——
+> 因为闸门存在的唯一理由就是**被查询**，没有别的东西赋予它意义。
+
+按这个问题筛，**恰好剩一条**：
+
+```ts
+export function isCandidateDiscriminationEnabled(options: {
+  readonly enableCandidateDiscrimination?: boolean;
+}): boolean {
+  return options.enableCandidateDiscrimination === true;
+}
+```
+
+`candidate-context.ts:192`，从 `index.ts:148` 进 barrel。它读
+`options.enableCandidateDiscrimination`——而这个字段**在整仓的另外一次出现就是它自己的声明**。
+没有任何东西设置它，没有任何别的东西读它。函数只被 `candidate-context.test.ts:40-49` 驱动，
+两条测试断言 `{}` / `{false}` / `{true}` 三种入参的返回值。
+
+> 这两条测试**通过**，而这正是缺陷隐形的原因：一个三case的纯布尔读取器覆盖率满分，
+> **所有常规信号都是绿的。**
+
+### 33.3 它看起来在闸的那个功能，是真的、已接线、但**名字是另一个**
+
+| 环节 | 位置 |
+|---|---|
+| 环境变量 | `CANDIDATE_DISCRIMINATION` |
+| 入口读取 | `bench/run.ts:433` — `readToggle(process.env, 'CANDIDATE_DISCRIMINATION')` |
+| runner 选项 | `runner.ts:144` — `candidateDiscrimination?: boolean` |
+| 功能配置派生 | `runner.ts:260`、`351`、`1228` |
+| prompt builder | `natural-language-memory.ts:1818`、`1899`（指令被追加） |
+| workflow 输入 | `.github/workflows/benchmark.yml:188` |
+
+**一个概念两个名字。一个活着且可测量，另一个惰性且已导出。**
+
+### 33.4 为什么「留着吧，无害」是错的
+
+死代码只占空间。**这一条占的是一个读者的结论。**
+
+想打开 candidate discrimination 的人会 grep 那个最显然的名字。他找到
+`isCandidateDiscriminationEnabled`——从包的公开 API 导出，读着
+`options.enableCandidateDiscrimination`，**且全仓无调用者**。合理的推断是
+**「这个开关是关的，功能从构造上就是关的」。这个推断是错的**：功能在
+`CANDIDATE_DISCRIMINATION=1` 时就开着，而且已经做过消融测量。
+
+> **两个名字是近义词，这是最坏的情况。** 它们不至于不同到让人怀疑存在第二个概念，
+> 却又相似到让人以为它们是同一个开关的两层。
+
+### 33.5 这是 `AUDIT-B7-DEAD-SWITCH` 的同族，且落在那次审计的射程之外
+
+`AUDIT-B7-DEAD-SWITCH.md` 关掉的是**活开关**的三处断裂（benchmark 输入设不了它、
+options 类型没有该字段、prompt-builder 闭包丢掉了参数），三处都已修。
+
+那次审计的对象是 `candidateDiscrimination`。本条是同一功能的**惰性同胞**——
+另一个名字、从未接线、从来不是任何人的主题。**它活过了针对它自己所在功能的审计**，
+因为那次审计问的是「活开关工作吗」，而**这一条不是活开关**。
+
+一条符号可以紧邻一个已关闭的缺陷，而对关闭它的那次改动完全不可见。
+
+### 33.6 27 条的处置
+
+**保留的 26 条**（按性质分组，组内理由相同）：
+
+| 组 | 数量 | 成员 | 为什么 `export` 承重 |
+|---|---|---|---|
+| `cortex-core` 算法层 | 12 | `consolidate`、`createMemory`、`currentFacts`、`currentValue`、`decideRetrieval`、`decideWrite`、`defaultValueFunction`、`findContradictions`、`initialFsrsState`、`l2Distance`、`resolveContradiction`、`squaredEuclideanCostMatrix` | 这就是该包声明的产品：「一个经过验证的认知契约与纯算法库」。它们服务于仓库里**不存在**的消费者——即 `AUDIT-CODE-VS-DOCS.md` §6 指定却缺失的 `cortex-memory` 接缝 |
+| 存储后端 | 3 | `PgStorage`、`SqliteStorage`、`ensurePgSchema` | `cortex-node` 的全部用途。`ARCHITECTURE.md` 点名它们是两个 `Storage` 实现。**仓库内有调用者的 storage 类是耦合，不是特性** |
+| 测试基础设施 | 6 | `createLongMemEvalMini`、`generateSyntheticBenchmark`、`createEmbeddingFromEnv`、`FactMemorySystem`、`runEmbeddingBenchmark`、`flattenSessions` | 测试套件直接构造的数据集与系统。`createLongMemEvalMini` 单在 `report-runner.test.ts` 就被用了 11 次来构造被测数据集，`index.test.ts:38` 还断言它经 barrel 可达 |
+| 诊断与测量 | 5 | `flattenTurns`、`candidateSpanCount`、`clearJudgeCache`、`sidesLandInDistinctClusters`、`createRetryStatsAggregate` | 测量或隔离用的仪器。`clearJudgeCache` 是被断言的一部分；其余喂给报告 |
+
+**删除的 1 条**：`isCandidateDiscriminationEnabled`、它的
+`enableCandidateDiscrimination` 字段、barrel 行、以及驱动它的两条测试。
+
+### 33.7 验收
+
+**删除前五条阴性检查**：
+
+1. 除自身测试外无调用者（`packages/`、`tools/`、`.github/` 全扫）。
+2. 无环境变量或 CLI 绑定：`ENABLE_CANDIDATE*` / `enableCandidate*` 在声明与其自身测试之外**返回空**。
+3. 无 docstring 承诺它（`docs/`、`ARCHITECTURE.md`、`README.md`、`CONTRIBUTING.md`——全仓仅有的两处提及是审计在**列出**它，属描述非承诺）。
+4. 无 workflow 输入映射到它。
+5. 活开关可独立验证为活的那个（§33.3）。
+
+**普查移动，与预测逐位一致：**
+
+| | Before | After | Δ |
+|---|---|---|---|
+| Exports | 430 | **429** | **−1** |
+| Orphaned | 214 | **213** | **−1** |
+| `unreferenced` | 27 | **26** | **−1** |
+| `referencedLocally` | 187 | 187 | **0** |
+| `withCaller` | 216 | 216 | **0** |
+
+不变量成立：`knownOrphans = locations = sum(groups) = orphanClass = 213`，
+`187 + 26 = 213`。`census:check` exit 0。
+
+**三次缺陷注入，每条由不同断言捕获：**
+
+| 注入 | 结果 |
+|---|---|
+| 重新声明惰性读取器及其字段 | `1 failed \| 5 passed`——报出声明 |
+| 把 `options.candidateDiscrimination` 从 3 处 prompt-builder 读取中切断 | `1 failed \| 5 passed`——**B7 的形状**，报 `expected 0 to be greater than or equal to 2` |
+| 移除 `readToggle(process.env, 'CANDIDATE_DISCRIMINATION')` 绑定 | `1 failed \| 5 passed`——报出入口点失去 env 通路 |
+
+第二条最值得拥有：它复现的是原始缺陷的**形状**而非符号，所以它**因为 B7 发生的那个原因而失败**。
+
+### 33.8 本次审计自己初稿里的一个洞
+
+守卫测试的第 4 条断言原本要求「活开关名出现在 `candidate-context.ts`」——即拥有该功能的那个文件。
+**它在未修改的树上就失败了**，而这个失败是**有信息的**，不是要绕开的 bug：
+`candidate-context.ts` 里有 `CANDIDATE_DISCRIMINATION_INSTRUCTION`，**完全没有开关字段**。
+
+> **拥有该功能的模块，声明的开关名与被驱动它的那个名字不同**——
+> 这就是 §33.3 用文件布局重述了一遍。
+
+断言已改为指向 `runner.ts` 与那个指令常量，观察记录在此。
+
+### 33.9 逐项结果
+
+| 项 | 结果 |
+|---|---|
+| `candidate-context.ts` | 删除读取器 + 字段（6 行） |
+| `index.ts` | 移除 barrel 行 |
+| `candidate-context.test.ts` | 删除导入项 + describe 块（12 行） |
+| `candidate-switch.test.ts` | **新建**，6 条断言 |
+| `docs/AUDIT-UNREFERENCED-GROUPS.md` | **新建**（8 节） |
+| `docs/AUDIT-B7-DEAD-SWITCH.md` | 追加 §8：该功能有过第二个开关，而它是虚构的 |
+| `docs/AUDIT-UNREFERENCED-CLASSES.md` | 处置表：27 中 26 条确认为接口，1 条是缺陷 |
+| `docs/AUDIT-UNREFERENCED-EXPORTS.md` | 该行标注为已删除 |
+| `docs/README.md` | 索引新增一行 |
+| `export-census-baseline.json` | 重建，213 |
+
+**仓库测试 1861 → 1865**（净 +4：新增 6，删 2）。**四包 × 四维度覆盖率全部 ≥95%**，
+逐项与本轮之前相同。`pnpm check` exit 0。
+
+推送：`cortex` → `ab2b20593f9a93d5d14d6e8b503da6fd4ccfb941`（234 blobs byte-identical，10 条变更路径）。
+
+### 33.10 仍未做
+
+- **26 条保留的公开面**未收敛（承 §31.1.1、§32.10）：这是产品决策，带兼容成本。
+  本轮的结论**强化**了这个边界：它们不是「未裁决的孤儿」，是**已裁决的接口**。
+- **182 条 barrel 条目**同上。
+- **`candidateDiscrimination` 接线的正确性**归 `AUDIT-B7-DEAD-SWITCH.md` 所有，本轮未重开。
+- **用轨迹而非行来测量「测试是否断言」**未做（§33.1b）。那是新仪器，不是本轮范围。
+
+### 33.11 可推广的结论
+
+> **零引用数是一个测量。「unreferenced」作为一个标签是一个分类。两者都不是工作项，
+> 而本轮的工作项不是类名预测的那一个。**
+
+27 条里有 26 条零引用**因为它们是接口**——在一个不含消费者的仓库里，这就是接口的含义。
+第 27 条零引用**因为它闸控的功能被另一个名字闸控**，而这第二种
+**对本仓拥有的每一个面向引用的测量都不可见**：它有调用者（它自己的测试）、
+有覆盖率（100%）、有 docstring、还被导出了。
+
+找到它的那个问题不是「谁调用它」，而是：
+
+> **这个符号是在做事，还是在决定事情要不要发生？**
+
+**决定事情的符号需要有一个决定喂给它。没有输入的闸门不是未使用的代码——
+它是一条关于系统的假陈述，以一个读者会相信的名字发布出去。**
+它的代价恰是 §33.4 那个推断，而付账的是下一个试图打开这个功能的人。
+
+规则：**当一个符号零引用时，判断它是「就是」那个能力，还是「闸控」那个能力。**
+能力可以零调用者地干净导出；闸门不行——闸门没有调用者，意味着它闸控的东西不可达，
+**或者这个闸门是虚构的**。问是哪一种；如果功能可证明地在运行，那闸门就是虚构的。
