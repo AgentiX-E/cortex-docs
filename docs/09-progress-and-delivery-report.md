@@ -6954,3 +6954,238 @@ options 类型没有该字段、prompt-builder 闭包丢掉了参数），三处
 规则：**当一个符号零引用时，判断它是「就是」那个能力，还是「闸控」那个能力。**
 能力可以零调用者地干净导出；闸门不行——闸门没有调用者，意味着它闸控的东西不可达，
 **或者这个闸门是虚构的**。问是哪一种；如果功能可证明地在运行，那闸门就是虚构的。
+
+---
+
+## 34. 遗忘时钟的量纲错误：默认配置下 `consolidate` 删除全部记忆
+
+**改动位置**：`cortex@` 本轮提交（见附录 commit 表）。
+**审计文档**：`cortex/docs/AUDIT-CONSOLIDATION-CLOCK.md`（新建，7 节）。
+**发现场景**：为 `cortex-memory` 缺失接缝做可行性侦察时撞到的，**不是**专门去找它。
+
+### 34.1 结论先行
+
+> **这不是「阈值调得太高」，是「单位错了」。**
+> `retrievability(deltaMs, stabilityMs) = exp(-Δt / S)` 的两个参数在文档里都是毫秒，
+> 而 `MIN_STABILITY = 1`、`createMemory` 的默认 `stability` 也是 `1`——
+> 即**一毫秒的耐久度**。`consolidate` 的遗忘阈值默认 `0.01`，
+> `exp(-5) < 0.01`，所以**任何超过 5 毫秒的记忆都被删除**，包括从未访问过的。
+>
+> 实测（改动前，跑 `dist/`）：
+>
+> ```
+> retrievability(1000, 1) = 0        // 创建后 1 秒
+> 10 条全新记忆 + 零访问 → consolidate → memories.size === 0
+> stats: { strengthened: 0, decayedEdges: 0, forgotten: 10 }
+> ```
+>
+> **十进零出。** 没有访问、没有失败、没有陈旧数据。
+
+一个默认配置会遗忘一切的系统，不是「配置不当」——它不是记忆系统。
+
+### 34.2 它为什么活着：三个结构性原因
+
+三个都不是「没人注意到」，而是**测量方式本身看不见它**。
+
+| # | 原因 | 具体 |
+| --- | --- | --- |
+| 1 | `consolidate` **零生产调用者** | 会调用它的合成层 `cortex-memory` 不存在（`AUDIT-CODE-VS-DOCS.md` §6）。没有真实存储在 consolidate 过，删除从未被观察到 |
+| 2 | 现有测试驱动**机制**、绕开**默认值** | 遗忘测试传 `forgettingThreshold: 0.9` + `lastAccessedAt: 0`；`decay` 测试只断言 `decayedEdges === 0`，它的两条夹具记忆**被静默清空**而无数量断言 |
+| 3 | 只断言**相对大小**，从不断言**量纲** | `toBeGreaterThan(s0)` / `toBeLessThan(s0)` / `toBeGreaterThan(0)` 在单位变换下全部不变。`toBeGreaterThan(0)` 对 `1` 和 `1e-9` 同样成立 |
+
+**第 1 条解释了 §6.2 步骤 2 为什么从未被实施**：
+
+> 把 `cortex-memory` 接到真实存储上，会**立刻**暴露这个缺陷。
+> 换句话说，任何诚实地开始构建那个接缝的尝试，第一步就是踩到它。
+
+**第 2 条更锋利**：现有套件里有一个测试，它的两条夹具正在被它脚下清空，而它通过了——
+因为它断言的恰好是那个不依赖夹具存在性的属性。
+
+**第 3 条是可推广的**：
+
+> **一个只约束比值的套件无法检测尺度错误。** 而这个缺陷是纯粹的尺度错误。
+
+### 34.3 修法：改单位，不改常数
+
+诱人的修法是把阈值提到足够大。那是**错误的轴**——它让默认值依赖第二个常数，
+而两个常数必须在没有人写下来的单位里达成一致。
+
+FSRS 的 stability 惯例上是**与复习间隔同量级的时长**。对记忆系统，那个间隔是「天」。
+`1` 在任何存记忆的系统里都不是「一毫秒耐久度」的合理值；
+而把「天」写成毫秒（`86_400_000`）会让每一个调参区间都不可读。
+
+| 文件 | 改前 | 改后 |
+| --- | --- | --- |
+| `math/fsrs.ts` | `retrievability(deltaMs, stabilityMs)`，两者皆毫秒 | `retrievability(deltaMs, stabilityDays)`，Δt 在函数内换算 |
+| `math/fsrs.ts` | `const MIN_STABILITY = 1`（毫秒） | `export const MIN_STABILITY = 1`（天） |
+| `domain/memory.ts` | `stability: partial.stability ?? 1` | `stability: partial.stability ?? fsrs.stability` |
+| `domain/memory.ts` | `difficulty: partial.difficulty ?? 5` | `difficulty: partial.difficulty ?? fsrs.difficulty` |
+
+其中两个刻意的决定：
+
+1. **时间参数留在毫秒。** 领域里每个时间戳都是 epoch 毫秒，所以 `deltaMs` 传不错；
+   传「天」却可以传错，而那会让曲线静默缩放 8640 万倍。换算放在边界上，
+   那里本来就在做换算。
+2. **`createMemory` 从 `initialFsrsState()` 派生默认值，不再复述。**
+   旧代码有两个各自独立的字面量（`initialFsrsState` 里一个 `1`、`createMemory` 里一个 `1`），
+   它们必须一致、确实一致、并且在**错误的单位上**一致。读初始状态消掉了第二个出错的地方。
+
+### 34.4 修第一个错时发现的第二个时钟错误
+
+`consolidate` 用 `now - lastAccessedAt` 计算 build cost，`now` 是**批处理时刻**。
+真实调用方重放一批记录，其中一些比这批更旧；用 `now` 会把**它已经承受过的衰减**算成它的收益。
+现改为 `access.at - mem.lastAccessedAt`。
+
+**在默认状态下两个时钟无法区分**——都给出 `exp(0)`——所以除非有测试刻意把它们分开，
+这个错误完全不可见。有一个测试这么做了。
+
+### 34.5 修完之后才现身的第三个缺陷
+
+单位修正**暴露了 `review` 里的退化情形**。成功复习的增益是 `1 + (1 - R) * 2`，
+与「这条记忆离被遗忘有多近」成正比。在 `Δt = 0` 时 `R = 1`，增益恰好是 `1`：
+
+```
+review({ stability: 1, difficulty: 5 }, 'success', 1)
+  → { stability: 1, difficulty: 4 }     // stability 未变
+```
+
+一条记忆可以连续访问任意多次、零时间代价、而耐久度**永不变化**。
+在旧单位下这只被掩盖了：「零时间代价」是一个没人能落进去的 5 毫秒窗口。
+**修好单位，让一个永久不可达的分支变得可达，而那个分支是错的。**
+
+现 `review` 在增益会变成 no-op 时施加 `+25%` 的下限。
+
+> **这是明确命名的简化，不是 FSRS。** 真实 FSRS 从 difficulty 和复习评级推导目标间隔；
+> Cortex 没有评级可依。这里的曲线是**FSRS 形状**的，不是**FSRS 忠实**的，
+> 这个差别现在被记录下来而不是被暗示。
+
+### 34.6 验收
+
+TDD：**先写测试、先跑红**。
+
+```
+× does not forget a memory that has existed for an hour
+    → an hour-old memory was forgotten: expected 1 to be +0
+× gives a fresh memory a stability that keeps it retrievable for a day
+    → initialFsrsState().stability is 1; a memory must be retrievable a day later
+× keeps the default stability of createMemory in the same regime
+    → createMemory().stability is 1, which cannot express a day of durability
+× leaves a reviewed memory more retrievable an hour later than an unreviewed one
+    → reviewed=0 should exceed unreviewed=0 after an hour
+× keeps both kinds of memory alive through a default consolidation
+    → a recent reviewed memory was forgotten: expected 2 to be +0
+Tests  5 failed | 5 passed (10)
+```
+
+**注意「通过」的是哪一条**：`does not forget a memory created moments ago`。
+夹具在 consolidate 前几微秒才创建，还在 5 毫秒危险窗内。
+下一条——一小时前——失败了。**删除行为是时钟的函数，不是年龄的函数，而那条通过的断言就是证据。**
+
+新增 `packages/cortex-core/src/__tests__/consolidation-clock.test.ts`，**12 条断言 × 4 组**：
+
+| 组 | 守卫的东西 |
+| --- | --- |
+| 新记忆在默认 consolidate 下存活 | 回归本身（10 进 10 出）／一小时前／**反向断言**：一年的确实被遗忘／显式阈值仍能覆盖默认 |
+| stability 是与记忆寿命同量级的时长 | 单位（用 `retrievability(DAY, S) > 0.01` 陈述）／第二个默认值／命名具体荒谬处的失败消息／`initialFsrsState` 与 `retrievability` 对活记忆一致 |
+| 成功访问延长寿命 | 增益确实到达曲线／端到端：被复习与被忽略的一样存活 |
+| **时钟是访问记录，不是批处理** | 增益是记录的属性，对照闭式 `1 + (1 - 1/e) * 2`／29 天前的访问增益高于零间隔访问 |
+
+第 3 行是让修法诚实的那个。**很容易通过「关掉遗忘」来"修"这个缺陷，而那会通过该文件里除它以外的每一条断言。**
+
+### 34.7 三次缺陷注入
+
+每次注入施加到绿树上、运行、再恢复。**各自被不同的子集捕获**，这才是值得分开记录的原因。
+
+| # | 注入 | 被谁捕获 | 失败信息 |
+| --- | --- | --- | --- |
+| 1 | 把单位改回毫秒 | **12 条中的 7 条** | `an hour-old memory was forgotten`；`stability is 1.157e-8`；`a fresh memory is gone after 1 ms: expected 0 to be greater than 0.01`；闭式偏差 `8.5e-9` |
+| 2 | 把 build cost 改回按 `now` 计算 | **12 条中的 1 条** | `a day-old access must not be charged the no-spacing floor: expected 2.294 to be close to 2.264` |
+| 3 | 移除 `review` 的零间隔下限 | 跨两个文件的 2 条 | `reviewed=0.959 should exceed unreviewed=0.959`；`expected 10 to be greater than 10` |
+
+**注入 1 是原缺陷复原，被该文件多数断言捕获**——这个套件不会让它出厂。
+**注入 2 只被一条断言捕获，而那条断言是为它写的**；没有 §34.4，这个时钟错误将没有任何见证者。
+
+### 34.8 仓库级验收与台账移动
+
+`pnpm check`（`test:tools && build && lint && typecheck && census:check && test && format`）**exit 0**。
+
+```
+packages/cortex-core  Tests  216 passed  98.75 | 98.67 | 100 | 98.75
+packages/cortex-node  Tests   16 passed   100 | 98.61 | 100 |  100
+packages/cortex-llm   Tests  131 passed  99.27 | 98.11 | 100 | 99.27
+packages/cortex-eval  Tests 1516 passed  99.88 | 99.05 | 100 | 99.88
+                             1879 tests, 0 failures
+```
+
+四包 × 四维度**全部过 95% 门**。套件 1865 → **1879**（`consolidation-clock.test.ts` +12，
+`math.test.ts` +2）。
+
+两条**既有测试被更正而非删除**，而两条更正本身都是证据：
+
+- `math.test.ts` 的 `retrievability decays to near zero after long delay` 断言的是
+  `retrievability(1_000_000_000, 1000)`——**11.6 天的延迟对 1000 的 stability**。
+  它之所以通过，只因为旧曲线把 stability 读成毫秒。
+  **那个字面量就是化了妆的缺陷**：它看起来像一个很大的延迟，实际是 11 天。
+- 新增 `retrievability(DAY_MS, 1) === 1/e` 让 stability 的**定义**变得可断言。
+  在单位修复之前，这句话根本写不出来——因为「一个稳定间隔」是一毫秒。
+
+#### 台账移动
+
+
+
+`tools/export-census-baseline.json` 由新的 census 重建：
+
+| 总量 | 改前 | 改后 | 原因 |
+| --- | --- | --- | --- |
+| `exports` | 429 | **431** | 导出 `MIN_STABILITY` / `MAX_REVIEW_BOOST` |
+| `withCaller` | 216 | **218** | 两者都有调用者（`review`、`memory.ts`） |
+| `orphaned` | 213 | 213 | 不变 |
+| `referencedLocally` | 187 | **189** | 两者在自己声明文件内被引用 |
+| `unreferenced` | 26 | **24** | `consolidate` 与 `initialFsrsState` 各获得一个调用者 |
+
+最后一行是信息量最大的，而它是**通过增加调用者而非删除代码得到的减少**：
+两者本来在 `unreferenced` 类里，因为没有任何东西调用它们。
+`initialFsrsState` 现在被 `createMemory` 调用（§34.3）。
+
+重建后台账不变量成立：
+
+```
+referencedLocally + unreferenced === orphaned            189 + 24 === 213
+knownOrphans === locations === orphanClass === orphaned  213 === 213 === 213 === 213
+```
+
+### 34.9 仍未做
+
+- **`consolidate` 仍然没有生产调用者。** 会给它一个调用者的那条接缝是 `cortex-memory`
+  （`AUDIT-CODE-VS-DOCS.md` §6.2 步骤 2）。本轮移除的是**阻塞项**，不是那份工作本身。
+- **阈值的取值仍然是判断。** `0.01` 现在意味着「约 4.6 个稳定间隔无访问」而不是「4.6 毫秒」，
+  但 4.6 天、周还是月才是对的，是产品问题，而回答它所需的观测能力还不存在。
+- **`ot.ts` 仍然被导出、仍然没被 `consolidate` 接线**，正如它的 docstring 从写下那天起就说的。
+- **census 看不见这一类缺陷。** 它数引用，不数单位。
+  门禁在毫秒版本的该模块上**不会有任何失败**。
+
+### 34.10 可推广的结论
+
+> **census 数的是引用，不是单位。一个 100% 覆盖率、有调用者、有 docstring 的模块，
+> 可以在一个从未被写下来的单位上，静默地删除它声称要保存的全部东西。**
+
+三条规则：
+
+1. **当测试只约束比值时，补一条约束尺度的断言。**
+   `toBeGreaterThan(0)` 对 `1` 和 `1e-9` 同样成立——它不是一个关于数值是否合理的断言。
+   本轮的 `retreivabilityIsSane` 断言的是曲线在**一天之后**的行为，不是字面量的量级，
+   所以它不会因为合理的调参而失效。
+2. **默认值只能有一处。** 两个必须一致的字面量，会在正确的方向上一致，
+   然后在错误的单位上一致——`initialFsrsState` 与 `createMemory` 就是这样。
+   把第二个改成从第一个派生，是让「它们不一致」无法表达，而不只是不太可能。
+3. **在修一个尺度错误时，检查被它掩盖的分支。**
+   §34.5 那个 no-op 分支在 5 毫秒窗口里**不可达**，所以它从未被正确性检验过；
+   单位一修，它就可达了。**修好单位会释放旧的不可达分支进入测试的射程**
+   ——这不是副作用，这是修复的一部分。
+
+而本轮最值得记的一条，是关于**发现路径**的：
+
+> 这个缺陷不是在审查遗忘逻辑时发现的，是在**勘察那条还没被构建的接缝**时发现的。
+> 「哪里缺一层」和「那一层接上会发生什么」是两个问题，
+> 而第二个问题**必须由第二个问题来问**——审查 `consolidate` 本身只看得到它的机制正确，
+> 看不到它的默认值荒谬。**缺失的接缝本身就是一台仪器。**
