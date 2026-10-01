@@ -7189,3 +7189,236 @@ knownOrphans === locations === orphanClass === orphaned  213 === 213 === 213 ===
 > 「哪里缺一层」和「那一层接上会发生什么」是两个问题，
 > 而第二个问题**必须由第二个问题来问**——审查 `consolidate` 本身只看得到它的机制正确，
 > 看不到它的默认值荒谬。**缺失的接缝本身就是一台仪器。**
+
+---
+
+## 35. §6.2 步骤 1：那条「既有的一致性测试」并不存在
+
+**改动位置**：`cortex@` 本轮提交。
+**审计文档**：`cortex/docs/AUDIT-EVAL-CONTRACTS.md`（新建，8 节）。
+**被审计的对象不是代码，是一条计划**：`AUDIT-CODE-VS-DOCS.md` §6.2 的第一行。
+
+### 35.1 结论先行
+
+§6.2 第一行原文：
+
+| # | Task | Why it is first | Verification |
+| --- | --- | --- | --- |
+| 1 | Extract the reference pipeline's contracts into `S`-compatible form | The instrument must be able to receive the product system | `cortex-memory` passes the **existing** `MemorySystem` conformance tests |
+
+这一行里塞了**三个可验证的预设**，而**两个是假的**：
+
+| # | 预设 | 判定 |
+| --- | --- | --- |
+| 1 | 契约与参考管线**纠缠**，所以「抽取」是工作 | **假**——`MemorySystem` 只有 1 个必填字段 + 1 个必填方法，零耦合 |
+| 2 | 存在一个要弯曲成的 `S`-compatible 形态 | **假**——变换在类型上是恒等映射 |
+| 3 | 存在一个 **`MemorySystem` 一致性测试套件** | **假，而且这条改变了一切** |
+
+第三条是最重的：
+
+```
+grep -rn "conformance" packages/   → 0 hits
+```
+
+**这个词在整个仓库里不存在。** `MemorySystem` 只作为类型标注出现，**没有任何地方断言一个满足该类型的对象会有任何特定行为**。
+
+### 35.2 为什么这不只是咬文嚼字
+
+`runBenchmark` 的分派基于 `'answerSessions' in system`，然后基于另外七个可选成员。所以契约**不是**「实现 `answer`」，而是：
+
+> **实现 `answer`，并且你声明的每一条可选路径都会被路由到、以特定的参数形态、且必须返回 `Answer`。**
+
+一个系统完全可以满足**类型**而在上述每一点上都错：
+
+- 声明了 `answerSessions`，却在空会话列表上返回 `undefined`；
+- 声明了 `answerAbstention` 却返回非 null 答案——**静默地把「弃答区块」变成「答错区块」**；
+- 什么可选成员都不声明，**而这完全合规**——这恰恰是 `cortex-memory` 最可能起步的配置。
+
+第三条是微妙的那个：**只实现 `name` + `answer` 的系统是完全一致的**。所以真正需要存在的套件必须断言**路由契约**：对七个可选成员中的每一个，**系统是否被调用，以什么参数被调用？**——因为那才是决定「声明这个成员是帮忙还是帮倒忙」的东西。
+
+> **这才是步骤 1 的真实内容。** 「抽取契约」预设了一次机械重构；真实的债务是
+> §6.2 的验证项命名了一个**不存在的测试**，而 `cortex-memory` 无法对着一个没人写过的套件被验证。
+
+### 35.3 独立重数：契约符号没有一个孤立
+
+按 §33 的方法（独立重数，不读 census 结论），对从 `types.js` 重导出的十一个契约名做全仓非测试、非 barrel、非声明文件的引用计数：
+
+| 符号 | 非测试非 barrel 调用者数 |
+| --- | --- |
+| `Capability` | 7 |
+| `Question` | 10 |
+| `BenchmarkDataset` | 6 |
+| `Answer` | 6 |
+| `MemorySystem` | **5** |
+| `SessionAwareMemorySystem` | 1 |
+| `PerCapabilityResult` | 1 |
+| `Metrics` | 3 |
+| `AggregateStats` | 1 |
+| `AblationResult` | 2 |
+| `PerCapabilityPairedStats` | 1 |
+
+**没有一个是孤立的。** §6.1 的瓶颈从来不是契约的**形状**，而是**产品层不存在它的任何实现**——那是步骤 2 的活，不是步骤 1 的。
+
+### 35.4 递给步骤 3 的：六个决定，不是一次抽取
+
+「`S`-compatible 形态」暗示有一个需要被弯曲成的 `S`。因为 `MemorySystem` 只有 1 个必填方法、零耦合，类型上的变换是**恒等映射**，真正的问题是运行时的：
+
+| 可选成员 | 声明它意味着 | `cortex-memory` 的代价 |
+| --- | --- | --- |
+| `answerSessions` | MR 路由到它 | 具备会话感知的前提；CPU 侧合成必须按会话分组 |
+| `answerTemporal?` | TR 带着 `questionDate` 路由到它 | 不声明则相对时间走朴素抽取路径，可测地更差 |
+| `answerAssistant?` | `single-session-assistant` 包含助手轮 | 不声明则该类问题的证据轮被过滤掉 |
+| `answerAbstention?` | ABS 路由到保守提示 | 不声明则弃答问题被「在候选里选一个」回答 |
+| `answerPreference?` | 偏好/推荐路由到生成式提示 | 不声明则抽取路径对一个有答案的问题弃答 |
+| `answerKnowledgeUpdate?` | `knowledge-update` 路由到区分时间限定的提示 | 不声明则 "previous" vs "currently" 不被显式化 |
+
+**六个决定，每一个的代价都在仓库别处有测量。没有一个是一次契约抽取。**
+
+### 35.5 顺手查出的一个死导出
+
+独立追踪 bench 实际可达的 `benchmark.js` 导出：
+
+```
+runner.ts   → runAblationReport          （ablation.ts，10+ 处）
+ablation.ts → evaluateWithScorerDetailed （line 75, 76）
+ablation.ts → evaluateWithScorer         （line 137, 138）
+```
+
+`runBenchmark` 与 `evaluate` **完全不在 bench 的路径上**。按 §33 的判据（**描述**能力还是**闸门**能力）：
+
+- **`runBenchmark` 是描述**，且是**路由实现本身**——它持有那七个分支，是一致性套件必须驱动的对象。**保留。**
+- **`evaluate` 是 `runBenchmark` + 一次 `computeMetrics`**，无路由、无策略、无状态，只有两个测试调用者，且**它的 docstring 就是它的实现**：
+
+```ts
+/** Run a system and immediately evaluate against ground truth. */
+export async function evaluate(dataset, system) {
+  const answers = await runBenchmark(dataset, system);
+  return computeMetrics(dataset, answers);
+}
+```
+
+> **一个文档即实现的函数是一个调用点，不是一个抽象。** 删除。
+
+两处测试调用点改写为直接表达同一组合（`computeMetrics(ds, await runBenchmark(ds, system))`），各有注释指向本审计。
+
+### 35.6 一个值得记的副作用：`computeMetrics` 变成孤儿
+
+删除 `evaluate` 使台账这样移动：
+
+| 总量 | 改前 | 改后 | 原因 |
+| --- | --- | --- | --- |
+| `exports` | 431 | **430** | 删除 `evaluate` |
+| `withCaller` | 218 | **217** | `evaluate` 在计数集合内本无调用者 |
+| `referencedLocally` | 189 | **188** | `evaluate` 是其一 |
+| `unreferenced` | 24 | **25** | **`computeMetrics` 进入该类** |
+
+`computeMetrics` 此前不是孤儿（因为**被我们删掉的 `evaluate` 调用了它**），现在也**没有死**——它的调用者只剩四个测试文件。
+
+**两件事，第二件才是有意思的：**
+
+1. **按 §33 的判据，`computeMetrics` 是合法的 `unreferenced` 成员。** 它是**描述**：「拿答案向量对着 ground truth 打分」——**整个 harness 存在的那个计算**，从公开 barrel 导出。一个消费者只有自己测试套件的库，在本仓是常态（§33：27 条里 26 条是接口，正是因为这个）。
+2. **门禁无法区分「豁免的接口」与「刚被删掉最后一个调用者的东西」。** 两者是同一行台账。此前 `computeMetrics` 被一个**没人用的便利包装**顺带证明了存在性。
+
+> 这不是保留那个包装的理由——这是**注意到 `unreferenced` 是一个成员资格会因与被审符号本身无关的原因而移动的类**的理由。
+> 裁决它的是 §33 的判据（描述 vs 闸门），不是 census。
+
+顺带澄清一个自然的反对意见：`packages/cortex-eval/bench/run.ts` **确实**被 census 计数——它从 barrel 导入十三个符号，`tools/export-census.mjs` 自己的 docstring 就称它为「the benchmark's actual entry point」。`computeMetrics` 只是**不在这十三个里**：bench 的打分路径是 `runAblationReport` → `ablation.ts`，从不直接经过 `computeMetrics`。**所以这不是 census 的盲区，bench 真的不调用它。**
+
+### 35.7 验收
+
+新增 `packages/cortex-eval/src/__tests__/memory-system-conformance.test.ts`，**11 条断言 × 5 组**。它是**刻画测试**——描述已经成立的行为，写成对着**尚不存在**的实现运行的形式，这正是要点：**它是规格，不是回归**。
+
+| 组 | 断言 |
+| --- | --- |
+| **最小 `MemorySystem` 合规** | 只有 `name` + `answer` 的对象被接受且收到**每一个**问题／`context` 与 `sessions` 被按原样传递 |
+| **每条声明的可选路径都被路由到** | 路由表逐行断言（9 个问题 → 9 条路径）／**顺序断言**：ABS 赢过 assistant 型／未声明的成员不被路由／对能力与成员不匹配时回落 `answer` |
+| **答案符合 `Answer` 契约** | `null` 是一等公民（= 弃答）／同步返回值被接受／**空字符串是答案不是弃答** |
+| **契约是结构性的，不是名义的** | 无 class、不导入该类型的普通对象字面量即可满足／**问题顺序被保持**（McNemar 逐位配对的前提） |
+
+两条**类型表达不了**的性质被单独断言：
+
+1. **最小性**——`{ name, answer }` 完全合规，因为那是新实现的起步配置。
+2. **优先级**——ABS 分支排在 assistant 分支之前，因为**一个 ABS 问题也可能带 `single-session-assistant` 型**。这个顺序是承重的。
+
+**刻意不断言**：答案正确性。那是 benchmark 的活（需要 LLM）；一致性套件测路由（需要一个记录器）。每个系统的每条路径返回自己的名字，**所以失败信息只指向一个路由决定，不含任何别的东西**。
+
+### 35.8 三次缺陷注入
+
+| # | 注入 | 被谁捕获 | 失败信息 |
+| --- | --- | --- | --- |
+| 1 | 把 ABS 分支移到 assistant 分支**之后** | **11 条中的 2 条** | 路由表整体错位；`expected 'answerAssistant' to be 'answerAbstention'` |
+| 2 | `isSessionAware` 改成探测形状（`sessionAnswer`）而非成员名 | **11 条中的 1 条** | `system.answerSessions is not a function` |
+| 3 | 按 id 排序问题，破坏数据集顺序 | **11 条中的 6 条** | `expected 'mr without session boundaries' to be 'assistant evidence'` 等 |
+
+**注入 1 同时打中路由表和那条专门的顺序断言**——后者是为它写的。
+**注入 2 只被「形状鸭子类型」那条捕获**：它给对象挂了一个 `sessionAnswer` 形状的属性，所以任何**探测形状**而非**探测成员名**的实现都会被抓住。
+**注入 3 打中六条**，因为顺序是几乎所有断言的隐含前提。
+
+### 35.9 第二个副作用，这次由审计自己的散文引起
+
+给 `MemorySystem` 写 docstring 指向新套件，让 **`runBenchmark` 从 census 里消失了**：
+
+```
+in baseline not in census: ['cortex-eval: runBenchmark']
+```
+
+那段 docstring 在散文里点了这个函数的名字——*「`runBenchmark` routes on the presence of the optional members」*——而 census **把注释或字符串里的整词出现计为引用**，这是刻意且有测量依据的：
+
+> 我们刻意不解析 import。**只出现在注释或字符串里的符号会被计为「被调用」。这朝安全方向过计**：
+> 工具的任务是找**确定未使用**的符号，假阴性（漏掉真孤儿）远比假阳性（标记活代码）代价低。
+
+所以门禁**按设计工作**，而新散文是一条**真实**的引用：`types.ts` 的读者现在可以从它找到 `runBenchmark`。
+
+本轮改动的**净**台账移动：
+
+| 总量 | 改前 | 改后 | 原因 |
+| --- | --- | --- | --- |
+| `exports` | 431 | **430** | 删除 `evaluate` |
+| `withCaller` | 218 | **218** | `evaluate` −1、`runBenchmark` +1 |
+| `orphaned` | 213 | **212** | — |
+| `referencedLocally` | 189 | **187** | `evaluate` −1、`runBenchmark` −1 |
+| `unreferenced` | 24 | **25** | `computeMetrics` +1 |
+
+`runBenchmark` 原本是 `referenced-locally`（在 `benchmark.ts` 内被调用；barrel 与测试都不计数）。
+现在它**因为文档而不再是孤儿**。
+
+> **一段散文就能移动一行台账，是这件仪器的既定行为，不是它的缺陷**——
+> 但读台账时必须知道这一点：**`referencedLocally` 计数可以通过「写关于某个符号的话」降低，
+> 而不是通过把它接上线。**
+
+这和 §33 的发现是同族但**方向相反**。§33 的教训是「零引用数是一个测量，不是工作项」；
+这一节的教训是**在另一个方向上也一样**：**非零引用数也是一个测量，它同样不等于「这个符号在做工作」**。
+两个方向都指向同一个结论：**裁决一个符号的，是「描述 vs 闸门」这个问题，不是 census 的数字。**
+
+### 35.10 仍未做
+
+- **路由是否正确**未被本审计确立。套件尚不存在时，本文只能说明路由**做了什么**，不能说它**是对的**。七个分支来自 LongMemEval 的问题类型，每一条的注释都引用了测量——本文一份都没有重新推导。
+- **`cortex-memory` 该声明哪些可选路径**：§35.4 列出六个决定，没有替它做决定。每一个都需要一个 arm。
+- **`cortex-eval` 作为 `cortex-memory` 的 devDependency 是否可接受**：它是 type-only 且无环，但意味着**产品包的测试要导入仪器的类型**。备选是把 `MemorySystem` 移进 `cortex-core`——一次更大的变更、有自己的迁移成本，而 §6.1 的分层表刻意把契约放 `cortex-core`、把 **benchmark 契约**放 `cortex-eval`。**这个张力未解决，被记录下来而不是被静默解决。**
+- **`formatStructuredContext` / `buildQaPrompt` / `parseQaAnswer` 这一类**仍是不收敛的 `referenced-locally` 孤儿，即 188 条那一类；本审计未重开。
+
+### 35.11 可推广的结论
+
+> **一条计划里写的「通过既有的 X 测试」，本身是一个可以被证伪的断言。**
+> 本轮的审计对象不是代码，是 §6.2 第一行；而它最实质的产出，
+> **不是**发现某个函数写错了，是发现**这行字承诺的验证手段从来不存在**——
+> 于是「抽取契约」这个任务描述**预设了一个错误的工作内容**。
+
+三条规则：
+
+1. **区分「描述」与「闸门」在**计划**层面的对应物**：任务写的是「抽取」还是「验证」？
+   §6.2 第一行把**一次机械重构**和**一个不存在的套件**捆在一行里，
+   而**这两个预设在同一个「Verification」格子里被同时声明**。
+   拆开它们，才发现真正欠的是后者。
+2. **「既有」是一个需要核实的词。** 写「passes the existing conformance tests」的人
+   （包括我自己）默认了套件存在。`grep` 一次的成本是零点几秒，而它的替代方案是
+   **把整个步骤 2 建立在一个不存在的验收标准上**。
+3. **删除一个符号之前，检查它替谁挡了什么。** `evaluate` 自己没有调用者，
+   但它**在计数上**是 `computeMetrics` 的调用者。删掉它，孤儿类增加一条
+   ——**而那条不是新缺陷，是一条被掩盖的既有情况**。
+   census 数的是引用，不数**引用链的承重**。
+4. **引用计数在两个方向上都不等于「在做工作」。** 本轮它动了两次，两次都不因为功能改动：
+   `computeMetrics` 因为**被删掉的那个包装**而跌进 `unreferenced`，
+   `runBenchmark` 因为**一段 docstring**而走出孤儿类。
+   **一个是假阳性被移除，一个是假阴性被引入**，而 census 对两者一视同仁。
+   这条和 §33 合起来才是完整的：**引用数是一个测量，任何方向都不能代替裁决。**
