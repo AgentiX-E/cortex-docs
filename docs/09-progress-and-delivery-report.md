@@ -7619,3 +7619,243 @@ cortex-core  <--  cortex-memory  -->  注入的 Storage / LLM / Embedding
 5. **注入通过全部测试，说明的是测试的射程，不是代码的正确性。**
    注入 2 首轮全绿——阈值边界**从未被走过等号**。
    **「通过」在采样点之外没有意义**；单调性断言比边界断言强，正是这个原因。
+
+---
+
+## 37. 步骤 3：把 `cortex-memory` 接进 benchmark，并在 dispatch 之前预注册
+
+**测量于** `cortex@ce592ee`（推送为 `015e218`）。`pnpm check` exit 0，
+**2044 tests / 0 failures**。
+
+### 37.1 结论先行
+
+步骤 3 的这一轮交付的是**仪器**，不是数字。
+
+`AUDIT-CODE-VS-DOCS.md` §6.2 把步骤 3 写成「加一个 arm」，读起来像是往一个已有九个
+arm 的包里再加一个。**它不是。** 它是本仓库第一个**两侧是不同系统**的 arm：
+
+| | 系统 | 住在哪 |
+| --- | --- | --- |
+| baseline | `NaturalLanguageMemorySystem` 参考管线 | `cortex-eval/src` |
+| feature | `CortexMemory` | `cortex-memory/src` |
+
+现有的九个 arm 全是 `NaturalLanguageMemorySystem` **内部**的 A/B——两个实例、
+选项不同、都在 `cortex-eval` 里构造（`runRerankAblation` 是范本）。
+而步骤 2 让 `cortex-memory` 得以满足契约的那条 **type-only devDependency**，
+正是让 `cortex-eval` **看不见** `CortexMemory` 的那条边。
+
+**所以「接一根线」这件事，实际上是一次结构决策。**
+
+### 37.2 三个方案，与选中的那个的代价
+
+| 方案 | 形状 | 裁决 |
+| --- | --- | --- |
+| **A：装配在 `cortex-eval/src/`，系统注入** | `bench-memory-arm.ts` 接收两个**已构造**的系统，从不提及 `cortex-memory` | **选中** |
+| B：新建 `cortex-bench` 包依赖双方 | 架构上最干净：协调层本就该依赖两侧 | 成本否决——1051 行 CLI 搬家 + 一整套工具链 + `pnpm check` 多一环 |
+| C：装配在 `cortex-memory/bench/` | 依赖方向天然成立 | 否决——`bench/**` 被排除在覆盖率外，接线**不可测**，正是 `bench-arm-options.ts` 记录过的缺陷 |
+
+**方案 A 的代价是真的，并且写下来而不是藏起来**：`cortex-eval` 里多了一个
+「为产品包服务」的模块，读者可能觉得它不纯。反面论据是：**装配是仪器的工作**——
+它决定「谁和谁比」，而它必须在覆盖率边界之内。
+
+**依赖边一个字没动**，并且 arm 自己的测试**断言**了这一点（读 `package.json` 的依赖声明，
+而不是扫源码文本）。一个未来的重构如果为了「简化」而直接 import 那个类，
+会让这个测试失败。
+
+### 37.3 一个边界问题：谁来构造 feature 侧
+
+方案 A 有一个必须回答的缺口：**`cortex-eval` 看不见 `CortexMemory`，那谁构造它？**
+
+答案由依赖图直接给出。`cortex-memory` **devDep 了 `cortex-eval`**，
+所以它能同时看见两侧：
+
+```
+cortex-core                     ← cortex-memory
+cortex-core, cortex-llm         ← cortex-eval
+cortex-memory --(devDep)------> cortex-eval      ← 箭头方向决定了入口在哪
+```
+
+于是新增 `cortex-memory/bench/run-ablation.ts`。**它里面没有任何决策**：
+环境解析是 `cortextMemoryArmOptions`、装配是 `runCortexMemoryArm`，
+两者都在 `cortex-eval/src/` 里、都在覆盖率边界之内。
+留在 CLI 的只有无分支的事：构造两个系统、交出去、写文件。
+
+### 37.4 门禁配置为什么需要一个新字段
+
+arm 的两个参数（`threshold`、`sessionBudget`）是**数字**，而 `FeatureConfig` 是
+`Readonly<Record<string, boolean>>`，渲染器写死 `v ? 'on' : 'off'`。
+
+三个选项：
+
+| 选项 | 后果 |
+| --- | --- |
+| 数值投影成布尔塞进 `FeatureConfig` | 丢失真实数值，§20 的教训重演 |
+| 放宽 `FeatureConfig` 为 `boolean \| number` | 改动**每一个既有 artifact** 的配置行，且联合类型让布尔侧的 `=== true` 读法不再穷尽 |
+| **新增专用字段 `memoryArmConfig`** | **选中**：只影响需要它的那个 arm |
+
+它**必需而非可选**，所以新调用者忘记传它是**编译错误**而不是一个更薄的报告。
+先例是 §20：两份下载下来的 artifact 差了两个问题，**都没有说自己站在开关的哪一侧**，
+于是 delta 的符号无法解释、这次 run 只能作废。一个没有门禁配置的
+`cortex-memory` artifact 从构造上就带着这个缺陷——`threshold=0`（闸门全开）
+和 `threshold=0.9`（几乎全关）会产生两个看起来一样、含义相反的文件。
+
+渲染也一并接上（Markdown + JSON），因为「只进了 JSON」正是这个仓库已经记录过
+**三次**的侧信道缺陷（`coverageCoverage`、`retryFires`、`candidateAnnotationVersion`）。
+
+### 37.5 预注册：三个数字，在 dispatch 之前
+
+§6.3 强制三个要素。全部写进
+[`docs/PREREGISTRATION-CORTEX-MEMORY-ARM.md`](../../cortex/docs/PREREGISTRATION-CORTEX-MEMORY-ARM.md)。
+
+**① 它必须超越的点估计：这次 dispatch 自己的 baseline 侧。**
+
+不是 `SOTA-BASELINE.md` 的 **83.55%**。那份文档自己用粗体标了：
+
+> `a52628f` is **55 commits behind** `master`，且测评工具 **+8,326 / −227 行**。
+
+**一个测量装置被改写 8,326 行之后仍然被引用的冻结分数，不是基线。**
+把它当作「要超越的数字」，会让这次 arm 的结果同时取决于**两个**差异——
+认知层，*以及*六周的 harness 漂移——而这正是配对设计要消除的混淆。
+
+配对不变量的推论是：**baseline 侧的数字，就是当前 `master` 的参考数字**——
+同一套装置、同一批问题、同一个 runner、同一时刻。
+
+**② 算作成功的效应量：**
+
+| 裁决 | 规则 |
+| --- | --- |
+| 有帮助 | `Δ > 0` **且** 双侧精确 McNemar `p < 0.05` |
+| **零结果（真实、可报告）** | `\|Δ\|` 在噪声底内且 McNemar 不显著 |
+| 有害 | `Δ < 0` 且 `p < 0.05` → **否决这个 arm** |
+
+端点取**全量 N=500、4 runs、temperature 0** 下的整体 abstention-aware accuracy。
+
+**不用单侧检验**：TR recall arm 用单侧是因为它有方向性先验；
+这个 arm 没有——认知层既可能帮忙（会话感知准入），也可能损害
+（价值闸门丢掉一个检索分数本会保留的 turn）。在一个两侧问题上用单侧检验，
+是把假阳性率翻倍。
+
+**③ 停止规则：一次 dispatch，不看中途，不为更好的抽签重跑。**
+
+并且**预注册了零假设为预期结果**：IE/KU/TR 上 `Δ ≈ 0`。
+写下来是为了让零结果**事后不能被重新解读为意外**——
+它的真实含义是「准入过滤不是这些能力的约束」，
+即参考管线的检索打分与 `cortex-core` 的价值函数，
+在「哪些 turn 重要」上接近到互换不改变答案。
+
+### 37.6 步骤 5 并入步骤 3，而不是被它阻塞
+
+我原先推荐「先做步骤 5，因为预注册需要干净基线」。**核实之后这个推荐被推翻。**
+
+| 步骤 5 需要 | 沙箱实际 |
+| --- | --- |
+| `DEEPSEEK_API_KEY` | ❌ 未设置 |
+| `ZHIPU_API_KEY` | ❌ 未设置，**且 429 配额耗尽** |
+| LongMemEval-S 数据集 | ❌ 本地无，由 workflow 从 HF 拉 |
+| `gh` CLI | ❌ 未登录 |
+
+步骤 5 **只能经 `workflow_dispatch` 执行**。
+而步骤 3 的 **baseline 侧跑的就是步骤 5 要的那次重测**——
+全量 N=500、4 runs、Wilson 区间。
+
+**一次 dispatch 同时交付两者。** 为步骤 5 单独再 dispatch 一次，
+会花掉同一份受配额限制的资源，去回答同一个问题，而且用的是**更旧的 revision**。
+
+### 37.7 缺陷注入：五次，其中一次逃逸——而那是本轮最有价值的部分
+
+| # | 注入 | 结果 |
+| --- | --- | --- |
+| 1 | 禁用 identity 守卫（§13 失败模式） | ✅ `bench-memory-arm.test.ts` 1/24 |
+| 2 | 从 report 丢弃 `memoryArmConfig`（§20 侧信道） | ✅ 1/24 |
+| 3 | `threshold` 的 `[0,1]` 校验弱化为只查 NaN | ✅ 1/24 |
+| 4 | `generatedAt` 默认值冻结成 epoch | ✅ 1/24（补测试后） |
+| 5 | 换成 staggered 双重评估 | ❌ **首轮逃逸** → 改写为行为断言后 ✅ 1/25 |
+
+**注入 5 逃逸的根因**：我的配对不变量测试断言在**源码文本**上——
+
+```ts
+expect(source).not.toMatch(/\brunBenchmark\(/);
+```
+
+而注入的破坏是 `void runBenchmark;`——**一个没有调用括号的引用**。
+守卫匹配不到任何东西，全部测试保持绿色。
+
+**两件事随之而来：**
+
+1. **源码文本断言是错误的仪器。** 它会在一次等价的改写上误报，
+   在一次真实的破坏上漏报，而且它对行为**什么也没证明**。
+2. 替代品是**行为断言**：两个系统被包装成各自的记录器，
+   测试断言每个**恰好被评估一次/每问**。重施同一个注入，这次测试失败了——
+   **这是守卫真的在守的唯一证据。**
+
+这正是这个 arm 本身要检测的缺陷类别——**一个看起来守住了某个性质、
+实际什么也没守的守卫**——而它发生在守卫自己身上。
+
+**还有第二个错误期望被纠正**：配对测试最初还断言两侧**交错**评估
+（`[baseline, feature, baseline, feature]`）。它失败了，因为 `runAblation`
+是**先把一侧跑完再跑另一侧**。错的是断言，不是实现：
+「配对」的含义是两侧在**同一数据集、同一 scorer 下逐题对齐比较**，
+这是逐题 discordant 循环提供的，而**分两次跑再相减**（staggered *comparison*）不提供。
+交错不是这个性质的一部分。
+
+修正后的套件用了一个**真正能区分两者**的 fixture：
+两侧各只答对**不同的一题**。未配对的比较看到的是「两边都是 50%」→ `Δ = 0.00pp`；
+配对的比较看到 1 个 discordant gain + 1 个 discordant regression，**并点名两道题**。
+
+### 37.8 验收
+
+| 项 | 结果 |
+| --- | --- |
+| `pnpm check` | **exit 0** |
+| 测试总数 | 2019 → **2044**（eval 1527 → 1552，**+25**；memory 129 不变） |
+| 新模块覆盖率 | **70/70 语句、5/5 函数、0 个未覆盖分支** |
+| eval 包四维度 | 99.88 / 99.07 / 100 / 99.88（下限 95） |
+| `cortex-memory` 四维度 | **100 / 100 / 100 / 100** |
+| `v8 ignore` | **零新增** |
+| mock | **零**——真实 `runAblationReport`、真实 `exactMatchScorer`、手写记录系统 |
+| `tsc` 抓到而 `vitest` 抓不到的错 | **3 处**（本轮第 6、7、8 次复现） |
+
+台账移动（第 37 行）：
+
+| 指标 | §36 | §37 |
+| --- | --- | --- |
+| exports | 451 | **459** |
+| withCaller | 244 | **248** |
+| orphaned | 207 | **211** |
+| referencedLocally | 191 | **195** |
+| unreferenced | 16 | **16** |
+
+新增的 4 条是 arm 的**调用面类型**（`CortexMemoryArmEnv/Options/Result/RunOptions`）。
+它们**全部被真实使用**——出现在三个**有调用者**的函数签名里——
+但 `type` 没有运行时引用点，所以 census 看不见。
+**逐一点名写进 `eval-harness-surface` 组的理由文字，而不是笼统放过**：
+笼统豁免正是这个仓库不再能回答这个问题的路径。
+
+### 37.9 仍未做
+
+- **dispatch**：`tools/dispatch-cortex-memory-ab.py` 已就绪，一次调用即可。
+  需要 GitHub secrets 与 runner 额度——**这是沙箱外的一步**。
+- **`Zhipu embedding-3` 配额**：已知阻塞。若 dispatch 落在 256 维 hash fallback 上，
+  结果**不可**与 `SOTA-BASELINE.md` 比较，必须如此标注。
+- **步骤 4**：五包已带 `thresholds: 95`；**未验证的是「故意欠覆盖的提交是否真会让 CI 失败」**。
+- 195 条 `referencedLocally` 孤儿未收敛（承 §32/§33/§37）。
+- 26 条保留的公开面未收敛（产品决策，带兼容成本）。
+
+### 37.10 可推广的结论
+
+1. **「加一个 arm」可能是一次依赖图决策。** 当两侧第一次来自不同包时，
+   问题不再是「接线写在哪一行」，而是「谁的测试守住这段接线、依赖箭头指向哪」。
+   把这件事当成一行改动，会得到一个不可测的 arm。
+2. **一个陈旧数字的问题不是它旧，是它的测量装置也旧了。**
+   83.55% 没法用，不是因为它是三个月前的，而是因为产生它的那 8,326 行已经不存在了。
+   **配对的 baseline 侧比历史锚点强**，因为它连装置一起就是当下的。
+3. **源码文本断言不是测试。** 它会在等价改写上误报、在真实破坏上漏报。
+   注入 5 是本仓库第一次**把一次逃逸变成一次改进**的完整闭环：
+   错误测试 → 逃逸 → 诊断 → 改写为行为断言 → 同一个注入被抓住。
+4. **注释描述意图，测试描述射程。** 「配对」这个词有歧义：
+   它是指交错执行，还是指逐题对齐比较？我按前者写了断言，实现是后者。
+   **歧义在断言里会变成假失败**，消除歧义的方法是把 fixture 设计成
+   两种解释**给出不同数字**。
+5. **一个必需的类型字段，是一种在编译期执行的预注册。**
+   `memoryArmConfig` 必需而非可选，让「忘记记录配置」变成编译错误。
+   这是把纪律写进类型系统，而不是写进文档。
