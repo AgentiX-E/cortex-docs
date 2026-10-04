@@ -8338,3 +8338,194 @@ Failed to run function tools: Error: Bad substitution: String
    我的守卫在真实缺陷上返回 clean ——
    因为它的分类器里有一支通配符。
    **写下一个「永不失败」的检查，和写下一个检查，是两种不同的工作。**
+
+## 41. 覆盖率战役收尾：四个包到 `100/100/100/100`，第五个缺口证明是工具缺陷
+
+### 41.1 结论先行
+
+**`cortex-eval` 从 `99.96 / 99.95 / 100 / 100` 走到 `100 / 100 / 100 / 100`；
+五个包中四个已在四维度上全 `100`，第五个（`cortex-node`）剩下的 1.39 个
+branch 点经 V8 层级实测确认是仪表缺陷。**
+
+| 包 | stmts | branch | funcs | lines |
+| --- | --- | --- | --- | --- |
+| `cortex-core` | 100 | 100 | 100 | 100 |
+| `cortex-llm` | 100 | 100 | 100 | 100 |
+| `cortex-eval` | **100** | **100** | 100 | **100** |
+| `cortex-memory` | 100 | 100 | 100 | 100 |
+| `cortex-node` | 100 | 98.61 | 100 | 100 |
+
+`cortex-node` 那一个点**不是留给下一次的债**，而是已经定性、写清依据、
+并且明确拒绝用注释或 `exclude` 洗白的**已知工具缺陷** —— 见 §41.5。
+
+**本轮最有价值的部分不是那 0.05 个百分点，而是四次「凭推理下结论」全部被插桩证伪。**
+它们记录在 §41.6，因为那才是可推广的东西。
+
+### 41.2 四个真实缺口：都是插桩先行的结果
+
+每一处都先插桩确定「是真没覆盖，还是 v8 归因缺陷」，**不允许凭形状类推**。
+
+| 位置 | 插桩读数 | 判定 | 处置 |
+| --- | --- | --- | --- |
+| `rerank-factory.ts:193` | `isError=true` ×2，非 Error ×0 | **真实缺口** | 用 `vi.mock` 让 peer 抛原始值 |
+| `retrieval-diagnostics.ts:173` | `dates_is_undefined=true` ×11，`false` ×0 | **真实缺口** | 补带日期数据集用例 |
+| `runner.ts:332/336/339`、`1229` | 既有夹具只走 `{}` 臂 | **真实缺口** | 补真值转发用例 |
+| `natural-language-memory.ts:805` | `defined=false` ×50，`true` ×0 | **真实缺口** | 补闭包转发用例 |
+
+**`rerank-factory.ts:193` 的 `String(err)` 臂曾经被我判为「已死」。** 证伪它的是
+这样一条实测：`loadPipeline()` 是 `createTransformersRerankPipeline`，
+它 `await import('@xenova/transformers')`；**模块在求值期间 `throw` 一个原始值时，
+该原始值会穿透 `await`** —— mock 该 peer 抛字符串即可到达该行。
+（实测：`thrown value ctor = String`，`instanceof Error = false`。）
+所以那一行零计数**描述的是夹具，不是代码** —— 而这正是现在钉在它下面的测试。
+
+`retrieval-diagnostics.ts:173` 同样翻转过一次判断。我原先认定
+`dates?.[i]` 是纯 v8 伪影，插桩显示 `dates_is_undefined` **11 次全为 true、
+false 零次** —— 是真实缺口，于是补了「数据集提供日期」的路径。
+
+### 41.3 归因缺陷：两种形态，都在 V8 层级量到
+
+把归因缺陷从「看起来像」升级为「量到」的关键，是直接读 `NODE_V8_COVERAGE`
+的原始 sub-range，而不是从覆盖率表格反推。
+
+**形态一：可选链只发射一个区间。**
+
+```
+a?.[i]   -> 1 个 sub-range（接收者本身，不是守卫）
+a?.m()   -> 1 个 sub-range
+a?.b     -> 1 个 sub-range
+c ? x : y        -> 2 个 sub-range
+cond instanceof E ? a : b -> 2 个 sub-range
+```
+
+对照实验（`subject.mjs` / `read.mjs`）：`c2OptionalElement`(=`a?.[i]`) 与
+`c3OptionalProperty`(=`a?.b`) 均只有 1 个；`c1TernaryInstanceof` 与
+`c5PlainTernary` 均有 2 个。**Istanbul 由一个单 location 的区间导出的 branch
+永远只有一个 location，因此只能读到零。**
+
+据此把 **8 处 `cache?.get` / `cache?.set`** 与 `dates?.[i]` **改写为显式守卫**
+`x === undefined ? undefined : x.get(k)`。语义等价性先行验证：
+三种输入（缺席 / 未命中 / 命中）× 两个方向（get / set）行为完全一致
+（`probe-guard-equiv.mjs`：`mismatches = 0`）。
+
+**形态二：单行 `if (cond) return x;` 同样被归因为单 location。**
+实测 `if (sides.length < 2) return {...};` 的 decline 臂**触发 4 次**（`len=0`）
+却计数为 `[0]`；展开为块后缺口闭合。
+
+**「深度」假设也被证伪。** 我曾认为缺口与函数头的距离是原因（实测 48 / 77 / 641 行，
+而所有归因正常的合成探针距离仅 1–3 行）。`subject6.mjs` **固定表达式、只改变上方填充行数**：
+
+```
+d001  decl 15, ternary 16  (距离 1)   -> 2 个 sub-range  ✓
+d025  decl 20, ternary 26  (距离 6)   -> 2 个 sub-range  ✓
+d050  decl 30, ternary 41  (距离 11)  -> 2 个 sub-range  ✓
+d080  decl 45, ternary 62  (距离 17)  -> 2 个 sub-range  ✓
+```
+
+**九十个填充行也不影响归因。距离不是原因。**
+
+### 41.4 最后一个缺口是真死代码，而报告是对的
+
+`natural-language-memory.ts` 的最后一处计数不在上面两类里。它是
+`truncateSession` 的收尾：
+
+```ts
+return truncated ? `${kept.join('')}\n[truncated]` : kept.join('');
+```
+
+`truncated === false` 那一臂**不可达**，而且是可证的：
+
+1. 走到这一行要求 `text.length > maxChars`（否则函数在头部提前返回）。
+2. 若某个 user turn 被丢弃或部分接纳，损失是直接的。
+3. 否则每个 user turn 都完整保留，那么决定结果的是 assistant 守卫：
+   每个被接纳的头都通过了 `used + head.length + suffix[i + 1] <= maxChars`，
+   而**末位** turn（下标 `n-1`）的 `suffix[n] = 0`，于是其守卫退化为
+   `used + head.length <= maxChars`。**把这些守卫在全部被接纳 turn 上求和，
+   望远镜式地得到 `textLength <= maxChars`** ——
+   与「在这里」的前提矛盾。
+
+**于是穷举验证**：八轮以内的 user/assistant 组合、每轮正文 0–8 字符、
+预算 1–300，**1,225,156 个越过提前返回的用例，`truncated === false` 出现 0 次**。
+独立的第二条证据：`tsc` 的 `noUnusedLocals` 报 `truncated`
+**「已赋值、从未读取」** —— 五处赋值全是死存储。
+
+**报告说的是实话。** 处置不是给它写一个假测试，而是**删掉这一臂**：
+标记改为无条件追加，证明写进函数的文档注释，五处死存储一并删除。
+
+**为这个臂写测试的三次尝试都失败，全部记录并删除了**：
+
+| 尝试 | 结果 | 失败原因 |
+| --- | --- | --- |
+| 第 1 次 | 通过，但无价值 | 35 字符正文对 500 预算 —— 在提前返回处就返回了，标记根本没被执行 |
+| 第 2 次 | 失败 | 90 预算对两轮 49 字符 —— 第二轮被部分接纳，已经是截断用例 |
+| 第 3 次 | 失败 | 120 预算对三轮 —— 第三轮被切成 1 字符头 + 标记 |
+
+**第 1 次是真正危险的那次：它通过了。**
+注释声称它走到标记决策，而覆盖率报告明说执行的是提前返回那几行
+（早返回行计数非零、标记行零）—— **声称走了某分支的断言，必须对着执行轨迹核验。**
+
+### 41.5 `cortex-node`：量到，而不是洗白
+
+剩下的 1.39 个 branch 点全部在 `pg.ts:82:4`，即
+`PgStorage.transaction` 的 `} finally {`。
+
+**V8 层级证据**：`NODE_V8_COVERAGE` 原始输出显示该行**恰好携带一个 sub-range、
+`count = 0`**，而同一个函数把 `try/finally` 去掉后在该行**发射零个 sub-range**。
+所以这个计数器是 **V8 仅因 `finally` 子句而发射的区间**制造出来的，
+而**只有一个 location 的 branch 记录没有决策可测，只能读到零**。
+支撑性证据：同一行上的语句计数为 **5**，且 `catch` 块语句计数为 **1** ——
+rollback 路径确实被测试过。
+
+依据写在 `packages/cortex-node/vitest.config.ts` 里，**且现在引用的是发射出来的区间，
+不再是从失败反推的推断**。不 `exclude`、不加注释：
+**数字是错的，代码不是；压制会让下一个读者无法区分这两种情况。**
+
+### 41.6 四次被证伪的推理 —— 本轮最贵的部分
+
+| # | 我的推理结论 | 插桩实测 | 后果 |
+| --- | --- | --- | --- |
+| 1 | `rerank-factory.ts:193` 的 `String(err)` 臂已死 | 非 Error 臂可达（`vi.mock` 抛原始值） | 差点删掉活代码 |
+| 2 | `retrieval-diagnostics.ts:173` 是 v8 伪影 | `dates_is_undefined=true` ×11、`false` ×0，**真实缺口** | 差点漏掉真缺口 |
+| 3 | `natural-language-memory.ts:2723` 真值臂未覆盖 | `truncated=true` ×11，**已覆盖** | 差点写无用测试 |
+| 4 | 剩余缺口源于「分配型 alternate」或 `=== true` 比较 | `subject5.mjs` 五种变体全部 2 个 sub-range，**双重证伪** | 差点改对代码 |
+
+**四次的共同形状**：从覆盖率的**表格**出发反推原因。
+表格是**投影**，丢掉了 sub-range 的个数与偏移。
+**正确的入口是 `NODE_V8_COVERAGE` 的原始区间，不是那张表。**
+
+还有一次工程失误需要记下：我判定「用户选定的收尾策略」后**没有执行就中断了**，
+用户指正「我提交了答案，为什么你反而取消了操作？」。
+**那是执行失误，不是用户操作问题** —— 选定方案后应当立即落地。
+
+### 41.7 验收
+
+| 项 | 结果 |
+| --- | --- |
+| `pnpm test` | **exit 0**，5/5 包全部 ≥95 闸 |
+| `cortex-eval` 四维度 | **100 / 100 / 100 / 100** |
+| `cortex-eval` 测试数 | 1600 → **1604** |
+| `prettier --check` | clean |
+| `eslint` | clean |
+| `tsc --noEmit` | clean |
+| `census:check` | 无新孤儿 |
+| `v8 ignore` / mock | 零新增 / 零（`vi.mock` 用于**驱动真实分支**，非替代实现） |
+
+提交：cortex `e6ea892`，作者 **Lambertyan**，时区 **+0800**。
+
+### 41.8 可推广的结论
+
+1. **覆盖率表格是投影，不是证据。**
+   一个 `[0]` 至少有三种成因：真没覆盖、可选链归因缺陷、单行 `if` 归因缺陷。
+   **三者只能靠原始 sub-range 区分，不能靠形状类推。**
+2. **「不可达」是一个需要证明的命题，不是一个可以假设的状态。**
+   本轮四次假设全部错误。正确的形式是：插桩 → 观察计数 → 再下结论；
+   若声称不可达，就给出**穷举或构造性证明**（§41.4 用的是穷举 + `tsc` 双证）。
+3. **一个通过的测试可能是零信息的。**
+   第 1 次尝试「通过」了，却在提前返回处就返回。
+   **断言必须对着执行轨迹核验，而不是对着意图。**
+4. **死代码的正确处置是删除，不是给它写测试。**
+   报告说某行从未执行，第一反应应当是「它是否可达」，
+   而不是「怎么让它被执行」。**给死臂写测试是把缺陷固化成契约。**
+5. **工具缺陷要记录，但必须记录成可复核的证据。**
+   `cortex-node` 那一个点没有被洗白，也没有被强行「修」——
+   **正确的第三条路是：量到机制、写下依据、保留阈值、让下一个读者能自行复核。**
