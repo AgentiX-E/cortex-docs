@@ -613,6 +613,33 @@ config line 现在如实写出 `retrievalThreshold=0` ——
 **配额前提**：本次 baseline 侧 84.60%–84.80% 与历史同量级，说明**未落在 fallback**，
 但下次派发前仍须核对产物里 `Embedding backend:` 那一行。
 
+#### 4.1.3 天花板已从代码层面根治（第 43 轮）
+
+前置条件的第一步已完成：**`sourceTrust` 从字面量变为 `GateOptions` 的字段**
+（默认 `0.5`，默认值不动）。可达区间由 `[0, 0.5]` 扩为 `[0, 1]`，
+`threshold > 0.5` 从「恒假」变为「可判别」。
+
+| 属性 | 修复前 | 修复后 |
+| --- | --- | --- |
+| 可达取值区间 | `[0, 0.5]` | `[0, 1]` |
+| `threshold > 0.5` | 恒不通过 | 可判别 |
+| 默认行为 | `sourceTrust = 0.5` | **不变** |
+
+**这是根治而非调参**，判据是「默认值不动」：字段存在之前产出的每一份产物，
+仍然描述它运行时的配置，`6.40%` / `6.45%` 的语义保持可比。
+三条独立于基准的缺陷随之关闭：写闸上半区间不可达、
+`selectSessionBudget` 的 best-of 排序退化为 tie-break、
+`contradiction/resolve.ts` 无法区分传闻与第一手观察。
+
+**但派发仍未授权。** 选一个 `sourceTrust`（或一个因新值域而变得有意义的
+`retrievalThreshold`）**改变了这个 arm 所问的问题**，必须在派发前注册。
+字段先于注册、注册先于派发 —— 顺序倒置产出的会是无法执行或被误读的记录。
+§4 的停止规则原样有效，`6.45%` 作为「修复后那个程序」的实测结果保留。
+
+详见进度报告第 43 轮与
+[DESIGN-CORTEX-MEMORY §6.4](../../cortex/docs/DESIGN-CORTEX-MEMORY.md)。
+
+
 > **配额前提**：若该 dispatch 落在 256 维 hash fallback（`Zhipu embedding-3` 配额耗尽
 > 时的静默降级），结果**不可**与 `SOTA-BASELINE.md` 比较。
 > `Embedding backend:` 那一行是唯一的区分依据，必须随产物归档。
