@@ -425,3 +425,93 @@ git diff --shortstat a52628f..HEAD -- packages/cortex-eval/src
 | 三类 | 注册数字漂移（键都在，值不对） | `test_preregistration_config.py` |
 | **四类** | **注册键缺席（不是值错，是键根本没有发）** | **同上的双向对账** |
 | **五类** | **对称回退：两侧同时改，一致性守卫必然通过** | **§6.6.2 的理由钉住断言** |
+| **六类** | **配置值抵达了决策点，但被它阈值的量坍缩成一个点（惰性闸门）** | **§6.7** |
+
+### 6.7 第六类偏差：闸门惰性 —— 值抵达了决策点，但决策点不可达
+
+§6.3 到 §6.6 记录的五类偏差有一个共同前提：**只要把值送到决策点，它就会生效。**
+第六类否证了这个前提，而它是在同一次读取里被发现的 —— 一次「设计正确、接线正确、
+执行正确」的运行，测出来的却是一个**与被测机制无关**的数。
+
+#### 6.7.1 现象
+
+运行 `37313582403` 武装 `retrievalThreshold: 0.25`，弃答率 `+46.40pp`，
+报告与文档都把这归因于准入闸门关闭。**闸门一次都没有关过。**
+
+`admission.ts` 的取值链条把可达值钉成常数：
+
+```
+value = confidence(默认 1) × sourceTrust(0.5) × (0.5 + 0.5 × recency)
+      = 1 × 0.5 × (0.5 + 0.5 × exp(0))        // lastAccessedAt === createdAt
+      = 0.5                                    // 对每个准入的 turn 恒成立
+```
+
+`decideRetrieval` 比较的是 **value 函数的输出**（`value.ts:51`），
+故 `≤ 0.5` 恒开、`> 0.5` 恒关，**边界精确落在天花板 `sourceTrust` 上**。
+`[0, 0.5]` 内每个阈值都是同一次实验 —— 不是一个「位置偏高的分布」，是一个**点**。
+
+`479` 次弃答全部来自模型输出 `UNANSWERABLE`。这次消融**没有测到闸门**。
+
+#### 6.7.2 为什么前五类守卫全都看不见它
+
+- **一类**（值没送到）通过了：值确实送到了，`decideRetrieval` 确实被调用。
+- **三类/四类**（值错/键缺）通过了：`0.25` 正是注册值，键也在。
+- `abstention-decision.test.ts` 通过了：它确实测了 `0.9`（关）与 `0.1`（开）——
+  但它只变动**阈值**，从不变动**约束取值的那个天花板**。在「闸门只在单点可达」
+  这一假设下，这两个样本与「旋钮完全惰性」**完全一致**，所以它区分不了两种假设。
+
+> **测「旋钮有效果」不等于测「旋钮可达」。**
+> 一个配置值可以被接受、写进产物、打印进日志，**同时完全惰性** ——
+> 只要它所阈值的那个量，其取值范围被调用方的**其他**设置坍缩成了一个点。
+
+#### 6.7.3 上游根因是一句文档陈述
+
+`PREREGISTRATION-CORTEX-MEMORY-ARM.md` 第 453 行原文：
+
+> `decideRetrieval` compares `confidence >= threshold`
+
+实际实现比较的是 **value 函数的输出**；memory 上的 `confidence` 字段只是其**输入之一**，
+从来不是被比较的量（局部变量名叫 `confidence`，纯属命名）。**结论碰巧对，理由全错。**
+
+这给一类偏差加了新的查法：**一个「结论正确」的文档陈述不需要被复核，
+除非它的理由被用来解释一个意外读数** —— 而那时错误理由会伪装成解释力。
+
+#### 6.7.4 修法：守卫可达性本身
+
+| 守卫 | 内容 |
+| --- | --- |
+| `retrieval-reachable-range.test.ts` | 钉住常数 `0.5`、钉住边界精确落在天花板、钉住抬高端口会放宽区间 |
+| 变异测试 | 把 `sourceTrust` 从价值函数中拿掉 ⇒ **4 个断言全部失败**（确认守卫承重） |
+
+#### 6.7.5 同一类缺陷的第二个实例：`sessionBudget`
+
+`GateOptions.sessionBudget` 在 `types.ts` 里是一条**无条件**承诺
+（"Upper bound on how many admitted turns may reach the prompt, counted across all
+presented sessions"）。它并非无条件：
+
+`selectSessionBudget` 只有**一个**调用点（`answerSessions` 内）；
+其余接收 `sessions` 的路径走 `#admit`，而 `#admit` 直接返回 `admitSessions` 的结果、
+**不施加预算**。`answerAbstention` 正是其中之一 —— 也就是**臂实验实际走的那条路**。
+
+实测（预算 `1`，两个 session 各两轮）：
+
+| 路径 | 进入 prompt 的 turn 数 | 预算是否生效 |
+| --- | --- | --- |
+| `answerSessions` | 2 | 是 |
+| `answerAbstention` | **4** | **否** |
+
+**这与 inert `retrievalThreshold` 是同一类缺陷**：一个被记录、被打印进派发行、
+却到不了它所命名的那个决策的配置值。第二个字段用**同一个问题**问一遍就出来了 ——
+说明这是一个**类别**，不是一次意外。守卫：`session-budget-on-every-path.test.ts`
+（断言两条路径**一致**，且平坦路径不受影响）。
+
+#### 6.7.6 诊断缺口（同一轮补上）
+
+`decisionReasons` 只在 `cortex-eval/bench/run.ts`（参考 CLI）产出，
+`cortex-memory/bench/run-ablation.ts` **不产出** —— 所以臂的产物**无法说明**
+一次弃答来自 `empty` / `threshold` / `llm`，错误归因因此在产物层面**不可反驳**。
+
+修法不是让 harness 事后重建，而是**让被测系统自己产出**（`abstentionReasons()`），
+经 `CortexMemoryArmResult.abstentionReasons` 透传进产物并打印。三个硬化点：
+普查是**可选能力**（不进 `MemorySystem` 契约）；载荷畸形时**缺失而非伪造**；
+读取抛错**不丢弃已测得的端点**。

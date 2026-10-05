@@ -9399,12 +9399,18 @@ IE 与 KU 不变，且接线前就已在底部；ABS 两侧都是 `30/30`（构�
 **特征的全部得分 `30/500 = 6.00%`，就是「永远弃答」的地板加上三题** ——
 按此接线，arm 实质上是一个近乎无条件的弃答器。
 
-**机制上的解释**：`0.5` 天花板从上界约束了准入分数。`0.25` 这一刀要按 §10.4 预测
-那样起作用，被约束后的质量就必须**大部分落在 `0.25` 之上**。观测结果只与
-「大部分落在 `0.25` 之下」一致 —— 所以这一刀关掉的是**基线本来在答的题**，
+**机制上的解释（初版，已被 §48.11 推翻）**：`0.5` 天花板从上界约束了准入分数。`0.25`
+这一刀要按 §10.4 预测那样起作用，被约束后的质量就必须**大部分落在 `0.25` 之上**。
+观测结果只与「大部分落在 `0.25` 之下」一致 —— 所以这一刀关掉的是**基线本来在答的题**，
 而不是打开基线已经放弃的题。
 
-**结论是 §10.4 的第四行，不是它的中间行。**
+> 上面这段是**基于两个数字（43.80% 与 6.60%）反推**出来的，它听起来自洽，
+> 但在本接线之下**算术上不可能成立**：准入值是常数 `0.5`，`0.25 ≤ 0.5` 恒为真，
+> **闸门一次都没有关过**。186 题是**模型**拒答的，不是闸门关掉的。
+> 完整更正见 §48.11 —— 这是本项目第一次出现「统计全对、归因全错」的读数。
+
+**结论是 §10.4 的第四行，不是它的中间行**（按字面读，这次运行其实不干净地落在任何一行；
+详见 §48.11）。
 
 ### 48.6 预承诺的执行：revert，作为一次独立改动
 
@@ -9488,3 +9494,175 @@ IE 与 KU 不变，且接线前就已在底部；ABS 两侧都是 `30/30`（构�
 所以下一步的正确形态是**先测量分布**（一个诊断性质、非比较性质的读数），
 再据此**写一份新的注册**。这比「把 0.25 改成 0.1 再跑一次」慢，
 但它是唯一一种不违反 §4、且能让第二次读数也具备证据地位的做法。
+
+### 48.11 更正：闸门是惰性的，§48.5 的归因是错的
+
+按 §48.10 自己定下的下一步执行 —— 先测 `[0, 0.5]` 区间内准入分数的**实际分布形状**。
+测出来的结果比 §48.10 的假设强得多，而且**推翻了 §48.5 的机制解释**。
+
+#### 48.11.1 测出来的不是分布，是一个常数
+
+`admission.ts` 的取值链条是：
+
+```ts
+// admission.ts: admitTurns 为每个 turn 构造 memory
+const memory = createMemory({
+  content, createdAt: options.now,
+  lastAccessedAt: options.now,   // ← 与 createdAt 相同 ⇒ recency = exp(0) = 1
+  source: 'unknown', sourceTrust, type: 'episodic',
+  // 不传 confidence ⇒ createMemory 默认 1
+});
+```
+
+于是价值函数
+
+```
+value = confidence × sourceTrust × (0.5 + 0.5 × recency)
+      = 1 × 0.5 × (0.5 + 0.5 × 1)
+      = 0.5        ← 对每一个准入的 turn 恒成立
+```
+
+**不是「分布位置偏高」，而是「分布退化成一个点」。** 独立探针逐值复现：
+
+| 阈值 | `decideRetrieval` 结果 |
+| --- | --- |
+| `0` | `retrieve: true` |
+| `0.25`（本臂注册值） | `retrieve: true` |
+| `0.5` | `retrieve: true` |
+| `0.5 + 1e-9` | `retrieve: false` |
+| `0.51` | `retrieve: false` |
+
+边界**精确**落在天花板 `sourceTrust` 上：可达区间是开区间 `[0, 0.5]` 与闭区间 `(0.5, 1]`。
+**在这个区间内，任何阈值都是同一次实验**，`0.25` 是一个 no-op。
+
+**write gate 同样是惰性的**：`threshold: 0` + `sessionBudget: unbounded`
+⇒ 3 个 session 全进、9 个 turn 全准入（已独立复现）。
+
+#### 48.11.2 §48.5 的错误从哪来：一个上游的文档错误
+
+`docs/PREREGISTRATION-CORTEX-MEMORY-ARM.md` 第 453 行原文写着：
+
+> `decideRetrieval` compares `confidence >= threshold`
+
+**这是错的。** 实际实现（`packages/cortex-core/src/value/value.ts`）：
+
+```ts
+let best = 0;
+for (const m of candidates) {
+  best = Math.max(best, clamp01(valueFn(m, queryContext)));
+}
+const confidence = best;            // ← 变量名叫 confidence，实为 value 函数输出
+return confidence >= threshold ? { retrieve: true, confidence } : ...
+```
+
+比较的是 **value 函数的输出**；memory 上那个 `confidence` 字段只是它的一个**输入**，
+从来不是被比较的量。那句错误陈述是 §48.5 错误归因的**上游**：既然以为在比 `confidence`（恒为 1），
+就会以为 `0.25` 是个真闸门，于是把 `+46.40pp` 顺理成章地归给它。
+
+**结论碰巧对（`[0,0.5]` 恒开、`>0.5` 恒关），理由全错** —— 这正是最危险的一种正确。
+
+#### 48.11.3 95.80% 弃答的真实来源
+
+两个闸门都恒开，`answerAbstention` 里剩下的唯一返回 `null` 的路径是
+模型输出 `UNANSWERABLE`（`reason: "llm"`）。所以：
+
+| 说法 | 真伪 |
+| --- | --- |
+| 「特征臂是一个武装了闸门的系统」 | **假** —— 闸门未接通到任何可达决策 |
+| 「特征臂的 prompt 使模型拒答，导致 6.60%」 | **真** |
+| 「这次消融测试了 retrieval gate」 | **假** —— 它**根本没有测到闸门** |
+
+这是关于**组合**的合法发现，**不是**关于准入闸门的发现。
+
+#### 48.11.4 暴露出的诊断缺口（已修）
+
+`decisionReasons` 只在 `packages/cortex-eval/bench/run.ts`（参考 CLI）产出；
+`cortex-memory/bench/run-ablation.ts` **不产出**。所以臂的产物**无法说明**一次弃答来自
+`empty` / `threshold` 还是 `llm`，上面的归因只能靠读源码和独立探针重建，
+而不能从这次运行自己的产物里读出来。
+
+本轮把缺口补上，且**由被测系统自己产出**（而不是由 harness 重建），这样两个基准入口
+对同一次运行不可能给出不一致的说法：
+
+| 改动 | 位置 |
+| --- | --- |
+| 弃答普查 `abstentionReasons()`，四类计数 | `cortex-memory/src/memory.ts` |
+| `CortexMemoryArmResult.abstentionReasons` 透传 | `cortex-eval/src/bench-memory-arm.ts` |
+| 臂产物写入 + 日志打印普查 | `cortex-memory/bench/run-ablation.ts` |
+
+设计上的三个硬化点：
+
+1. **普查是可选能力**，不进入 `MemorySystem` 契约 —— 后者的一致最小集是 `{ name, answer }`，
+   加进去会让所有测试替身和参考管线都背上一个只有价值门控系统能填的字段。
+2. **载荷畸形时「缺失」而非「伪造」**：present-but-wrong 比 absent 更危险，
+   因为它与真实读数无法区分 —— 这正是 §48.11 得以成立的失败模式。
+3. **读取抛错不丢弃已测得的端点**：读数只值一次 `JSON.stringify`，而一次运行约一小时。
+
+#### 48.11.5 顺带发现的第二个真实缺陷：`sessionBudget` 在弃答路径上被静默忽略
+
+写 §48.11.4 的测试时发现： `GateOptions.sessionBudget` 在 `types.ts` 里是一条
+**无条件**承诺 ——
+
+> Upper bound on how many admitted turns may reach the prompt, counted across
+> all presented sessions.
+
+它并非无条件。`selectSessionBudget` 只有一个调用点（`answerSessions` 内），
+其余接收 `sessions` 的路径都走 `#admit`，而 `#admit` 直接返回 `admitSessions` 的结果
+**不施加预算**。`admitSessions` 本身不知道预算的存在。
+
+实测（预算 `1`，两个 session 各两轮）：
+
+| 路径 | 进入 prompt 的 turn 数 | 预算是否生效 |
+| --- | --- | --- |
+| `answerSessions` | 2（仅 session 1） | 是 |
+| `answerAbstention` | **4（两个 session 全进）** | **否** |
+
+**这比一处管道不一致更重要**：`answerAbstention` 正是臂实验所走的那条路，
+而 `answerSessions` 只在多 session 形状下才被触达。也就是说，
+**测量 arm 的那次运行是在预算未施加的状态下跑的**，而产物记录着它以为自己遵守的预算。
+
+这与 §10.10 的 `retrievalThreshold` 是**同一类缺陷**：一个被记录、被打印进派发行、
+却到不了它所命名的那个决策的配置值。第二个字段用同一个问题问了一遍就出来了 ——
+说明这是一个**类别**，不是一次意外。
+
+修法：把预算施加点移进 `#admit`（必须在 flatten **之前**，因为排序依 session 而非 turn）。
+
+#### 48.11.6 方法论教训（可推广）
+
+> **测「旋钮有效果」不等于测「旋钮可达」。**
+
+`abstention-decision.test.ts` 确实同时测了 `0.9`（关）与 `0.1`（开），且全部通过 ——
+但它只**变动阈值**，从不变动**约束取值的那个天花板**。在「闸门只在单点可达」这一假设下，
+这两个样本与「旋钮完全惰性」**完全一致**，所以它区分不了两种假设。
+
+一个配置值可以被接受、被写进产物、被打印进日志，**同时完全惰性** ——
+只要它所阈值的那个量，其取值范围被调用方的**其他**设置坍缩成了一个点。
+
+新增守卫（`retrieval-reachable-range.test.ts`）钉住常数、边界与放宽，共 4 个断言；
+把 `sourceTrust` 从价值函数里拿掉，**4 个断言全部失败** —— 已用变异测试确认它是承重的。
+
+#### 48.11.7 本轮明确不做的事
+
+- **§48.5 的统计量一个字不改**，它们作为统计量仍然正确，只是**归因**变了。
+- **`retrievalThreshold` 回退到 `0` 保持不变**，理由比 §48.5 给的更强：接线本身是 no-op，
+  所以无论如何都需要重新注册。
+- **不把阈值滑到 `0.1`**。在退化的区间里，`[0, 0.5]` 内每个值都是同一次实验；
+  下一步是让区间**可达**（抬天花板，或让准入带上变化的 `confidence`），
+  再对着一个能响应的区间注册一刀。
+
+#### 48.11.8 本轮门禁读数
+
+| 项目 | 结果 |
+| --- | --- |
+| `pnpm check` | `rc=0` |
+| `cortex-core` 覆盖率 | `100/100/100/100`（252 tests） |
+| `cortex-llm` 覆盖率 | `100/100/100/100`（138 tests） |
+| `cortex-eval` 覆盖率 | `100/100/100/100`（`1623 → 1629` tests） |
+| `cortex-memory` 覆盖率 | `100/100/100/100`（`144 → 158` tests） |
+| `cortex-node` 覆盖率 | `100/98.61/100/100`（已知 v8 分支缺陷，非代码缺口） |
+| tools 测试 | `132`（保持） |
+| census | no new orphans |
+| format | clean |
+
+新增测试文件 4 个：`retrieval-reachable-range.test.ts`（4）、`abstention-reasons.test.ts`（6）、
+`session-budget-on-every-path.test.ts`（4）、`bench-memory-arm-census.test.ts`（6），共 20 个断言。
