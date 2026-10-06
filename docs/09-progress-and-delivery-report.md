@@ -9666,3 +9666,144 @@ return confidence >= threshold ? { retrieve: true, confidence } : ...
 
 新增测试文件 4 个：`retrieval-reachable-range.test.ts`（4）、`abstention-reasons.test.ts`（6）、
 `session-budget-on-every-path.test.ts`（4）、`bench-memory-arm-census.test.ts`（6），共 20 个断言。
+
+### 49. 可达不等于可判别，且普查必须进入读者打开的那份文档
+
+承接 §48.11。§48.11.7 写下的下一步是「让区间**可达**」，而本轮做了两件事：
+把「可达」这个说法测到底，以及把普查从 JSON 字段搬到读者真正打开的 Markdown。
+
+#### 49.1 抬天花板让区间可达，但没有让它可判别
+
+`GateOptions.sourceTrust` 的文档注释说它存在的理由是「What grows is the reachable
+set」，而 §48.11 证明了在默认 `0.5` 下闸门是惰性的。于是「抬到 `1` 就修好了」是一个
+很容易顺手写下的结论 —— 它是错的，而且错得刚好在两个字上：**可达（reachable）
+不等于可判别（discriminating）**。
+
+| 天花板 | 可达区间 | 能否区分好坏候选 |
+| --- | --- | --- |
+| `0.5`（默认） | `[0, 0.5]`，**退化成一个点** | 不能 —— §48.11 已证 |
+| `1` | `[0, 1]`，**是一个集合** | **仍然不能** |
+
+抬天花板确实让 `0.9` 这一刀从「恒关」变成「恒开」，这是 §48.11.7 想达到的效果。
+但 `sourceTrust: 1` 时每个准入 turn 的值都**恰好是 `1`**，所以区间内的任何一刀仍是
+全有全无：`0.9999` 全过、`1` 全过、`1 + 1e-9` 全不过。**砍不出「让好的过、坏的不过」，
+因为根本没有坏的可以挡。**
+
+原因是结构性的，而且它才是本轮真正的发现。价值函数有三个因子，而 `admission.ts`
+对每一个 turn 都把三者同时钉死：
+
+| 因子 | 取值 | 为何不变 |
+| --- | --- | --- |
+| `confidence` | `1` | 不传 ⇒ `createMemory` 默认 |
+| `sourceTrust` | 单一值 | 按定义就是整次准入一个值 |
+| `recency` | `1` | `lastAccessedAt === createdAt === now` ⇒ `exp(0)` |
+
+> **准入层没有可供阈值化的逐题差异。**
+> 一个输入是常数的闸门，无论把刀放在哪里都无法判别。
+
+所以下一份注册**不能**是「同一接线、换个阈值」—— 它必须先**制造差异**。
+`retrieval-discrimination.test.ts` 把这件事写成了可执行事实：4 个断言分别钉住
+「抬天花板会移动边界」「每个 turn 仍得同一个值」「抬到 `1` 后仍是全有全无」
+「逐题 `confidence` 才是提供差异的那个因子」。两个变异都杀死了正确的断言：
+加逐题 `confidence` ⇒ 常数性测试失败；从价值函数拿掉 `sourceTrust` ⇒ 4 个里 3 个失败。
+
+**这个测试的第二个用途是防未来的自己**：一旦真的引入了逐题 `confidence`，
+常数性测试会**失败**，而不是让 §49.1 的推理悄悄失效还继续被引用。
+
+#### 49.2 普查写进了 JSON，却没写进文档 —— 第三次同一个缺陷
+
+§48.11.4 让臂产出了 `abstentionReasons`，写进 JSON、也打印进日志。
+**但 `formatAblationReport` 不认识它**，所以 Markdown 里没有这一节。
+
+这不是疏漏，是本仓库已经付过两次学费的**同一个模式**：
+
+| 实例 | 计算正确？ | 丢失环节 |
+| --- | --- | --- |
+| `cohortCoverage`（`0e2c30e`） | 是 | 返回在 report 旁边，渲染器拿不到 |
+| `retryFires`（`report-retry-fires.test.ts`） | 是 | 靠调用点字符串拼接进 Markdown，重新渲染即丢 |
+| **`abstentionReasons`（本轮）** | **是** | **只进了 JSON，从未被渲染** |
+
+两次的修法都落在同一句话上：**把它放进 report 里**，让渲染器不可能在没有它的情况下
+产出文档。本轮沿用该修法，并且**发现顺序是倒过来的** —— 这次是主动审计这个模式找出来的，
+不是又付一次学费。
+
+**为什么 JSON 里有还不够。** §10.10 的失败形态正是一个读者**只看了消融表**
+（`43.80%` 对 `6.60%`）就下了「闸门关掉了基线在答的题」的结论 —— 而普查能一眼反驳它。
+把普查放进一个**没人渲染的字段**，表格和之前一样有歧义：一个 delta，没有归因。
+
+修法有一处顺序上的关键：**普查必须在渲染之前读进 report**，而不是渲染之后返回在旁边。
+
+```
+census = abstentionReasonsOf(feature)          // 先读
+reported = { ...report, abstentionReasons }    // 再放进 report
+markdown = formatAblationReport(reported)      // 最后才渲染
+```
+
+这样 JSON 与 Markdown 是**同一个对象的两种渲染**，不可能就「普查在不在」产生分歧。
+臂 CLI 里手写的合并逻辑被删掉 —— 第二个合并点是 report 类型存在的意义所要消除的侧信道。
+
+#### 49.3 渲染出的那一节，以及它的条件性警告
+
+```
+## Abstention reasons
+
+| Reason | Count | Share | Decided by |
+|---|---|---|---|
+| `empty` | … | … | machine (no evidence admitted) |
+| `threshold` | … | … | machine (retrieval gate closed) |
+| `llm` | … | … | model (declined) |
+| `answered` | … | … | model (answered) |
+
+- Total: **N** questions through the abstention path
+- Machine-derived share (`empty` + `threshold`): **…**
+- Model-side share (`llm`): **…**
+```
+
+**警告只在「已武装却一次没关」时触发** —— `retrievalThreshold > 0` 且 `threshold == 0`，
+正是 §10.10 那次错误归因成立的条件。读者不该靠「配置行 × 普查表」交叉比对才发现它。
+
+条件在**两个方向上都刻意收窄**，而且两个控制项都在测试里：
+
+| 情形 | 是否警告 | 理由 |
+| --- | --- | --- |
+| `retrievalThreshold: 0`，`threshold: 0` | **否** | `0` 是恒等配置（「有准入就作答」），零计数是预期的 |
+| `retrievalThreshold > 0`，`threshold: 0` | **是** | 武装了却一次没关 —— 惰性 |
+| `retrievalThreshold > 0`，`threshold: 42` | **否** | 闸门确实关过 42 题，证明它在这个接线下有效 |
+
+> 一个在没出错时也会响的警告，是读者学会忽略的警告。
+
+#### 49.4 一个被门禁拦下的自己人
+
+`retryFireLines` 是**导出的**，因为它有第二个调用者
+（`runner.ts` 的 `formatRetryFireSection` 渲染同一张表）。我一开始照抄这个形状把
+`abstentionReasonLines` 也导出了 —— 而它只有**一个**调用者。
+
+`pnpm check` 的 export census 当场把它报成 new orphan（`report.ts:561`）。
+这不是误报，是门禁在正确地工作：**一个没有调用者的导出就是孤儿**，
+照着「旁边的函数这么做」来写而不问「它为什么可以这么做」，正是这次要修的那类错误。
+改为不导出，并在注释里写明「若将来出现第二个渲染器，那时再导出」。§36 记录的
+「一个原先没有任何测试覆盖的缺陷，不会因为只补上修复而被防住」在这里有一个平静的版本：
+**一个照着邻居抄的形状，不会因为它旁边合法就变得合法。**
+
+#### 49.5 本轮门禁读数
+
+| 项目 | 结果 |
+| --- | --- |
+| `pnpm check` | `rc=0` |
+| `cortex-core` 覆盖率 | `100/100/100/100`（252 tests） |
+| `cortex-llm` 覆盖率 | `100/100/100/100`（138 tests） |
+| `cortex-eval` 覆盖率 | `100/100/100/100`（`1629 → 1640` tests） |
+| `cortex-memory` 覆盖率 | `100/100/100/100`（`158 → 162` tests） |
+| `cortex-node` 覆盖率 | `100/98.61/100/100`（已知 v8 分支缺陷，非代码缺口） |
+| export census | no new orphans（拦下 1 个，已修） |
+| format | clean |
+| 变异测试 | 4 次注入，全部被正确的断言杀死 |
+
+新增测试文件 2 个：`retrieval-discrimination.test.ts`（4）、
+`report-abstention-census.test.ts`（9）；扩展 1 个：`bench-memory-arm-census.test.ts`（6 → 8）。
+共 21 个新断言。
+
+**一次自身缺陷记录**：`report-abstention-census.test.ts` 第一版把
+`retrievalThreshold` 传成 `0` 却断言 INERT 警告出现 —— 那是**测试写错了**，
+因为 `0` 是恒等配置、不警告才是正确的。修法是让 fixture 显式传 `0.25`（即 §10.10 的
+那个接线），而不是放宽警告条件。**把测试改成迁就实现，会永久删掉这个守卫。**

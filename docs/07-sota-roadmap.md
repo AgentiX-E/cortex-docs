@@ -1354,3 +1354,42 @@ fixture 变成编译错误而非静默省略；**id 而非 index**，因 index �
 导致弃答来源无法从产物判断 —— 这正是错误归因得以成立的条件。
 现将普查改为**由被测系统自己产出**（`CortexMemory.abstentionReasons()`），
 经 `CortexMemoryArmResult.abstentionReasons` 写入产物并打印进日志。
+
+#### 4.1.9 第 49 轮：可达 ≠ 可判别；且普查必须进入 Markdown
+
+**状态**：承接 §48.11.7 的下一步（「让区间可达」），把该说法测到底，并补上
+§48.11.4 遗留的渲染缺口。两处结论都会改变**下一份注册的形态**。
+
+**结论一：抬天花板修好了可达性，没有修好判别力。**
+
+| 天花板 | 可达区间 | 能否区分好坏候选 |
+| --- | --- | --- |
+| `0.5`（默认） | `[0, 0.5]`，退化成一个点 | 不能（§48.11 已证） |
+| `1` | `[0, 1]`，是一个集合 | **仍然不能** |
+
+`sourceTrust: 1` 时每个准入 turn 的值恰好是 `1`，区间内任何一刀仍是全有全无。
+根因结构性：`admission.ts` 把价值函数三个因子对每个 turn 全部钉死 ——
+`confidence` 默认 `1`、`sourceTrust` 整次准入一个值、`recency` 因
+`lastAccessedAt === createdAt` 而恒为 `exp(0)`。**准入层没有可阈值化的逐题差异。**
+
+> **对注册形态的直接约束**：下一份注册**不能**是「同一接线、换个阈值」。
+> 必须先让准入带上**逐题变化**（`confidence` 是唯一有余地的因子），
+> 再对着一个能响应的区间注册一刀。
+> 守卫：`retrieval-discrimination.test.ts`（4 断言，2 次变异均被正确杀死）。
+
+**结论二：`abstentionReasons` 此前只进 JSON，未进 Markdown —— 第三次同类缺陷。**
+
+| 实例 | 丢失环节 |
+| --- | --- |
+| `cohortCoverage`（`0e2c30e`） | 返回在 report 旁边，渲染器拿不到 |
+| `retryFires` | 靠调用点拼接进 Markdown，重新渲染即丢 |
+| **`abstentionReasons`** | **只进 JSON，从未渲染** |
+
+修法沿用前两次：**放进 report**，且**在渲染之前**读入，使 JSON 与 Markdown 成为
+同一个对象的两种渲染。新增渲染节含 `empty/threshold/llm/answered` 四类计数、
+机器侧与模型侧占比，以及**条件性 INERT 警告**（仅当 `retrievalThreshold > 0`
+且 `threshold == 0`）。两个控制项（恒等配置不警告、闸门关过题不警告）均在测试中。
+
+**门禁**：`pnpm check rc=0`；五包覆盖率 `100/100/100/100`（`cortex-node` `100/98.61/100/100`）；
+export census 拦下并修掉 1 个新孤儿；format clean；`cortex-eval 1629 → 1640`、
+`cortex-memory 158 → 162` tests。

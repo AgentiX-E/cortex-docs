@@ -515,3 +515,51 @@ presented sessions"）。它并非无条件：
 经 `CortexMemoryArmResult.abstentionReasons` 透传进产物并打印。三个硬化点：
 普查是**可选能力**（不进 `MemorySystem` 契约）；载荷畸形时**缺失而非伪造**；
 读取抛错**不丢弃已测得的端点**。
+
+### 6.8 第七类偏差：计算正确、归因正确、但没送到读者手里
+
+前六类都在讨论**值与决策**的关系（送不送得到、值对不对、能不能判别）。
+第七类在决策**之后**：一个值被正确地计算、正确地归因、正确地写进 JSON，
+**却没有出现在读者打开的那份文档里**。
+
+#### 6.8.1 三次同一个模式
+
+| 实例 | 计算 | 归因 | 丢失环节 |
+| --- | --- | --- | --- |
+| `cohortCoverage`（`0e2c30e`） | ✓ | ✓ | 返回在 report 旁边，`formatAblationReport` 拿不到 |
+| `retryFires` | ✓ | ✓ | 靠调用点字符串拼接进 Markdown，重新渲染即丢 |
+| `abstentionReasons`（§49.2） | ✓ | ✓ | 只进了 JSON，从未被渲染 |
+
+三者的**修法是同一句话**：**把它放进 report 里**。放进 report 之后，渲染器
+**不可能**在没有它的情况下产出文档 —— 这从「记得渲染」这种纪律问题，
+变成类型层面的不可能。
+
+#### 6.8.2 为什么「JSON 里有」不算送到了
+
+读者打开的是 Markdown。§10.10 的失败形态正是**只看消融表就下结论** ——
+而普查本可一眼反驳。把普查放进没人渲染的字段，表格的歧义**完全不变**：
+一个 delta，没有归因。
+
+#### 6.8.3 顺序是关键，不是细节
+
+```
+census = abstentionReasonsOf(feature)          // 先读
+reported = { ...report, abstentionReasons }    // 再放进 report
+markdown = formatAblationReport(reported)      // 最后才渲染
+```
+
+若按自然的写法（先 `formatAblationReport(report)`，再读 census 返回在旁边），
+Markdown 永远拿不到它。**这里的 bug 不在逻辑里，在调用顺序里**，
+因此它不会被任何单函数测试发现 —— 只有端到端断言
+「Markdown 里含有普查」能抓到（`bench-memory-arm-census.test.ts`）。
+
+#### 6.8.4 附带的第八类苗头：照着邻居抄的形状
+
+`retryFireLines` 是导出的（有第二个调用者 `formatRetryFireSection`）；
+我照抄它的形状导出了只有**一个**调用者的 `abstentionReasonLines`，
+被 export census 当场报成 new orphan。
+
+这不是误报。**照着「旁边的函数这么做」写而不问「它为什么可以这么做」**，
+是从正确实现里复制出一个错误的动作 —— 与本轮别处修的那些缺陷同源。
+该类目前不需要独立守卫，因为 `pnpm check` 的 export census **已经**覆盖了它，
+且本轮验证了它会拦下。
