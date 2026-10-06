@@ -1513,3 +1513,60 @@ export census 拦下 2 个新孤儿（`ScoreOverlap` / `computeScoreOverlap`）�
 `cortex-eval 1640 → 1650` tests；format clean。
 
 **仍未做的事**：本轮没有让臂变强。它让**下一份注册不能再用一个名字冒充一次测量**。
+
+#### 4.1.12 CI 连红两次的收口：shim 从未在子进程里生效过
+
+**状态**：§4.1.11 推送后 CI 两次 failure。两次都是同一处缺陷的两层，
+第一层是 §6.4 记的第三类偏差（测试在测量机器的安装状态），
+第二层是修第一层时引入的「门控自身会抛错」。
+
+**结论一（本轮最有价值的发现）：§4g 的 shim 从来没在子进程路径上生效过。**
+
+| 调用方式 | `command -v python3` |
+| --- | --- |
+| 交互式 shell | `/root/.pyenv/shims/python3` ✅ |
+| 子进程 `bash -c` | `/root/.pyenv/versions/3.11.1/bin/python3` ❌ **绕过** |
+| 子进程 `bash -lc` | `/root/.pyenv/versions/3.11.1/bin/python3` ❌ **绕过** |
+
+`PATH` 以版本 `bin` 开头，排在 `shims` 之前。所以**裸 `python3` 在子进程里直达真实解释器，
+守卫不被咨询**。§4g 原文「它是 `PATH` 上第一个 `python3`」**从子进程看是假的**。
+
+> **为什么九个回合都没发现**：作者的交互式 shell **确实**解析到 shim，
+> 而每个断言 shim 裁决的用例都**调绝对路径**，所以那个查找**从来不需要赢**。
+> **一个「从来不需要赢」的前提，等于没有被测过。**
+
+**结论二：一条门禁不允许失败，只允许说「不」。**
+
+`skipif` 的判据写成 `SHIM_HOME.exists() and SHIM_HOME.stat().st_mode & 0o111`，
+而两者在**祖先目录不可穿越**时**抛 `PermissionError`**。runner 上 `/root` 进不去，
+判据在 **import 期**就抛，**在任何 `skipif` 生效之前**，
+把**不需要 shim 的规则用例一起带走**（`Interrupted: 1 error during collection`）。
+修法：捕获 `OSError` 返回 `False`。
+
+**结论三：按「每个测试能回答的问题」拆分，规则覆盖不依赖机器。**
+
+| 类 | 是否需要 shim | 在哪运行 |
+| --- | --- | --- |
+| `TestTheRuleIsCoveredWithoutTheShim`（走已提交的 `--c-payload` 入口） | **否** | **所有主机，含 CI** |
+| 三个 shim 存在性 / 裁决类 | 是 | 已安装 shim 的主机（缺席则带理由 `skip`） |
+| `test_the_shim_is_bypassed_when_the_path_is_ordered_the_other_way` | 否 | 所有主机，**双向分支都断言** |
+
+把规则裁决**全部**锁在 shim 后面，会让这条规则的覆盖率只在一台机器上跑 ——
+**而那台正是作者在看着的机器，也就是回归最不容易被发现的那台。**
+
+**结论四：两层回答不同的问题，把两者写成同一断言会让其中一个成为谎言。**
+
+| 层 | 问的问题 | `-c 'print(${HOME})'` 的裁决 |
+| --- | --- | --- |
+| `--c-payload` | 内层语言**能不能解析**这段文本？ | **clean**（`${HOME}` 不是 Python 构造） |
+| shim | 文本**是不是从 shell 来的**？ | **拒绝**（载荷不是 shell，作者的意图不可能是 shell 变量） |
+
+**门禁**：`pnpm check rc=0`；pytest `205 → 227 passed`（`test_shim_guard.py` `26 → 48`）；
+CI `Verify` @ `2444e389` **success**（14 步全 success）；模拟缺席 shim 主机
+**24 passed / 24 skipped / rc=0**。
+
+**仍未做的事（诚实边界）**：**`PATH` 的顺序没有在这里修**。
+修它意味着在 profile 里把 `shims` 排到版本 `bin` 之前，
+那是与 shim 本身同类别的环境改动，且**静默修掉会让它在下一次重烧镜像时消失**。
+本轮把它**记录**为 §4g.1（`test_the_login_shell_bypass_is_recorded` 断言的是**记录**而非行为，
+因为**把当前错误行为钉住会锁死它**），留给下一次环境重建时一并处理。

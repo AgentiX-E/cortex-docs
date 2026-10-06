@@ -10169,3 +10169,104 @@ type ScoreOverlap = {
    证据指向 **MR/TR 的 evidence rendering 与 `b✗f✓`**，而不是阈值。
 
 > **一句话**：这一轮没有让臂变强，它让**下一份注册不能再用一个名字冒充一次测量**。
+
+#### 51.10 CI 连红两次：一处让构建失红的「测试在测量宿主机」，以及它顺带找到的真实旁路
+
+§51.1–51.9 的改动推送后 **CI 连续两次失败**。两次都是同一处缺陷的两层，
+而且第一层是本节一直在追踪的**第三类偏差**（测试在测量机器的安装状态），
+第二层是修第一层时引入的**门控自身会抛错**。
+
+##### 51.10.1 第一层：测试断言了开发镜像才有的路径
+
+`tools/__tests__/test_shim_guard.py` 直接以绝对路径
+`/root/.pyenv/shims/python3` 运行每一个用例。该路径**只存在于开发镜像**，
+GitHub runner 上根本没有 `.pyenv`，于是 21 个用例报：
+
+```
+PermissionError: [Errno 13] Permission denied: '/root/.pyenv/shims/python3'
+```
+
+**这条信息读起来像权限位坏了，而不像文件不存在** —— 它关于守卫什么都没说。
+这正是 `cortex-docs` §6.4 记的第三类偏差，而代价是一次**与本改动无关的红色构建**。
+
+##### 51.10.2 追它的过程中找到的真实旁路（这一条比修复本身更有价值）
+
+shim 是 §4g 写的「让守卫坐在一个被敲下的命令路径上」的机制。
+它**并不总是那个被运行的 `python3`**：
+
+| 调用方式 | `command -v python3` 的结果 |
+| --- | --- |
+| 交互式 shell | `/root/.pyenv/shims/python3` |
+| 子进程 `bash -c` | `/root/.pyenv/versions/3.11.1/bin/python3` |
+| 子进程 `bash -lc` | `/root/.pyenv/versions/3.11.1/bin/python3` |
+
+`PATH` 以版本的 `bin` 开头，**排在 `shims` 之前**，所以子进程里的裸 `python3`
+直达真实解释器，**守卫根本不被咨询**。§4g 原文写的是「它是 `PATH` 上第一个
+`python3`」—— **从子进程看这句话是假的。**
+
+之所以长期没被发现：作者自己的交互式 shell **确实**解析到 shim，
+而每一个断言 shim 裁决的用例都**调绝对路径**，所以那个查找**从来不需要赢**，
+测试也能全绿。**一个「从来不需要赢」的前提，等于没有被测过。**
+
+##### 51.10.3 第二层：门控自己会抛错
+
+修第一层时给 shim 相关类加了 `skipif`，CI **仍然失败**，但错误变了：
+
+```
+ERROR tools/__tests__/test_shim_guard.py
+  PermissionError: [Errno 13] Permission denied: '/root/.pyenv/shims/python3'
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+```
+
+原因是判据写成 `SHIM_HOME.exists() and SHIM_HOME.stat().st_mode & 0o111`，
+而这两者在**祖先目录不可穿越**时**抛 `PermissionError` 而不是返回 `False`**。
+runner 上 `/root` 存在但进不去，于是判据在 **import 期**就抛了 ——
+在任何用例运行之前，也在 **任何 `skipif` 能生效之前**，
+把**根本不需要 shim 的规则用例一起带走**。
+
+> **一条门禁不允许失败，它只允许说「不」。**
+> 一个环境差异必须不能和「测试文件坏了」长得一样。
+
+修法：判据捕获 `OSError` 并返回 `False`。用「把 `SHIM_HOME` 指向一个不可达祖先」
+模拟缺席 shim 验证：**24 passed, 24 skipped, rc=0**。
+
+##### 51.10.4 按「每个测试能回答的问题」拆分文件
+
+| 类 | 问题 | 是否需要 shim | 在哪运行 |
+| --- | --- | --- | --- |
+| `TestTheRuleIsCoveredWithoutTheShim` | 规则会不会拒绝 / 会不会误报 | **否**（走已提交的 `--c-payload` 入口） | **所有主机**，含 CI |
+| `TestTheShimIsPresent` / `RefusesTheSeventhRecurrence` / `AllowsWhatMustStayAllowed` | 这台机器的接线是否在 | 是 | 已安装该 shim 的主机 |
+| `test_the_shim_is_bypassed_when_the_path_is_ordered_the_other_way` | **旁路本身** | 否（断言测量到的事实） | 所有主机，**双向分支都断言** |
+
+第三行值得单独说：它在「解析到 shim」时断言**必须由 shim 拒绝**，
+在「解析到真实解释器」时断言**守卫不得发声**。
+**两个分支都断言**，是为了让它不会因为解析方式变化而**从空路径静默通过**。
+
+##### 51.10.5 两个新测试首版就写错了，两处都按实测改正
+
+| 断言 | 我写的 | 实测 |
+| --- | --- | --- |
+| 拒绝信息里的出路 | `exec-python.py` | `--c-payload` 层说的是 **`run-program.py`**；shim 自己的信息两个都提 |
+| `${HOME}` 在 `--c-payload` 层 | `rc != 0` | **`rc == 0`（clean）** |
+
+第二处是**设计**而非 bug，值得写清楚：两层回答**不同的问题**。
+
+- `--c-payload` 只问：**内层语言能不能解析这段文本？** `${HOME}` 不是任何 Python 构造，
+  所以没有遮蔽 Python 的语法，判 clean 是对的。
+- **shim** 额外知道：**这段文本是从 shell 来的**。所以 `-c` 载荷里的 `${HOME}`
+  被拒绝 —— 一个载荷不是 shell，作者的意图不可能是 shell 变量。
+
+**两层、两个问题。把两者都写成 `rc != 0` 会让其中一个成为谎言。**
+
+##### 51.10.6 门禁读数与 CI
+
+| 项目 | 结果 |
+| --- | --- |
+| `pnpm check` | `rc=0` |
+| pytest（tools） | `205 → 227 passed, 14 subtests passed`（`test_shim_guard.py` `26 → 48`） |
+| CI `Verify` @ `2444e389` | **success**（全部 14 步 success） |
+| 前两次 CI | `bb95b328` failure（collection error）、`2365dbe3` failure（21 PermissionError） |
+
+**这一轮真正的产出不是「CI 变绿」，而是**：
+一个被相信了九个回合的机制（shim）**从来没在子进程里生效过**，
+而它之所以看起来生效，是因为**测试调用的是它的地址而不是它的解析路径**。
