@@ -9807,3 +9807,187 @@ markdown = formatAblationReport(reported)      // 最后才渲染
 `retrievalThreshold` 传成 `0` 却断言 INERT 警告出现 —— 那是**测试写错了**，
 因为 `0` 是恒等配置、不警告才是正确的。修法是让 fixture 显式传 `0.25`（即 §10.10 的
 那个接线），而不是放宽警告条件。**把测试改成迁就实现，会永久删掉这个守卫。**
+
+### 50. 首次让闸门可判别：一个机制、一个最弱信号、五个被收窄的孤儿
+
+承接 §49.1 亲自写下的约束：
+
+> 「下一份注册**不能**是同一接线换阈值 —— 必须先制造差异。」
+
+本轮就是那次「先制造差异」。交付的**不是**一次注册、也不是一次派发，
+而是**让下一次注册有东西可切**：准入层第一次拥有可阈值化的**逐题差异**。
+
+#### 50.1 三因子被钉死，而其中只有一个有余地
+
+§49.1 的表已经定位了根因，本轮要做的是判断三个因子里**哪一个可以被动**，而
+不是能不能动：
+
+| 因子 | 可否引入逐题差异 | 理由 |
+| --- | --- | --- |
+| `recency` | **否** | 一次准入的所有 turn 按构造记在同一瞬，age 不属于这次准入 |
+| `sourceTrust` | **否** | 按定义就是整次准入一个值；逐题化会把它变成另一个概念 |
+| `confidence` | **可以** | 它的语义就是「这条记忆本身有多可信」，天然逐条 |
+
+于是机制落在 `AdmissionOptions.confidenceFor?: (turn: string) => number` 上。
+两个设计决定值得单独记下：
+
+1. **回调，而不是与 turns 平行的数组。** 平行数组可能与输入顺序不一致，而**没有任何类型能察觉**；
+   `(turn) => number` 对正在判定的那个 turn 求值，顺序问题在类型层面就不存在。
+   代价是回调每 turn 被调用一次 —— 测试 5 用 `seen === ['alpha','beta','gamma']` 把这个次数钉住。
+2. **只给内容，不给 ordinal。** 传入的是 turn 的**文本**，不是它在数组里的位置。
+   若传入位置，调用方就能写出「第 3 条起加分」这种与内容无关的信号，
+   而那种信号在基准上会精确地编码「题目顺序」，即**答案知识的一种形式**。
+
+#### 50.2 机制归组合层，信号归调用方
+
+`cortex-memory` 只依赖 `cortex-core`，**不读任何嵌入模型、不发任何请求**。
+如果在这里度量 turn 的质量（例如做词重叠、调用 reranker），就等于让组合层
+依赖它本该坐在其上的检索机制 —— 层级会反过来。
+
+这与本仓库既有的两条边界是同一处：`valueFunction` 与 `CortexMemoryOptions.llm`。
+三者都是**注入点**，机制在包内、决定在外。
+
+因此本轮交付的是一个**信号模块** `packages/cortex-memory/src/confidence.ts`，
+`bench/run-ablation.ts` 通过 `confidenceSignal === 'length'` 条件展开把它接上去：
+
+```ts
+...(armOptions.confidenceSignal === 'length' ? { confidenceFor: confidenceFromLength } : {}),
+```
+
+**注意「条件展开」这个形状**：`confidenceFor` 缺席时对象里**没有这个键**，
+而不是有一个 `undefined` 值的键。这和 §48 里 `sourceTrust` 的处理是同一手法 ——
+默认路径不经过新代码。
+
+#### 50.3 选最弱的可辩护信号，而不是可选里最好的
+
+`confidenceFromLength` 是 `min(1, turn.length / 2000)`。它不是「能想到的最好信号」，
+而是「最强的信号里最弱的那一个」，四条判据缺一不可：
+
+| 判据 | 为什么必须有 |
+| --- | --- |
+| deterministic | 臂的 delta 里不能混入信号自己的噪声 |
+| content-only | 不能依赖题目身份、顺序或任何 ordinal |
+| I/O-free and model-free | 组合层不得依赖嵌入模型或任何外部服务 |
+| bounded and non-degenerate | 有界是校验的前提；在**形如基准的上下文**上非退化才叫信号 |
+
+第四条是本轮最容易写错的地方，`confidence.test.ts` 因此**从行为推导饱和点**，
+不 import 那个常量：
+
+```ts
+function saturationPoint(): number {
+  let length = 1;
+  while (confidenceFromLength('x'.repeat(length)) < 1) { length += 1; }
+  return length;
+}
+const SATURATION = saturationPoint();
+```
+
+并把它断言为 `2_000`。这样「饱和点改到别处」这件事会**打在这条断言上**，
+而不是被打在一个从实现里拷来的常数上。
+
+**一个无法从公式上看出来的性质**（记在 `confidence.ts` 头注释里）：
+
+> 只在「运行中永远不会出现的输入」上变化的信号，在被评测的那次运行里就是常数信号。
+
+#### 50.4 `retrieval-discrimination.test.ts` 被重写，而不是被放宽
+
+§49 明确写过：这个文件里的**常数性断言被设计成会在机制到达时失败**。
+本轮它确实失败了 —— 修法是**让被断言的行为变复杂**，不是改断言：
+
+| 旧断言（删除） | 新断言（4 条） |
+| --- | --- |
+| 每个准入 turn 的值恒为 `1` | 两个 turn 得**两个不同值** |
+| —— | 区间内**一刀能分开**强/弱候选 |
+| —— | 最强之上**仍然能关上**（否则「从不关上」也满足上一条） |
+| 不给回调时旧行为**逐字不变** | 不给回调时旧行为**逐字不变**（保留） |
+
+第三条是控制项，也是这一族测试里唯一能防止「判别力」退化成「永远打开」的东西。
+
+#### 50.5 `validateConfidence` 抛错，不 clamp
+
+```ts
+if (!Number.isFinite(value) || value < 0 || value > 1) {
+  throw new Error(`confidenceFor must return a number in [0, 1], got ${String(value)} for turn ${JSON.stringify(turn)}. ...`);
+}
+```
+
+clamp 会把 `1.5` 静默重解释为 `1`，读者在产物里看到一个合理数字，
+而调用方的打字错误已经消失 —— **不可解释的结果比报错更贵**。
+错误信息里带 `JSON.stringify(turn)`，是为了让「哪一个 turn 触发的」不需要二分排查。
+（测试 8 断言了名字出现在消息里。）
+
+#### 50.6 `confidenceSignal` 抛错，是与 `readToggle` 方向**相反**的决定
+
+同一文件里 `readToggle` 对不识别的布尔值**回落到控制臂**，这是安全的 ——
+选择哪个臂是配置行说了算，配置行会打印出来。
+
+但 `confidenceSignal` 不能这么做：
+
+> 一次被派去**引入逐题差异**的运行，若静默回落到 `none`，
+> 它的产物会读起来像「差异没用」的**证据**。
+
+这是在制造伪证据，而不是降级运行。所以不识别值直接抛错，并且错误信息说明这一点。
+
+#### 50.7 门禁三轮拦下 5 个孤儿，全部靠收窄可见性修掉
+
+| 轮次 | 被拦下的符号 | 修法 |
+| --- | --- | --- |
+| 1 | `CONFIDENCE_SATURATION_CHARS`、`ConfidenceFunction`、`confidenceFromLength` | 后者**接线到臂**（它确实有调用者） |
+| 2 | `CONFIDENCE_SATURATION_CHARS`、`ConfidenceFunction` | **删掉 `ConfidenceFunction` 改用内联签名**；常量从 barrel 移除 |
+| 3 | `CONFIDENCE_SATURATION_CHARS` | 改为**不导出**（`SATURATION_CHARS`），测试改从行为推导 |
+
+**一条都没有进 `tools/export-census-baseline.json`。** 这个决定是刻意的：
+baseline 是**债务账本**，给两个小时代龄的符号加一条，等于决定**永久保留一个无用导出**。
+§49.4 记过同一个原则的另一种形态 —— 收回 `export` 才是正确的修法。
+
+#### 50.8 四次变异注入，全部被杀死
+
+| # | 变异 | 被杀的断言数 |
+| --- | --- | --- |
+| 1 | `confidenceFor` 被忽略（不接进 `createMemory`） | 6 / 8 |
+| 2 | 校验放宽为只查 `value < 0` | 1 / 8 |
+| 3 | `admissionOptionsFrom` 丢掉 `confidenceFor` 转发 | 2 / 9（`index.test.ts`） |
+| 4 | 校验改为 clamp 而非抛错 | 1 / 8 |
+
+变异 3 值得单独说：它**不改变任何 `cortex-memory` 内部测试的结果**，
+只有端到端那条（gate → admissionOptions → admitted value）能看见它。
+这正是「一个被丢弃的转发只有跨越接缝的测试能发现」的实例。
+
+每次注入后都把 `admission.ts` 恢复到与变异前一致（`grep -c 'MUTANT'` 为 0 作为核对）。
+
+#### 50.9 本轮门禁读数
+
+| 项目 | 结果 |
+| --- | --- |
+| `pnpm check` | `rc=0` |
+| `cortex-core` 覆盖率 | `100/100/100/100` |
+| `cortex-llm` 覆盖率 | `100/100/100/100` |
+| `cortex-eval` 覆盖率 | `100/100/100/100` |
+| `cortex-memory` 覆盖率 | `100/100/100/100`（`162 → 174` tests） |
+| `cortex-node` 覆盖率 | `100/98.61/100/100`（已知 v8 分支缺陷，非代码缺口） |
+| export census | `470 exported symbols, 237 with a non-test caller, 233 orphaned`；**no new orphans beyond the recorded baseline** |
+| format | `All matched files use Prettier code style!` |
+| 变异测试 | 4 次注入，全部被正确的断言杀死 |
+
+新增测试文件 1 个（`confidence.test.ts`，7 断言）；重写 1 个
+（`retrieval-discrimination.test.ts`，4 → 8 断言）；扩展 2 个
+（`index.test.ts`、`bench-memory-arm.test.ts` 各 +1 用例）。
+
+**一次自身缺陷记录**：`retrieval-discrimination.test.ts` 第 3 个断言第一版不成立 ——
+我用的 `strong` 字符串不足 60 字符，`confidenceByLength` 未饱和、得 `0.883…` 而非 `1`。
+修法是**把 fixture 加长**并**断言 fixture 自己的前提**：
+
+```ts
+expect(confidenceByLength(strongest)).toBe(1);
+```
+
+这与 §49.5 记录的是同一条纪律：**把测试改成迁就实现，会永久删掉这个守卫。**
+
+#### 50.10 本轮为下一份注册留下的形态约束
+
+本轮交付的是**机制**，不是注册。下一份注册的允许与不允许写在
+`PREREGISTRATION-CORTEX-MEMORY-ARM.md` §11.2，可概括为两句话：
+
+1. **仍是一次 dispatch、不搜阈值、零假设仍是预期结果。** 机制到达**不放宽** §4 的任何纪律。
+2. 可以命名一个 `(0, S]` 内的 `retrievalThreshold` 与一个 `confidenceSignal`，
+   因为这一对才让那一刀**关于某件事**。

@@ -1393,3 +1393,44 @@ fixture 变成编译错误而非静默省略；**id 而非 index**，因 index �
 **门禁**：`pnpm check rc=0`；五包覆盖率 `100/100/100/100`（`cortex-node` `100/98.61/100/100`）；
 export census 拦下并修掉 1 个新孤儿；format clean；`cortex-eval 1629 → 1640`、
 `cortex-memory 158 → 162` tests。
+
+#### 4.1.10 第 50 轮：可判别性已交付，并写下新注册的形态约束
+
+**状态**：执行 §4.1.9 写下的形态约束（「下一份注册不能是同一接线换阈值」）。
+本轮**不派发**，交付的是让下一份注册**有东西可切**的机制。
+
+**交付物**：`cortex-memory` 的准入层第一次拥有可阈值化的**逐题差异**。
+
+| 层 | 交付 |
+| --- | --- |
+| 机制 | `AdmissionOptions.confidenceFor?: (turn: string) => number` + `validateConfidence`（抛错不 clamp） |
+| 信号 | `confidenceFromLength = min(1, length / 2000)`（`src/confidence.ts`，四判据：确定 / 只依赖内容 / 无 I-O 无模型 / 有界非退化） |
+| 接线 | 臂解析 `CORTEX_MEMORY_CONFIDENCE`，落进产物与日志行（不识别值**抛错**，不回落） |
+| 守卫 | `retrieval-discrimination.test.ts` 重写（4 → 8 断言）、`confidence.test.ts`（7 断言） |
+
+**为什么信号不在 `cortex-memory` 内**：本包不读嵌入模型、不发请求；
+在其中度量 turn 质量会让组合层依赖它本该坐在其上的检索机制。
+与 `valueFunction`、`CortexMemoryOptions.llm` 是同一处注入边界。
+
+**可判别性的验收形状**（这一组断言本身就是「可判别」的定义）：
+
+| 断言 | 反例若缺失 |
+| --- | --- |
+| 两个 turn 得两个不同值 | 每 turn 恒 `1`，区间是点（§4.1.9） |
+| 区间内一刀分开强/弱候选 | 闸门能开但不分好坏 |
+| 最强之上仍能关上 | 「永不关上」也满足上一条 |
+| 不给回调时旧行为逐字不变 | 默认路径被新代码经过，此前测量含义改变 |
+
+**门禁**：`pnpm check rc=0`；`cortex-memory` `100/100/100/100`（`162 → 174` tests）；
+export census 三轮拦下 5 个孤儿、全部靠**收窄可见性**修掉（**零条进 baseline**）；
+4 次变异注入全部被杀。
+
+**下一份注册的形态（§11.2 的摘要，纪律未被放宽）**：
+
+1. **One dispatch, no threshold search.** 仍然是单次派发、不扫阈值。
+2. **零假设仍是预期结果**，直到某次运行给出相反的证据。
+3. 允许命名 `(0, S]` 内的一个 `retrievalThreshold` 与一个 `confidenceSignal` ——
+   这一对才让那一刀**关于某件事**，而这也是 §4.1.9 要求「先制造差异」的全部含义。
+
+**仍未做的事**：本轮**没有**答辩「逐题 confidence 能否提升排名信号」这个问题。
+机制到达只解除了 §4.1.9 的形态障碍，**证据仍然为零**。
