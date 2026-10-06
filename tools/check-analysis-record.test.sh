@@ -78,8 +78,20 @@ run "clean record passes" 0 --sources "$SOURCES"
 
 # 1. An untranslated document. This is the failure the numeric gate cannot see:
 #    the file matches its own source exactly, so fidelity reports 94/94.
+#
+#    The fixture must be built from the English original in "$SOURCES", not
+#    copied out of the record. Until this was fixed the line below read
+#    `cp "$SOURCES/<doc>" "$WORK/repo/$RECORD_REL/<doc>"`, and that source file
+#    does not exist: the guard's own record holds the same path, already
+#    translated. `cp` failed, `set -e` did not abort because the copy is
+#    followed by the `run` call rather than and-ed to it, and the record was
+#    left clean -- so the case reported "exit=0, expected=1", which read as
+#    this check being broken while it was in fact working correctly and the
+#    fixture was wrong. It is the mirror image of the case it sits beside: the
+#    mutation has to actually be applied, or the assertion is about nothing.
 fresh
-cp "$SOURCES/longmemeval-sota-research.md" "$WORK/repo/$RECORD_REL/longmemeval-sota-research.md"
+printf '# LongMemEval-S SOTA research notes\n\nA wholly untranslated document.\n' \
+  > "$WORK/repo/$RECORD_REL/longmemeval-sota-research.md"
 run "untranslated document is caught" 1 --sources "$SOURCES"
 
 # 2. A frozen citation that was localized. "Hindsight Tempr step N" points at a

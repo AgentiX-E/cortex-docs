@@ -629,3 +629,71 @@ Markdown 永远拿不到它。**这里的 bug 不在逻辑里，在调用顺序�
 并且用「过滤后的上下文」断言退化变体确实退化成它代表的那个常数。
 （该测试的第一版用未过滤的上下文跑 `min(1, length / 10_000)`，得到 8 个不同值而失败；
 修正是让变体的主张**关于一个上下文**，而不是关于它自己的公式。）
+
+### 6.11 第十一类偏差：守卫的自身测试带着一个从未生效的变异
+
+在 §6.9 / §6.10 之后，审查这一轮的两仓库门禁时发现的是**另一类**问题，
+而且它的形状恰好是本节标题所描述的那个：
+
+> **一个从未真正施加的变异，会让「这个检查坏了」和「这个检查正常」长得一模一样。**
+
+`cortex-docs` 的 `tools/check-analysis-record.test.sh` 用 7 个用例逐个复现守卫
+存在的理由。其中「未翻译文档会被抓住」的用例，其变异方式是从 `$SOURCES` 复制英文原版
+覆盖记录中的同名文件：
+
+```bash
+cp "$SOURCES/longmemeval-sota-research.md" "$WORK/repo/$RECORD_REL/longmemeval-sota-research.md"
+```
+
+而**这个文件在 `$SOURCES` 里不存在** —— 守卫的记录里就有同名文件，且已经是中译本。
+于是 `cp` 失败、记录保持干净、守卫输出 `exit=0`，用例期望 `1`，报告：
+
+```
+FAIL  untranslated document is caught (exit=0, expected=1)
+```
+
+#### 6.11.1 为什么这条失败信息是错的，而检查是对的
+
+这条信息读起来像是「`untranslated` 检查坏了」。实际上检查**工作正常**：
+把一份纯英文文档放进记录，它会被抓住（§6.11.2 的两个变异都验证了这一点）。
+坏的是 **fixture** —— 它没有制造出它声称在制造的那个状态。
+
+`set -euo pipefail` 没有兜住它，因为 `cp` 的失败**没有被 `&&` 或 `if` 连接到后面的
+`run` 调用**：`cp` 是一条独立语句，其后是另一条独立语句，`run` 自身的退出码
+才是函数返回给断言的东西。**一条被断言吞掉的失败命令，等于没有跑过。**
+
+这与本仓库已经记过的两条是同族的：
+
+| 已有记录 | 形态 |
+| --- | --- |
+| §6.9 | 值被解析、转发、应用、落盘、打印，**但被比较的那个量对每个输入都相同** |
+| §6.10 | 变异的来源写在**没有测试能抵达的位置** |
+| **§6.11** | **变异本身没有施加成功，而断言把它读成了「检查坏了」** |
+
+三者的共同后果是同一个：**测试通过（或失败）的理由，与它声称在测的东西无关。**
+
+#### 6.11.2 修法与判别力验证
+
+修法是让 fixture **自己产出**那个状态，而不是去 `$SOURCES` 找一个不存在的文件 ——
+这本来就是守卫文档里写下的设计（「asserts against the same originals the fidelity
+check uses」，即英文原版提供的是**保真度**基准，而「未翻译」这个主张必须由
+测试**合成**）：
+
+```bash
+printf '# LongMemEval-S SOTA research notes\n\nA wholly untranslated document.\n' \
+  > "$WORK/repo/$RECORD_REL/longmemeval-sota-research.md"
+```
+
+两个变异注入确认这条用例现在真的在测它声称的东西：
+
+| 变异 | 结果 |
+| --- | --- |
+| `THRESHOLD=40` → `THRESHOLD=0`（检查永不触发） | `FAIL untranslated document is caught` |
+| `\p{Han}` → `\p{Latin}`（模式不匹配任何汉字） | `FAIL untranslated document is caught` |
+
+修复后：`check-analysis-record.test.sh` **7/7 cases**，
+`check-analysis-record.sh` 六项全 `ok`（含 `guard self-test`、`numeric fidelity: 94/94`）。
+
+> **对后续工作的约束**：一个「守卫的守卫」如果不能在自己的变异没有施加成功时报错，
+> 它就只是在为守卫的**存在**背书，而不是为守卫的**有效性**背书。
+> 判据不是「这个用例跑过了」，而是「把这个用例要防的失败亲手制造出来，它响了」。
