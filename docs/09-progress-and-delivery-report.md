@@ -11100,3 +11100,211 @@ TDD 红状态：**`5 failed | 8 passed (13)`**。五条断言：
 | P2 | `confidenceFor` 信号对弃答的影响 | §49 已测阈值不可判别，信号是另一条路 |
 
 **注意一项仍未做**：`PATH` 顺序未修（§4g.1 已记录，刻意留待重烧镜像）。
+
+---
+
+## 58. 弃答普查只覆盖一条路线，而 §55.4 排在最前的那项候选因此被撤回
+
+§57.9 写下 P0：**读 30 道 ABS 题的弃答输出**，找共同触发模式。
+它是 §55.4 三项候选里最便宜的一项，且 §57 刚把它的阻塞（名册缺席）解除。
+本轮执行它 —— 而**执行的第一步就推翻了它的前提**。
+
+### 58.1 先测量：读 §12.5 产物，而不是读代码
+
+§12.5 的产物 `benchmark-cortex-memory-ablation-report.json` 顶层键：
+
+```
+dataset, questionCount, baseline, feature, ablation,
+generatedAt, featureConfig, memoryArmConfig, abstentionReasons
+```
+
+`abstentionReasons` 是：
+
+| 字段 | 值 |
+|---|---|
+| `empty` | 0 |
+| `threshold` | 0 |
+| `llm` | **120** |
+| `answered` | 0 |
+
+§55 的读法是：**模型弃答了 120 次**，这是过度弃答的证据。
+`empty = 0` 还被 §55 当作「证据确实到了 prompt」的证明。
+
+### 58.2 算术先给出一个精确的巧合
+
+同一份产物里：
+
+| 能力 | total | base | feat | b+f− |
+|---|---|---|---|---|
+| IE | 150 | 1 | 1 | 0 |
+| MR | 121 | **105** | 0 | **105** |
+| KU | 72 | 0 | 0 | 0 |
+| TR | 127 | **84** | 0 | **84** |
+| ABS | 30 | **30** | **30** | 0 |
+
+ABS 的 `total = 30`，`base = feat = 30`，`b+f− = 0`。
+`runAblation` 的 `runs` 语义是 **30 道题 × 4 runs**。
+
+> **30 × 4 = 120**，与 `llm: 120` **精确相等**。
+
+精确相等不是证据，但它是**指向一个可证伪假设的指针**：这个字段数的**不是这一轮**，
+而是**某一条路线**，且那条路线**恰好只有 ABS 会走**。
+
+### 58.3 假设被两处源码证实，且第二处是唯一写入点
+
+**分派点**（`packages/cortex-eval/src/benchmark.ts:92`）：
+
+```ts
+} else if (isSessionAware(system) && q.capability === 'ABS' && system.answerAbstention) {
+```
+
+`answerAbstention` **只为 `capability === 'ABS'` 分派**。其余能力走向
+`answerSessions`（MR）、`answerTemporal`（TR）、`answerAssistant`、
+`answerPreference`、`answerKnowledgeUpdate`。
+
+**写入点**（`packages/cortex-memory/src/memory.ts`）：`#reasons` 在整个包里
+**只在一处被写** —— `answerAbstention` 内部的三个 `return null` 分支：
+
+| 分支 | 条件 | 记入 |
+|---|---|---|
+| `turns.length === 0` | 无证据被准入 | `empty` |
+| `!this.#retrievalAdmitted(turns)` | 检索门关闭 | `threshold` |
+| 模型返回 `INSUFFICIENT_EVIDENCE` | 模型主动拒绝 | `llm` |
+| 其余 | 模型作答 | `answered` |
+
+别处**一处不写**。所以 `abstentionReasons` 是**弃答路线的普查**，
+不是**串运行的普查** —— **字段名同它覆盖的范围不一致**，这就是误读的来源。
+
+### 58.4 结论翻转：那 120 次是能力在通过
+
+三条读数互相闭合：
+
+1. ABS 的 **gold 就是弃答** —— 30 道 ABS 题的对错**就是**「是否拒绝回答」。
+2. ABS 得分 **30/30 正确**，`b+f− = 0` —— 一次都没答错。
+3. `llm = 120` 是 `answerAbstention` 被调用的次数，**全部落在 ABS 上**。
+
+> **那 120 次是能力在正确工作，不是模型在过度弃答。**
+
+§55 把「ABS 全部弃答」读成缺陷；
+§55.4 据此把「读这 30 段输出找共同触发模式」排成 P0。
+**两者是同一个误读的两步**：把**成功样本**当成了**失败样本**。
+
+### 58.5 真实损失面从不进入这个字段
+
+非 ABS 共 **470 题**（150 + 121 + 72 + 127），其中：
+
+| 项 | 值 |
+|---|---|
+| feature 弃答（非 ABS） | **449** |
+| 弃答率 | **95.5%** |
+| 其中「基线答对而 feature 弃答」 | MR **105** + TR **84** = **189** |
+| `answerAbstention` 跑过其中几题 | **0** |
+
+`featureMetrics.perCapability` 侧证：
+
+| 能力 | abstained | answered | correct |
+|---|---|---|---|
+| IE | 149 | 1 | 1 |
+| MR | 117 | 4 | 0 |
+| KU | 61 | 11 | 0 |
+| TR | 122 | 5 | 0 |
+| ABS | 30 | 0 | **30** |
+
+**最大的一笔损失（MR 105 + TR 84）在任何版本的 `abstentionReasons` 里都不存在。**
+`answerAbstention` 一题都没跑过 —— 它**没有机会**记录它们。
+
+### 58.6 本轮改动：不动物理量，只改读法与范围
+
+本轮**不调整任何测量值**，也**不为了把数字做好看而改路线分派**。
+改的是两处**会让人误读**的地方，因为误读是**从数字形成的**：
+
+| 位置 | 改动 |
+|---|---|
+| `memory.ts` `#reasons` docstring | 首行由「accumulated across every question answered」改为「**on the ABSTENTION ROUTE, accumulated across calls**」；新增 scope 与「为什么写下来」两节 |
+| `report.ts` `abstentionReasonLines` | 在**表格之前**插入 scope 行 |
+
+**为什么 scope 行放表格之前、不放脚注**：误读是**在读到数字的那一刻形成**的，
+放在表格下面的限定**读得太晚** —— 读者已经带走了「模型弃答 120 次」这个结论。
+渲染实测：
+
+```
+## Abstention reasons
+
+> Scope: the **abstention route only** (`answerAbstention`, dispatched for `ABS`
+> questions). A decline on any other route is **not** counted here, so this table
+> does not describe the arm. Read it against the `ABS` row of the capability table.
+
+| Reason | Count | Share | Decided by |
+|---|---|---|---|
+| `empty` | 0 | 0.00% | machine (no evidence admitted) |
+| `threshold` | 0 | 0.00% | machine (retrieval gate closed) |
+| `llm` | 120 | 100.00% | model (declined) |
+| `answered` | 0 | 0.00% | model (answered) |
+```
+
+### 58.7 测试：六条先写，含一条正对照
+
+TDD，两处各三条。
+
+**`cortex-memory/src/__tests__/abstention-reasons.test.ts`** 新增
+`describe('the census measures ONE route, and the artifact must not read it as the whole arm')`：
+
+| 测试 | 钉住的边界 |
+|---|---|
+| `counts nothing for a question answered on a non-abstention route` | `answerSessions` 返回 `null` 后，census **仍四零** |
+| `counts a decline on the temporal route as nothing, for the same reason` | `answerTemporal` 同理（TR 是最大单一损失 84 题） |
+| `tallies a decline on the abstention route, which is the route it measures` | **正对照** |
+
+第三条是**刻意的**：前两条的断言形状是「什么也没发生」，
+而**一个永不递增的计数器能通过任何条这样的测试**。
+正对照要求同一个 fixture 下 `llm` **必须**增一，两条否定断言才有意义。
+
+fixture 用 `recordingLlm([], ABSTAIN_TOKEN)` 而**不是 `null`**：
+`parseAnswer` 对返回值调 `.trim()`，`null` 会直接抛 —— 这条约束是上一轮实测学到的。
+
+**`cortex-eval/src/__tests__/report-abstention-census.test.ts`** 新增
+`describe('the census must state the one route it measures')`：
+
+| 测试 | 钉住的边界 |
+|---|---|
+| `names the abstention route as the scope, and says it is not the arm` | 断言 `'Scope: the **abstention route only**'`、`` '`answerAbstention`' ``、`` '`ABS`' ``、`'this table does not describe the arm'`、`'**not** counted here'` |
+| `puts the scope before the table, so it is read as a qualifier rather than a footnote` | `md.indexOf(scope) < md.indexOf('\| Reason \| Count \|')` |
+| `points the reader at the capability row the numbers can actually be checked against` | `'Read it against the `ABS` row of the capability table.'` |
+
+第二条把**位置本身**当成被测量的属性。回退它会让 scope 行**降级为脚注**，
+而脚注正是本轮要修的那个失败模式。
+
+### 58.8 验收
+
+| 项 | 结果 |
+|---|---|
+| `pnpm check` | **exit 0**（含 `test:tools` / build / lint / typecheck / `census:check` / test / format） |
+| `cortex-memory` | Test Files **14 passed**，Tests **187 passed**（+3），覆盖率 **100 / 100 / 100 / 100** |
+| `cortex-eval` | Test Files **61 passed**，Tests **1673 passed**（+3） |
+| 全量覆盖率 | statements **100** / branch **99.95** / functions **100** / lines **100** |
+| `report.ts` | 100 / 98.83 / 100 / 100 —— 余项为 §56 的 `runs > 1` 分支，**非本轮引入** |
+| 提交 | `ed935e7`，署名 **Lambertyan**，`+0800` |
+| 推送 | `1b841749`，**292 blobs 逐字节一致** |
+
+**一处工具教训**：验证渲染时第一次看不到 scope 行，
+原因是 `packages/cortex-eval/dist/` 是**陈旧的** —— 渲染验证**必须先前重建 dist**，
+否则测的是上一次的构建产物。
+
+### 58.9 撤回与下一步
+
+| 项 | 裁决 |
+|---|---|
+| §55.4 第 3 项候选「读 30 道 ABS 弃答输出」 | **撤回** —— 它要读的 30 段是**成功样本**；ABS 30/30 正确 |
+| §55 的「模型弃答 120 次是过度弃答」 | **撤回** —— 120 = 30 题 × 4 runs，全部是 ABS 的正确弃答 |
+
+剩余两项候选**保留但换范围**：真实损失在 **MR/TR 路线**上，
+不在弃答路线上。**读数是语言，穷举计数是布尔量** ——
+`abstentionReasons` 给不了 MR 105 / TR 84 的**表述**。
+
+| 优先级 | 动作 | 范围修正 |
+|---|---|---|
+| P0 | 读 **MR/TR 路线**的弃答输出 | 不是 30 道 ABS，是 449 次非 ABS 弃答，优先其中 **189 次 b+f−** |
+| P1 | 抽取指令强度（prompt contract）与弃答率的关系 | 不变；`CORTEX_MEMORY_PROMPT_CONTRACT` 开关已在 |
+| P2 | `confidenceFor` 信号对弃答的影响 | 不变；§49 已测阈值不可判别，信号是另一条路 |
+
+**注意一项仍未做**：`PATH` 顺序未修（§4g.1 已记录，刻意留待重烧镜像）。

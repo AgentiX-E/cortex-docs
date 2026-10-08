@@ -1867,3 +1867,43 @@ statements/branch/functions/lines = **100 / 99.95 / 100 / 100**，
 **下一步（§55.4 三项，阻塞已解除）**：
 P0 读 30 道 ABS 弃答输出找共同触发模式 → P1 指令强度 vs 弃答率 →
 P2 `confidenceFor` 信号。**`PATH` 顺序仍未修**（§4g.1，刻意留待重烧镜像）。
+
+### 4.1.17 弃答普查的覆盖范围被写进字段名之外，§55.4 的 P0 候选因此撤回
+
+`abstentionReasons` 的**名字**读起来像「本轮所有弃答的原因分布」。
+本轮实测确认它**不是**：它数的是**弃答路线**，而弃答路线**只为 ABS 分派**。
+
+| 证据 | 内容 |
+|---|---|
+| 分派唯一 | `benchmark.ts:92`：`q.capability === 'ABS' && system.answerAbstention` |
+| 写入唯一 | `memory.ts` 中 `#reasons` **只在 `answerAbstention` 内**被写（三个 `return null` 分支） |
+| 算术闭合 | ABS `total=30` × `runs=4` = **120** = `llm: 120`（精确相等） |
+| 产物自证 | 同一 artifact：`ABS total=30 base=30 feat=30 b+f−=0` |
+
+**结论翻转**：ABS 的 gold **就是弃答**，且 ABS **30/30 正确**。
+所以那 120 次是**能力在正确工作**，不是模型过度弃答。
+§55 与 §55.4 把**成功样本**读成了**失败样本**，这是同一个误读的两步。
+
+**真实损失面不进入这个字段**：非 ABS 470 题中 **449 题弃答（95.5%）**，
+其中「基线答对而 feature 弃答」为 MR **105** + TR **84** = **189**，
+而 `answerAbstention` **一题都没跑过** —— 它没有机会记录它们。
+
+**改动（不动物理量，只改读法）**：
+
+| 层 | 文件 | 改动 |
+|---|---|---|
+| 产品 | `cortex-memory/src/memory.ts` | `#reasons` docstring scope 两节；首行限定为「on the ABSTENTION ROUTE」 |
+| 报告 | `cortex-eval/src/report.ts` | scope 行插在**表格之前**（放在下面会被读作脚注，而误读在读到数字时已形成） |
+
+**六条测试先写**，其中 `tallies a decline on the abstention route` 是**正对照**：
+另两条的断言形状是「什么也没发生」，而**一个永不递增的计数器能通过它们**。
+报告侧还把**位置本身**当属性测（`indexOf(scope) < indexOf(table header)`）。
+
+**验收**：`pnpm check` exit 0；`cortex-memory` **187 passed**（覆盖率四维 100）；
+`cortex-eval` **1673 passed**；全量 statements/branch/functions/lines = **100 / 99.95 / 100 / 100**；
+提交 `ed935e7`（Lambertyan），推送 `1b841749`，292 blobs 逐字节一致。
+
+**撤回**：§55.4 第 3 项候选「读 30 道 ABS 弃答输出」**作废** —— 要读的是成功样本。
+下一步 P0 改为**读 MR/TR 路线**的 449 次非 ABS 弃答（优先其中 189 次 b+f−）；
+P1 指令强度 vs 弃答率、P2 `confidenceFor` 信号**范围不变**。
+**`PATH` 顺序仍未修**（§4g.1，刻意留待重烧镜像）。
