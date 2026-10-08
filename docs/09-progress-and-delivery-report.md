@@ -11391,3 +11391,156 @@ MR 弃答 117、TR 弃答 122，**一段都没有活下来**。
    的 `abstained` 对齐。
 
 **注意一项仍未做**：`PATH` 顺序未修（§4g.1 已记录，刻意留待重烧镜像）。
+
+---
+
+## 60. 名册到达了，但弃答的原文在更下一层就没了
+
+§59 分派了采样跑（`37792539133`，`limit=120`，`ablation_runs=1`）。
+本轮读它的产物 —— 而**读数在第一步就给出了否定的答案**。
+
+### 60.1 第一项验收：链路，通过
+
+§59.4 把「名册存在且长度 = 样本题数」定为**优先于任何文本结论**的判据。实测：
+
+| 项 | 值 |
+|---|---|
+| 顶层键 | `... 'runs', 'abstentionReasons', 'questions'` |
+| `questionCount` | 120 |
+| `questions` 存在 | **是**，长度 **120** |
+| `abstentionReasons` | `{empty: 0, threshold: 0, llm: 17, answered: 0}` |
+| 记录字段 | `answer, capability, correct, featureConfig, groundTruth, grounded, question, questionId, turns` |
+
+**§57 的修复在真实产物中首次被观察到生效。** 对照组是 §12.5 的产物：
+顶层键里没有 `questions`，`questions present: False`。
+
+`abstentionReasons.llm = 17` **又一次自证 §58** —— ABS 桶约 17 题 × 1 run = 17，
+与 `total: 17` 精确相等。§58 的修正在这里第二次被独立复现。
+
+### 60.2 第二项验收：文本，失败 —— 而且失败的位置比 §57 低一层
+
+`answer` 字段**不是**空的：120 条里 **5 条非 null**，最长的一条是多行回复：
+
+```
+'Based on the evidence:\n\n- When you first started your new role as Senior Software Engineer, you lead **4 engineers**'
+```
+
+所以**载体是好的**。而 115/120 读作 `null` —— 即弃答。
+
+**问题在于 `null` 就是全部信息。** `Answer = string | null`，而
+`parseAnswer` 只在**最后一个非空行**判定弃答（`stripLabel` 剥 `Answer:` 前缀，
+`equalsToken` 大小写不敏感）。于是**三种不同的模型行为塌缩成同一个值**：
+
+| 模型实际输出 | `parseAnswer` | 名册里的 `answer` |
+|---|---|---|
+| `INSUFFICIENT_EVIDENCE` | `null` | `null` |
+| `Answer: INSUFFICIENT_EVIDENCE` | `null` | `null` |
+| `...解释...\nINSUFFICIENT_EVIDENCE` | `null` | `null` |
+
+本轮要解释的正是**这 29 题**（MR 13 + TR 16，基线答对而 feature 弃答）。
+**它们是三种形状里的哪一种，从产物里无法恢复** —— 因为能说明这一点的文本，
+在 `#prompt` 里是一个局部变量，`parseAnswer` 返回时就已经死了。
+
+```
+raw = await this.#llm.complete(prompt);   ← P0 要读的原文在这里
+return parseAnswer(raw);                  ← 返回的是它的摘要，原文消失
+```
+
+### 60.3 这是 §57 的缺陷低一层，§56 的再低一层
+
+| 节 | 缺陷 |
+|---|---|
+| §56 | 值算对了，**没有进到需要它的产物字段**（报告层） |
+| §57 | 值算对了，**在到达报告层之前被丢弃**（评分层） |
+| **§60** | **值算出来了，然后被它自己的摘要替换**（解析层） |
+
+`parseAnswer` **不是错的函数**。错的是**把它的输出当成它输入的替代品**。
+三次同构的失败，每一次都在前一次的下一层，直到碰到真正的数据源头。
+
+### 60.4 本轮读数：采样跑与 §12.5 的图景一致
+
+| 能力 | total | baselineCorrect | featureCorrect | b+f− | abstained |
+|---|---|---|---|---|---|
+| IE | 52 | 0 | 0 | 0 | 52 |
+| MR | 17 | **13** | 0 | **13** | 16 |
+| KU | 17 | 0 | 0 | 0 | 13 |
+| TR | 17 | **16** | 0 | **16** | 17 |
+| ABS | 17 | 17 | 17 | 0 | 17 |
+| **合计** | **120** | 33 | 17 | **29** | **115** |
+
+弃答率 **95.83%**，与 §12.5 的 **95.8%** 一致；`b−f+ = 0`（一题都没修回）。
+MR 的 McNemar `p = 2.44e−4`、TR `p = 3.05e−5`，两者均显著 ——
+**采样版复现了全量的结论**，所以采样跑作为取证手段是有效的。
+
+### 60.5 修法：在解析之前留一份原文
+
+新增 `lastRawOutput(): string | null`，在**三个** prompt 路径上写入：
+
+| 路径 | 覆盖的路由 |
+|---|---|
+| `#prompt` | flat / assistant / knowledge-update / abstention |
+| `#promptWithDate` | temporal（TR） |
+| `#promptSessionAware` | session-aware（MR） |
+
+**为什么是三条路径而不是一条**：损失**测在 MR 和 TR 上**，而这两条
+**根本不走 `answerAbstention`**。只在弃答路线上写的字段，
+对本轮要解释的题目**一个字都记不下来**。
+
+**为什么是单槽而不是列表**：基准**一次问一题、问完立刻读**，
+单槽就是全部需求；而在 500 题的运行里，一个累积列表会**无界增长**，
+供一个**从不回头看**的读者使用。
+
+**为什么默认是 `null` 不是 `''`**：`''` 在本包里**是一个答案**（空白、错误的答案），
+不是弃答 —— 这是 `parse.ts` 开篇就点明的区分。默认 `''` 会让
+「还没有任何调用」与「模型回了个空」在同一字段上**不可区分**，
+而这个字段存在的**唯一目的**就是阻止两种行为塌缩成一个值。
+
+### 60.6 七条测试先写，其中两条是防假通过的对照
+
+TDD 红状态：**7 failed (7)**。修完后 **7 passed**。
+
+| 测试 | 钉住的东西 |
+|---|---|
+| 裸 token 可读回 | 原文 = `INSUFFICIENT_EVIDENCE` |
+| 带标签的弃答与裸的**可区分** | 两者都是 `null`，原文不同 |
+| 弃答前的解释被保留 | 原文含 `does not name a city` |
+| 作答的原文也保留 | 原文 = `Lisbon` |
+| **闸门拒绝时字段保持 `null`** | **对照**：模型没被咨询，就没有模型输出 |
+| **任何调用前是 `null` 而非 `''`** | **对照**：`''` 会读作空答案 |
+| 每条路由都保留（MR/TR 也测） | 只在弃答路线写会记录不到要解释的题 |
+
+第 5 条是**关键的对照**：一个「永远保留上一次调用文本」的实现会让
+**上一题的措辞被归给这一题的决策**。第 6 条针对 §60.5 的 `''` 理由。
+
+**一处 fixture 教训**：第一版 `openSystem` 只设 `valueFunction`，
+七条测试里 **5 条假失败** —— 因为 `#admit` 的**写入闸门**先返回了 `null`。
+正确做法是**两个阈值都显式声明**（`threshold: 0`、`retrievalThreshold: 0.1`），
+这正是 `abstention-decision.test.ts` 已经记录过的**假通过形态**：
+`turns.length === 0` 的守卫会在检索决策之前返回。
+
+### 60.7 验收
+
+| 项 | 结果 |
+|---|---|
+| `pnpm check` | **exit 0**（含 `test:tools` / build / lint / typecheck / `census:check` / test / format） |
+| `cortex-memory` | Test Files **15 passed**，Tests **194 passed**（+7），覆盖率 **100 / 100 / 100 / 100** |
+| 全量 | Test Files **98 passed**，Tests **2274 passed**（+13） |
+| `cortex-eval` | 100 / 99.95 / 100 / 100（未改该包） |
+| census gate | 未报新 orphan |
+| 提交 | `0e8a5dc`，署名 **Lambertyan**，`+0800` |
+| 推送 | `92d8734e`，**293 blobs 逐字节一致** |
+
+### 60.8 下一步
+
+P0 的**载体**现在齐了：名册（§57）+ 原文（本轮）。下一轮读的是
+**MR 13 题 + TR 16 题**的 `lastRawOutput` —— 但本轮已确认它**还没有进产物**：
+`lastRawOutput()` 是**内存中的访问器**，`QuestionRecord` 尚未承载它。
+
+| 优先级 | 动作 | 说明 |
+|---|---|---|
+| P0 | **把 `lastRawOutput` 接进 `QuestionRecord`** | 载体已有，缺的是与 §57 同形的那一段管线接线 |
+| P1 | 读 MR/TR 的原文，按「裸 token / 带标签 / 带解释」分类 | §60.2 的三分法，本轮已定判据 |
+| P2 | 抽取指令强度（prompt contract）与弃答率的关系 | `CORTEX_MEMORY_PROMPT_CONTRACT` 开关已在 |
+| P3 | `confidenceFor` 信号对弃答的影响 | §49 已测阈值不可判别，信号是另一条路 |
+
+**注意一项仍未做**：`PATH` 顺序未修（§4g.1 已记录，刻意留待重烧镜像）。
