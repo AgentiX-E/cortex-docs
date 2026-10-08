@@ -11685,3 +11685,103 @@ P0 的**载体**至此完整：名册（§57）+ 原文（§61）。
 | P2 | `confidenceFor` 信号对弃答的影响 | §49 已测阈值不可判别，信号是另一条路 |
 
 **注意一项仍未做**：`PATH` 顺序未修（§4g.1 已记录，刻意留待重烧镜像）。
+
+
+## 62. `${...}` 第十二次复发：机制全线正确，出问题的是使用机制的那条命令
+
+### 62.1 用户点名要求反思的问题
+
+> 你又出现输出错误了：`Failed to run function tools: Error: Bad substitution: bc`，你反思一下这是第几次了，应该如何根治？
+
+先把「第几次」答清楚，因为这决定了根治的方向。
+
+`AgentiX-E/cortex` 的 `docs/OPS-SHELL-INTERPOLATION.md` 已经把这一类缺陷记录到 **§4j（第十次复发）**，本轮为 **第十一次复发**，文档已扩写到 **§4k**。触发形态：把一个 TypeScript 模板字面量 `` `answer-${bc-1}` `` 写进 shell 双引号参数，宿主 tokeniser 在工具派发前抛出。
+
+### 62.2 本轮首次给出的定性结论：这次复发里没有任何机制失效
+
+前九次复发，每一次都定位到一个机制缺陷（规则、消息、路径、层次），每一次都以下一项机制改进收尾。**第十一次不同**：逐项测量下来，**没有任何机制是坏的**。
+
+测量方法有纪律要求——每个组件都**在它与输入之间不经过任何 shell** 的条件下单独测量，payload 由 `chr(36)` 组装并经 `subprocess` 传入，不写进命令行。这个纪律本身就是结论的一部分（见 62.4）。
+
+| 组件 | 输入 | 结果 | 正确 |
+| --- | --- | --- | --- |
+| `check-shell-interpolation.py --fragment` | 未闭合 opener | 1 violation，exit 1 | 是 |
+| `scan_payload(payload, …, 'python')` | `f"{cut:.3f}"` | 1 violation | 是 |
+| `check-shell-interpolation.py --c-payload` | 同样的字节 | 1 violation，exit 1 | 是 |
+| `/root/.pyenv/shims/python3 -c` | 同样的字节 | 拒绝，exit 1，打印修法 | 是 |
+| `/root/.pyenv/shims/python3 -c` | `print(1+1)` | 执行，exit 0 | 是 |
+| `diagnose-bad-substitution.py --message` | `Bad substitution: bc` | 解码为 branch A | 本轮新增 |
+
+守卫 86 条测试全绿，shim 48 条全绿，4h 的分类表在实测下成立：
+
+```
+'cut:.3f'    is-a-shell-expansion=False    <- 上报
+'v:2.3f'     is-a-shell-expansion=False    <- 上报
+'x:offset'   is-a-shell-expansion=True     <- 正确豁免
+'a:1'        is-a-shell-expansion=True     <- 正确豁免
+```
+
+### 62.3 失败发生在我用来验证的**那条命令**里，而且发生了两次
+
+第一次测量 shim，用 shell 变量承接 payload：
+
+```text
+payload_a="print(f\"${OPEN}cut:.3f${CLOSE}\")"
+"$SHIM" -c "$payload_a"
+```
+
+shim 报告 clean，Python 一路执行到 `NameError: name 'cut' is not defined`。看起来像 shim 失效。**不是**：`$OPEN` / `$CLOSE` 在外层 shell 里被展开，`${OPEN}cut:.3f${CLOSE}` 被解析成一次参数展开，到达 shim 的是 `print(f"cut:.3f")`——**花括号没了**。直接测量：
+
+```text
+argv received:  'print(f"cut:.3f")'
+intended:       'print(f"${cut:.3f}")'
+violations:     []
+```
+
+第二次，我在同一条命令里又写了 `echo "exit=${PIPESTATUS[0]}"`，zsh 以 `bad math expression: operator expected at 'f'` 拒绝——**又一次在调用方，又一次是验证者自己写的 `${...}`。**
+
+两次失败，都发生在调查这个缺陷的过程中，都在同一个位置，都只能靠「已经知道答案」来避免。**这不是注意力问题，是问题的结构。**
+
+### 62.4 为什么工具无法被改进到能防住这一点，以及能做什么
+
+本文档里每一个补救都是一段检查文本的机制。每一个都必须被**调用**，而调用就是一条 shell 命令。于是被检查的文本与承载它的命令处在同一个 token 流里，外层 shell 先解析这个流——这就是 §2 的观察，从另一端再一次抵达。
+
+§4e 把这命名为**代价不对称**并让安全路径变便宜；§4g 命名为**可达性**并装了 shim。两条都对，两条都仍然成立。它们都没能做到的是：取消「作者的第一条命令必须是安全的」这一要求——因为作者此刻还不知道它不安全。
+
+由此三条，只有第三条是新工作：
+
+1. **守卫保持原样。** 它是对的，而针对「已闭合花括号」的规则会误报 `'${cut:.3f}'`——那是 Python 程序里的合法字面量，正是 §4h 已证明**不可存在**的那类规则。
+2. **让这条消息不再需要人来读。** `Bad substitution: bc` 命名的是一个尾巴，十二轮都在读这个名字。`tools/diagnose-bad-substitution.py` 把消息到形态的映射机器化，使诊断成为一次查表，不再依赖读者认得出「这是尾巴」。它的 9 条测试用 `chr(36)` 组装 fixture，所以**记录这个危险的文档本身，仍然可以被一条携带该危险的命令投递出去**。
+3. **交付物永远是文件。** 第十一次复发是用 heredoc 写一个 TypeScript 程序。§4b 的第一条规则已经是「把程序写进文件」；第十一次表明这条规则必须适用于**正在被写的 fixture**，而不是只适用于被研究的程序。本节中所有成功的命令，payload 都来自 `subprocess`、文件，或不含花括号的变量赋值。
+
+### 62.5 声称什么，不声称什么
+
+**声称。** 在 `bcf66463`，守卫、payload 规则、shim、分类表在隔离条件下（路径里没有 shell）逐项测量为工作正常；该提交下的失败不在它们之中。`diagnose-bad-substitution.py` 能把记录下来的消息解码为 branch A，且其测试在该映射或守卫判定发生变化时会失败。
+
+**不声称。** 不声称该类不会复发。十一次复发里，第十一次的特征是**没有缺陷可修**——这意味着机制已不是剩余暴露面。剩余暴露面是：命令必须先被写出来才能被检查，而检查工具要靠写一条命令才能到达。`diagnose-bad-substitution.py` 降低了**第二步（恢复）**的代价，没有消除第一步。
+
+这与第九次复发的结论同形（§4i：危险从来不在我正在编辑的文本里），并把它向前推了一步。第九次发现危险在载体而不在 payload；第十一次发现对**检查载体的工具**同样成立，且任何工具编排都改变不了这一点，因为工具要通过它所检查的东西才够得到。
+
+### 62.6 可执行的一般化
+
+§4j 的规则是「读抛出错误的代码，不要读它抛出的消息」。第十一次把它磨成一条可执行的：
+
+> **由读消息得出的诊断，其可靠性只等于读者当时的状态。当消息是可判定的，就用代码判定它。**
+
+`tools/diagnose-bad-substitution.py` 就是这个。它刻意很小：十一轮调查里唯一留存的东西是那个映射，共七行；其余全部是手工抵达它的代价。
+
+### 62.7 本轮验收
+
+| 项 | 结果 |
+| --- | --- |
+| `pnpm check` | **exit 0** |
+| `cortex-eval` | 1686 passed (63 files)，100 / 99.95 / 100 / 100 |
+| `cortex-memory` | 194 passed (15 files)，100 / 100 / 100 / 100 |
+| `cortex-llm` | 138 passed (4 files)，100 / 100 / 100 / 100 |
+| `cortex-node` | 17 passed (1 file)，100 / 98.61 / 100 / 100 |
+| `tools/__tests__` | **273 passed，1 skipped**（新增 9 条） |
+| 插值守卫全树 | `7 fragment(s) clean` |
+| 提交 | `5af6385` |
+| 推送 | `6b787d83`，**296 blobs 逐字节一致** |
+
+同时修掉一个**发现即修**的盲区：`docs/OPS-SHELL-INTERPOLATION.md` 此前**未被 `docs/README.md` 索引**，只能靠文件名去猜。已补入索引行。

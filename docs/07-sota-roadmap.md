@@ -1995,3 +1995,66 @@ P1 = 按三分法读 MR/TR 原文；P2/P3 不变。
 **下一步**：P0 载体已完整（名册 §4.1.18 + 原文本轮），
 下一轮分派采样跑读 **MR/TR 的 `rawOutput`**，按三分法（裸 token / 带标签 / 带解释）分类。
 **`PATH` 顺序仍未修**（§4g.1，刻意留待重烧镜像）。
+
+
+### 4.1.20 第十一次复发：机制全线通过隔离测量，失败全在使用机制的那条命令里（2026-10-08）
+
+#### 结论
+
+`${...}` 这一类已经复发十一次。前十次每一次都定位到一个机制缺陷并以下一项机制改进收尾。**第十一次没有缺陷可修**：守卫、`--c-payload` 模式、`scan_payload`、`python3` shim、4h 的分类表，全部在**隔离条件**（路径里不经过任何 shell）下测量为工作正常。
+
+由此得出的不是又一次机制改进，而是一条**关于这类补救的边界**：
+
+> 每一个补救都是一段检查文本的机制；每一个都必须被调用，而调用就是一条 shell 命令。被检查的文本与承载它的命令处在同一个 token 流里，外层先解析这个流。**工具编排无法改变这一点，因为工具要通过它所检查的东西才够得到。**
+
+#### 关键证据：两次失败都在验证命令里
+
+| 尝试 | 命令 | 观察 | 真相 |
+| --- | --- | --- | --- |
+| 1 | `payload_a="print(f\"${OPEN}cut:.3f${CLOSE}\")"` → `"$SHIM" -c "$payload_a"` | shim 报 clean，Python 抛 `NameError: name 'cut' is not defined` | 外层 shell 先展开了 `$OPEN`/`$CLOSE`，到达 shim 的是 `print(f"cut:.3f")`，**花括号已消失** |
+| 2 | 同一条命令里附加 `echo "exit=${PIPESTATUS[0]}"` | zsh：`bad math expression: operator expected at 'f'` | 又一次在调用方，又一次是验证者自己写的 `${...}` |
+
+两次都发生在**调查这个缺陷的过程当中**，都在同一位置，都只能靠「已经知道答案」避免。这不是注意力问题。
+
+#### 隔离测量表
+
+| 组件 | 输入 | 结果 | 正确 |
+| --- | --- | --- | --- |
+| `check-shell-interpolation.py --fragment` | 未闭合 opener | 1 violation，exit 1 | 是 |
+| `scan_payload(payload, …, 'python')` | `f"{cut:.3f}"` | 1 violation | 是 |
+| `check-shell-interpolation.py --c-payload` | 同样的字节 | 1 violation，exit 1 | 是 |
+| `/root/.pyenv/shims/python3 -c` | 同样的字节 | 拒绝，exit 1，打印修法 | 是 |
+| `/root/.pyenv/shims/python3 -c` | `print(1+1)` | 执行，exit 0 | 是 |
+
+守卫 86 条测试全绿，shim 48 条全绿。分类表实测成立：`cut:.3f` / `v:2.3f` 判违规，`x:offset` / `a:1` 正确豁免。
+
+#### 交付
+
+1. **`tools/diagnose-bad-substitution.py`**（新）。`--message` 把记录下来的 `Bad substitution: X` 解码为宿主 tokeniser 的具体分支（A：缺闭合；B：空花括号），并给出修法；`--command` 直接检查一条命令，且**导入守卫而非重新实现**（两套扫描器是「规则与解释各说各话」的成因）。`--message` 遇到非目标消息返回 exit 2 并说明「无法解码」，**不报 clean**。
+2. **`tools/__tests__/test_diagnose_bad_substitution.py`**（新，9 条）。fixture 全部由 `chr(36)` 组装——否则记录危险的测试文件本身会被携带危险的命令卡死（`scan_test_sources` 已记录过这一形态）。
+3. **`docs/OPS-SHELL-INTERPOLATION.md` §4k**：测量表、两次验证命令的失败、声称与不声称。
+4. **`docs/README.md`**：补入索引行。该文档此前**未被索引**，只能靠文件名去猜——这是「机制存在但不可发现」的又一处。
+
+#### 声称与不声称
+
+**声称**：在 `bcf66463`，该提交下的失败不在任何机制之中。诊断工具能解码消息，其测试在映射或守卫判定变化时失败。
+
+**不声称**：不声称不会复发。第十一次的特征正是「没有缺陷可修」——机制不再是剩余暴露面。剩余暴露面是**命令必须先被写出来才能被检查**。诊断工具降低第二步（恢复）的代价，没有消除第一步。
+
+#### 可执行的一般化
+
+§4j 的规则「读抛出错误的代码，不要读它抛出的消息」被磨成：
+
+> **由读消息得出的诊断，其可靠性只等于读者当时的状态。当消息是可判定的，就用代码判定它。**
+
+#### 验收
+
+| 项 | 结果 |
+| --- | --- |
+| `pnpm check` | exit 0 |
+| `cortex-eval` | 1686 passed (63 files)，100 / 99.95 / 100 / 100 |
+| `cortex-memory` | 194 passed (15 files)，100 / 100 / 100 / 100 |
+| `cortex-llm` | 138 passed (4 files)，100 / 100 / 100 / 100 |
+| `cortex-node` | 17 passed (1 file)，100 / 98.61 / 100 / 100 |
+| `tools/__tests__` | 273 passed，1 skipped |
+| 提交 / 推送 | `5af6385` / `6b787d83`，296 blobs 逐字节一致 |
