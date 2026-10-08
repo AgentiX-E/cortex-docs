@@ -10952,3 +10952,151 @@ abstentionReasons = { "empty": 0, "threshold": 0, "llm": 120, "answered": 0 }
 正确的说法是「**30 道 ABS 题各被问了 4 次，4 次全部弃答**」。
 
 **§55.4 的三项候选仍未做。** 本轮做的是它们的前置条件：**先让产物能被正确阅读。**
+
+---
+
+## §57 第 57 轮：产物里没有 `questions`，因为答案在到达产物之前就被丢掉了
+
+**触发**：承接 §56。§56 读出一个**产物主张缺陷**（普查数调用、报告题为题数）。
+修完之后按 §12.5 的读数继续推进 §55.4 的三项候选 —— 而三项候选的共同前置是
+**先把弃答输出读出来**，于是去看产物里有没有。
+
+结果是：**没有 `questions` 字段，一个都没有。**
+
+### 57.1 `questions` 是一个被声明、被文档化、却从未被填充的字段
+
+`AblationReport.questions` 的 docstring 自己列了三个消费者：
+
+| 消费者 | 它需要什么 | 缺字段时的表现 |
+|---|---|---|
+| `tools/read-b7-criterion.mjs` | 逐题记录，重算 target cohort 并执行三条款 | 报 `no per-question array found`，**判据无法执行** |
+| `compareQuestionVectors` | 两条按题对齐的 correctness 向量 | 噪声模型**没有真数据可跑** |
+| 问「哪些题动了」的读者 | 题 id 名册 | 只剩计数，§20 的 A/B 两臂差 2 题却**说不出是哪 2 题** |
+
+三者在 §12.5 的产物面前**全部失效** —— 因为字段根本没有。
+
+### 57.2 根因在下一层：答案在手，却被丢掉
+
+不是「没算」，是**算完丢了**。
+
+`evaluateWithScorerDetailed` 返回 `{ metrics, correct }`，把 `runBenchmark`
+产出的 `answers` 数组**直接丢弃**。也就是说：
+
+> 每道题的模型输出在运行期间**都真实存在过**，在任何东西能记录它之前被丢掉了。
+
+这与 §56 的 `runs` 缺陷**同形，低一层**：
+
+- §56：值算对了，**没有进到需要它的产物字段里**（报告层）
+- §57：值算对了，**在到达报告层之前就没了**（评分层）
+
+### 57.3 这次修复的成本是具体的，不是理论上的
+
+§55.4 把「读弃答输出」列为**最便宜的下一个动作**，指向 TT RE3 的「错误值」类故障。
+§12.5 的读数：30 道 ABS 题**全部弃答**，`abstentionReasons.llm = 120`，
+且 `empty = 0` 证明**证据确实到了 prompt**。
+
+**然后 30 个输出，一个都没活下来。**
+
+`correct` 是一个布尔量，**布尔量读不出语言**。当前的问题是模型**说了什么**，
+所以现有产物**没有任何东西可读**。修复不是「补齐一个字段」，是
+**让那 30 段文本第一次能够活到产物里**。
+
+### 57.4 改动链路：把答案带下去，而不是再丢一次
+
+```
+scoreEvaluation      返回 answers（与 correct 并列）
+        ↓
+runAblation          作为 featureAnswers 带出
+        ↓
+runCortexMemoryArm   用它在消融之后组装 questions
+```
+
+**为什么在臂里组装，而不是在 `runAblationReport` 里** —— 这一处是实测决策：
+
+- `questions` 按契约是**调用方提供**的字段：没人提供时**缺席**。
+  `[]` 会主张「本轮判了 0 道题」，缺席说的是「没人记录名册」。
+- `runEmbeddingBenchmark` **依赖这条契约**：它跑的系统没有决策追踪，其测试
+  **要求名册保持缺席**，而不是从一个答案向量**伪造**出来。
+
+所以名册由**能观察到答案的那个调用方**组装，也就是这个臂；
+且必须在消融**之后**，因为 `featureAnswers` 是消融自己的输出。
+
+### 57.5 被证伪的第一次尝试：字段的契约比我以为的弱
+
+第一版我让 `runAblationReport` **自己从答案向量构造名册**。两个既有测试立刻变红：
+
+| 测试 | 它钉住的契约 | 我的改动违反了它 |
+|---|---|---|
+| `report-json-roundtrip` 「forwards a supplied roster ... omits the field when none is given」 | 未提供名册 → **字段缺席** | 我无条件构造，字段恒在 |
+| `report-runner` 「emits no roster for the embedding-only benchmark that has no traces」 | 无追踪的臂 **不得伪造名册** | 我从向量伪造了 |
+
+两条都在说同一件事：**缺席是一个主张，`[]` 是另一个主张，伪造的名册是第三个**。
+我第一版的注释写「这个无条件构造让每个调用方都拿到名册，是安全的」——
+**它是伪造**。已回退，改为「臂提供」，契约不变。
+
+### 57.6 第二个被证伪的设计：给不存在的分支写守卫
+
+修法确定后，臂里还剩一个分支：`featureAnswers` 会不会缺席？
+我给它写了 `?? []` 与 `undefined` 守卫，并**试图导出一个内部函数来测它**。
+
+两件事都错了，都**被门禁抓住**：
+
+1. **census gate 报 `1 NEW orphan(s)`** —— 导出 `buildArmRoster` 而它**没有非测试调用方**。
+   门禁是对的：一个为了让测试够到分支而存在的导出，是模块表面上的**测试形状的洞**。
+2. 顺着门禁追下去，发现**那个分支根本不可达**：臂被交到手里的是
+   `runAblation → runBenchmark → scoreEvaluation` 这条链**自己产出的** `AblationResult`，
+   而这条链**每题恰好压入一个答案**并在 §57.4 之后**返回它们**。
+
+所以 `?? []` 与 `undefined` 守卫是**死代码**，而且**读起来像安全网** ——
+正是 `report-runner.test.ts` 点名的那种形状：一个只能在错位时触发的兜底，
+会**把一道没人判过的题静默归档为弃答**。
+
+**正确处理是删掉分支，不是导出它以便测试。**
+缺席那一侧属于 `runAblationReport` 的契约，两个既有测试已经在那里覆盖它。
+
+### 57.7 本轮新增的测试（先写，先红）
+
+TDD 红状态：**`5 failed | 8 passed (13)`**。五条断言：
+
+1. `writes a per-question record for every graded question`
+2. `records the answer the model actually produced` —— `answer === 'Lisbon'`
+3. `records an abstention as null rather than as a missing answer`
+4. `records the question text and its gold`
+5. `agrees with the correctness vector the paired tables were built from`
+
+修完后**加写两条**，把两处**语义边界**钉住（而不是把内部函数导出以够到分支）：
+
+6. `keeps an abstention a value, not a hole` —— 断言 **`'answer' in record === true`**
+   且值为 `null`。`null` 是「系统弃答」（是一个发现），
+   字段缺席是「没人记录」（是一个缺口）。**判据对前者有分支，对后者没有。**
+7. `reports the evidence it did not collect as absent rather than as grounded` ——
+   `grounded === false`、`turns` 为空。这是臂**诚实承认它测不到的**：
+   接地性是检索追踪的属性，本臂不采追踪，所以报 `false`；
+   B7 会把未接地题**排除**在聚类之外，而伪造的 `true` 会把**没有追踪支撑的题放进目标集**。
+
+### 57.8 验收
+
+| 项 | 结果 |
+|---|---|
+| `pnpm check` | **exit 0**（含 `test:tools` / build / lint / typecheck / `census:check` / test / format） |
+| 测试 | **2261 passed (97 files)**；`cortex-eval` **1670 passed (61 files)** |
+| 全量覆盖率 | statements **100** / branch **99.95** / functions **100** / lines **100** |
+| `bench-memory-arm.ts` | **100 / 100 / 100 / 100** |
+| `metrics.ts` / `ablation.ts` / `question-record.ts` | **100 / 100 / 100 / 100** |
+| `report.ts` | 100 / 98.83 / 100 / 100 —— 余项为 §56 的 `runs > 1` 分支，**非本轮引入** |
+| census gate | 抓到我一处**错误的导出**；据此删掉不可达分支，**未绕过门禁** |
+| 提交 | `3bef218e`，署名 **Lambertyan**，`+0800` |
+| 推送 | `66645a5d`，**292 blobs 逐字节一致** |
+| CI | `Verify` **success**（run `37716127168`） |
+
+### 57.9 下一步
+
+`questions` 到位了，§55.4 的三项候选**第一次可以被执行**：
+
+| 优先级 | 动作 | 说明 |
+|---|---|---|
+| P0 | **读 30 道 ABS 题的弃答输出** | 找共同触发模式；这是「最便宜的下一个动作」，本轮已解除其阻塞 |
+| P1 | 抽取指令强度（prompt contract）与弃答率的关系 | 已有 `CORTEX_MEMORY_PROMPT_CONTRACT` 开关 |
+| P2 | `confidenceFor` 信号对弃答的影响 | §49 已测阈值不可判别，信号是另一条路 |
+
+**注意一项仍未做**：`PATH` 顺序未修（§4g.1 已记录，刻意留待重烧镜像）。

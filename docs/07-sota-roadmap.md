@@ -1822,3 +1822,48 @@ Micro-Kinetic RCA 不在本 scope 内，本文件不涉及。
 这一前置条件已由本轮完成。
 
 **仍未做的事（诚实边界）**：Micro-Kinetic RCA 不在本 scope 内，本文件不涉及。
+
+### 4.1.16 第 57 轮：产物缺 `questions`，根因是答案在评分层就被丢掉（2026-10-08）
+
+**结论先行**：`AblationReport.questions` 从未被填充，是因为
+`evaluateWithScorerDetailed` **丢弃了** `runBenchmark` 产出的 `answers`。
+这不是「少写一个字段」，是**测到的语言在到达产物之前就消失了**。
+本轮把它接回来，§55.4 的三项候选**第一次可执行**。
+
+**改动链路**（三层，一层不改都不成立）：
+
+| 层 | 文件 | 改动 |
+|---|---|---|
+| 评分 | `metrics.ts` | `ScoredEvaluation` 新增 `answers: Answer[]`，`scoreEvaluation` 返回它 |
+| 消融 | `ablation.ts` / `types.ts` | `featureAnswers?: Answer[]` 带出（**可选**，见下） |
+| 臂 | `bench-memory-arm.ts` | 消融**之后**用 `buildArmRoster` 组装 `questions` |
+
+**为什么 `featureAnswers` 是可选的**：`AblationResult` 是**报告形状**，
+十几个测试**按手从一条 correctness 向量构造它**；改成必填会逼每个 fixture
+**为了满足编译器而编造答案列表** —— 把伪造数据塞进 fixture。
+测量该有的保证**写在能断言的地方**：臂的测试要求记录携带系统真实产出并与向量一致。
+
+**为什么名册在臂里组装，不在 `runAblationReport` 里**：
+`questions` 按契约是**调用方提供**的字段，没人提供则**缺席**（`[]` 会主张「判了 0 题」）。
+`runEmbeddingBenchmark` **依赖这条契约** —— 它没有决策追踪，其测试
+**要求名册保持缺席而非从向量伪造**。
+
+**两处被证伪的设计**（都是实测，不是推演）：
+
+1. **让 `runAblationReport` 无条件构造名册** → 两个既有测试立刻变红，
+   断言「未提供 → 字段缺席」与「无追踪的臂不得伪造名册」。
+   我第一版注释说这「让每个调用方都拿到名册，是安全的」—— **那是伪造**。已回退。
+2. **给不存在的分支写守卫并导出内部函数来测它** → **census gate 报 `1 NEW orphan(s)`**。
+   门禁是对的。顺着它追下去发现**分支根本不可达**：臂拿到的是自己那条
+   `runAblation → runBenchmark → scoreEvaluation` 链产出的结果，每题恰好一个答案。
+   `?? []` 就是**读起来像安全网的死代码**，且会**把没人判过的题静默归档为弃答**。
+   **正确处理是删掉分支，不是导出它以便测试。**
+
+**验收**：`pnpm check` exit 0；全量 **2261 passed**；
+statements/branch/functions/lines = **100 / 99.95 / 100 / 100**，
+`bench-memory-arm.ts` 与 `metrics.ts`、`ablation.ts`、`question-record.ts` **四维全 100**；
+提交 `3bef218e`（Lambertyan），推送 `66645a5d`，292 blobs 逐字节一致，CI `Verify` success。
+
+**下一步（§55.4 三项，阻塞已解除）**：
+P0 读 30 道 ABS 弃答输出找共同触发模式 → P1 指令强度 vs 弃答率 →
+P2 `confidenceFor` 信号。**`PATH` 顺序仍未修**（§4g.1，刻意留待重烧镜像）。
