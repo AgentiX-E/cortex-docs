@@ -11285,6 +11285,7 @@ fixture 用 `recordingLlm([], ABSTAIN_TOKEN)` 而**不是 `null`**：
 | `report.ts` | 100 / 98.83 / 100 / 100 —— 余项为 §56 的 `runs > 1` 分支，**非本轮引入** |
 | 提交 | `ed935e7`，署名 **Lambertyan**，`+0800` |
 | 推送 | `1b841749`，**292 blobs 逐字节一致** |
+| CI | `Verify` **success**（`1b841749`，完成于 `14:25:14Z`） |
 
 **一处工具教训**：验证渲染时第一次看不到 scope 行，
 原因是 `packages/cortex-eval/dist/` 是**陈旧的** —— 渲染验证**必须先前重建 dist**，
