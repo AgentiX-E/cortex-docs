@@ -11309,3 +11309,85 @@ fixture 用 `recordingLlm([], ABSTAIN_TOKEN)` 而**不是 `null`**：
 | P2 | `confidenceFor` 信号对弃答的影响 | 不变；§49 已测阈值不可判别，信号是另一条路 |
 
 **注意一项仍未做**：`PATH` 顺序未修（§4g.1 已记录，刻意留待重烧镜像）。
+
+---
+
+## 59. 执行 §55.4 换范围后的 P0：先钉死归因前提，再分派取证
+
+§58.9 把 P0 改为「读 MR/TR 路线的弃答输出」。本轮分派取证，并在分派前
+**先验证读数的归因前提** —— 因为这次读数要把结论归给「模型看到的东西」，
+而归因错了，读到的文本再多也是错的。
+
+### 59.1 归因前提：两个 contract 的指令块逐字相同
+
+workflow 的注释说 `cortex_memory_prompt_contract` 是 **§12.5 实验的唯一变量**。
+这是本轮读数的前提，所以逐字节验证，不采信注释：
+
+| contract | 指令块 | 证据渲染 |
+|---|---|---|
+| `abstention` | 5 行，见下 | `formatEvidence(turns)` |
+| `abstention-evidence-blocks` | **逐字相同** | `formatEvidenceWithSources(turns)` |
+
+```
+Answer the question using only the evidence above.
+This question may have no answer in the evidence. That is expected and is a valid outcome.
+Do not choose among candidates to produce something plausible.
+If no evidence supports an answer, reply exactly INSUFFICIENT_EVIDENCE.
+Otherwise reply with the answer alone.
+```
+
+差异**只在证据渲染**：`formatEvidenceWithSources` 给每一轮标上来源 memory id。
+实测确认（`prompt.ts:215`），所以本轮若读数有变化，**归因给渲染而非措辞**。
+
+### 59.2 弃答的判据比 token 匹配宽，这一点必须写下来
+
+`parse.ts` 的 `isAbstention` **只看最后一个非空行**，且 `stripLabel` 先剥掉
+形如 `Answer:` / `Answer -` 的前缀，`equalsToken` 再大小写不敏感比对。
+
+所以「被判为弃答」的文本**不一定是裸 token**：
+
+| 模型输出 | 判定 | 名册里留下的文本 |
+|---|---|---|
+| `INSUFFICIENT_EVIDENCE` | 弃答 | 裸 token |
+| `Answer: INSUFFICIENT_EVIDENCE` | 弃答 | 完整原文 |
+| `...解释...\nINSUFFICIENT_EVIDENCE` | 弃答 | **含解释的全文** |
+| `the evidence is insufficient` | **作答**（不是判定） | 原文 |
+| `""`（空串） | **作答**（空答案） | `''` |
+
+这张表是 P0 能读的前提：**名册保留原文而非归一化后的判定**。
+所以 `answer: null` 在名册中**不可见** —— 要读的是 `answer` 字段里的**文本**，
+而「它为什么被判弃答」要从文本反推，不能从 `null` 反推。
+这也是 §58 那条结论的延续：**计数是布尔量，读数是语言。**
+
+### 59.3 采样规模的计算，而不是猜
+
+P0 要的不是精度，是**文本样本**，所以用采样跑而非 500 题 × 4 runs。
+
+`sampleInstances` 是**分桶轮转**（`sampling.ts`），桶键为
+`IE:user` / `IE:assistant` / `IE:preference` / `MR` / `TR` / `ABS` / `KU`。
+`limit = 120` 时每桶约 **17 题**，MR 与 TR 各拿约 17 题。
+
+这足以拿到**几十段**弃答文本 —— 而 §12.5 的产物里
+MR 弃答 117、TR 弃答 122，**一段都没有活下来**。
+
+| 参数 | 值 | 理由 |
+|---|---|---|
+| `limit` | **120** | 采样是分层的，MR/TR 一定入选；足够读文本 |
+| `ablation_runs` | **1** | 两侧共享答案缓存，第二 run 只重放缓存（workflow 已实测记录） |
+| `temperature` | `0` | 确定性，读数可比 |
+| `cortex_memory_prompt_contract` | `abstention-evidence-blocks` | §12.5 的唯一变量，保持不变 |
+
+### 59.4 这次跑要验收的是名册，不是精度
+
+§57 修好了 `featureAnswers → questions` 的链路，但**从未在任何实跑里见过它的产物**：
+§12.5 的产物 `questions` 缺席（本轮复核确认：顶层键里没有 `questions`）。
+
+所以本轮的验收判据是**两项**，且第一项先于第二项：
+
+1. **链路**：产物里 **`questions` 存在且长度 = 样本题数**（120）。
+   若缺席，说明 §57 的修复没有生效到这条路径 —— 那本身就是发现，且优先于任何文本结论。
+2. **读数**：从名册里按 `capability` 过滤 MR/TR，统计
+   **判定为弃答的题数**与**其答案文本**，与 `featureMetrics.perCapability`
+   的 `abstained` 对齐。
+
+**注意一项仍未做**：`PATH` 顺序未修（§4g.1 已记录，刻意留待重烧镜像）。
