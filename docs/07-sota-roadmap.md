@@ -1949,3 +1949,49 @@ fixture 教训：第一版只设 `valueFunction` 致 **5 条假失败** ——
 **下一步**：P0 = 把 `lastRawOutput` **接进 `QuestionRecord`**（缺的是与 §57 同形的接线）；
 P1 = 按三分法读 MR/TR 原文；P2/P3 不变。
 **`PATH` 顺序仍未修**（§4g.1，刻意留待重烧镜像）。
+### 4.1.19 原文接进名册：载体完整，三次传输与两段死代码
+
+§4.1.18 把 P0 定为「把 `lastRawOutput` 接进 `QuestionRecord`」。本轮接完。
+
+**唯一的架构约束**：`lastRawOutput()` 只有**一个槽**，而名册在**全部题跑完后**
+才组装。所以在那里读槽会把**最后一题的措辞写给每一条记录**。
+捕获必须发生在**答案产生的地方** —— 问答循环内。
+
+**捕获点**：`runBenchmark` 新增**尾参**钩子，在每次迭代**末尾**、
+`answers.push` **之后**、**七个路由分支之外**调用。
+
+| 选择 | 理由 |
+|---|---|
+| 在分支之外 | 七个分支 = 七次忘记一个的机会；路由不是本钩子要测的 |
+| **尾参**而非改返回类型 | `benchmark.test.ts` 单文件十处依赖 `Answer[]` |
+| 缺席 = 出厂行为 | 不传时**逐字节不变** |
+| **不吞访问器异常** | **与 `abstentionReasonsOf` 相反**：那里端点已测完，丢普查胜过丢臂；这里捕获**就是测量本身**，静默失败与正常机器弃答**不可区分** |
+
+**三次传输**：`ScoredEvaluation.rawOutputs` → `AblationResult.featureRawOutputs`
+→ `QuestionRecord.rawOutput`。**只捕获 feature 一侧**（它才是解释损失的那一侧），
+并保持与 `featureAnswers`/`featureCorrect` **同序**。
+
+**两段死代码被覆盖率门禁找出并删除**：首次实现用
+`...(x === undefined ? {} : {...})` 展开，门禁报 `ablation.ts:223` 与
+`bench-memory-arm.ts:814` 两处新缺口。追溯发现两侧 `undefined` **都不可达** ——
+`runAblation` 是 `AblationResult` 的**唯一生产者**且**无条件**请求捕获。
+那是**读起来像安全网的死代码**，且会把**失败的捕获**归档成**模型从未被咨询**，
+与 §4.1.18 一处同形。**处理是删掉分支**（`!` 断言 + 注释），**不是导出它以便测试**。
+
+**一处被 census gate 抓住的多余导出**：`BenchmarkRawOutputCallback`
+报 `1 NEW orphan(s)`。它唯一调用方是本模块循环，而对外暴露的是**布尔开关**
+而非 sink，故**删掉 `export`**（`BenchmarkProgressCallback` 保留导出，
+因为另外两个模块的选项类型真的在用它）。
+
+**十三次测试先写**：7 条钉循环内（顺序 / **每题自己的值** / `null` 非 `''` /
+解释完整 / 省略钩子答案不变 / **异常向上抛** / 同序），
+6 条钉名册层（含 **`new Set(raw).size === 3`** —— 槽式实现会报三次最后一题）。
+
+**验收**：`pnpm check` exit 0；`cortex-eval` **1686 passed**；
+全量 **2287 passed (100 files)**；覆盖率 100 / 99.95 / 100 / 100，
+`ablation.ts`/`bench-memory-arm.ts`/`benchmark.ts`/`metrics.ts` **四维 100**；
+提交 `40afd1d`（Lambertyan），推送 `bcf66463`，294 blobs 逐字节一致。
+
+**下一步**：P0 载体已完整（名册 §4.1.18 + 原文本轮），
+下一轮分派采样跑读 **MR/TR 的 `rawOutput`**，按三分法（裸 token / 带标签 / 带解释）分类。
+**`PATH` 顺序仍未修**（§4g.1，刻意留待重烧镜像）。
