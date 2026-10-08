@@ -2058,3 +2058,68 @@ P1 = 按三分法读 MR/TR 原文；P2/P3 不变。
 | `cortex-node` | 17 passed (1 file)，100 / 98.61 / 100 / 100 |
 | `tools/__tests__` | 273 passed，1 skipped |
 | 提交 / 推送 | `5af6385` / `6b787d83`，296 blobs 逐字节一致 |
+
+
+### 4.1.21 §61.10 的 P0 读数落地：模型全量弃答得到证实，实验变量只覆盖 17 题（2026-10-09）
+
+#### 读数
+
+`bcf66463`（`limit=120`、`ablation_runs=1`）的产物是本项目第一份**同时带完整名册与模型原文**的产物。按 §60.2 三分法分类：
+
+| capability | baseline | feature | `bare` | `other` |
+| --- | --- | --- | --- | --- |
+| MR | 13/17 | **0/17** | 16 | 1 |
+| TR | 15/17 | **0/17** | 17 | 0 |
+| IE | 0/52 | 0/52 | 52 | 0 |
+| KU | 0/17 | 0/17 | 14 | 3 |
+| ABS | 17/17 | 17/17 | 17 | 0 |
+| **合计** | **45/120** | **17/120** | **116** | **4** |
+
+`discordant = {b+f-: 28, b-f+: 0}`；`abstentionReasons = {empty: 0, threshold: 0, llm: 17, answered: 0}`。
+
+#### §60.2 的三分法被判决：只出现第一种
+
+116 题裸 `INSUFFICIENT_EVIDENCE` 且 `answer = null` **完全重合**；4 题输出文本且 `answer = 值` **完全重合**。**`parseAnswer` 忠实，带标签/解释两种形态一次未现。**
+
+**这推翻了 §61.10 的 P1 前提**——原文写的是"若『带解释』占多数则测指令强度"，而真相是 **96.7% 裸 token**，契约被完美执行。
+
+#### 三个假设的实测排除
+
+| 假设 | 判据 | 结论 |
+| --- | --- | --- |
+| 闸门拒绝 | `#lastRawOutput` 只在模型调用后写入，而 120 条全部非 null → 模型被咨询 120 次 | 排除 |
+| 证据未进 prompt | 用产物精确 gate 配置实测：MR prompt 逐字带两个 turn | 排除 |
+| 解析丢内容 | 裸 sentinel ↔ null 完全重合 | 排除 |
+
+三个都排除后，剩下的**不是缺陷，是覆盖面**。
+
+#### 真正的问题：单变量只落在 17 题上
+
+`memory.ts` 的替换条件是 `contract === 'abstention' && promptContract !== undefined`；`runBenchmark` 只为 `capability === 'ABS'` 分派 `answerAbstention`。**§12.5 的单变量只作用于 120 题里的 17 题 ABS——而 ABS gold 就是弃答。**
+
+六个路线里只有一条被替换：`abstention`（17 题）。`knowledge-update` / `temporal` / session / `assistant` / `extractive` 全部未替换，合计 103 题。
+
+**28 题损失全在 MR/TR/IE/KU，四个都不含该渲染。所以 `b−f+ = 0` 不是关于这个变量的证据，注册文档不能被读成"变量已被检验"。**
+
+#### 交付
+
+`packages/cortex-memory/src/__tests__/prompt-contract-reach.test.ts`，10 条：
+
+1. 六条**逐路线驱动并读 prompt**，证明只有 abstention 拿到替换渲染——行为断言而非注释，因为该性质跨两个包的两个文件且互不提及。
+2. 两条单变量性：两份 abstention contract 的**指令块逐字节相同**，只差证据渲染（`[id]` 溯源）。
+3. 一条 `PROMPT_CONTRACTS` 成员性。
+4. 一条形态自检，防止 id 格式变化让路线测试"因匹配不到任何东西"而全过。
+
+**修掉两个自身缺陷：** (a) 首版比对 `TURNS[0].id` 与 prompt id，但 `answerAbstention` 经 `admitTurns` 从文本重建 memory，id 是新生成的——**正确实现反而失败**，改为按形态匹配；(b) `LLM` 需 `completeStructured`，**vitest 通过但 typecheck 失败**。
+
+#### 下一步判据
+
+| 优先级 | 项 | 依据 |
+| --- | --- | --- |
+| **P0** | 把证据渲染覆盖面扩到含 MR/TR 的路线，或在注册里显式声明可达集只有 ABS | 当前 28 题损失所在能力一个都没覆盖 |
+| P1 | IE 0/52、KU 0/17 在 baseline 也是 0——**基线自身缺口**，与 memory arm 无关 | §4.1.21 读数表 |
+| P2 | `turns`/`grounded` 在名册里是硬编码常量；B7 若需要须从 trace 侧补真通道 | `bench-memory-arm.ts` 明示 |
+
+#### 验收
+
+`pnpm check` exit 0；cortex-memory **204 passed**（+10）100/100/100/100；cortex-eval 1686 passed 100/99.95/100/100；cortex-core 252 passed 100/100/100/100；提交 `92360c2` → 推送 `6daab1fc`，299 blobs 逐字节一致。

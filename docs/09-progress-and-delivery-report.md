@@ -11785,3 +11785,114 @@ violations:     []
 | 推送 | `6b787d83`，**296 blobs 逐字节一致** |
 
 同时修掉一个**发现即修**的盲区：`docs/OPS-SHELL-INTERPOLATION.md` 此前**未被 `docs/README.md` 索引**，只能靠文件名去猜。已补入索引行。
+
+
+## 63. §61.10 的 P0 读数：模型全量弃答得到证实，而实验变量只覆盖了 17 题
+
+### 63.1 载体到位后的第一次真实读数
+
+`cortex-docs` 的 §57–§61 用四个章节把载体补齐：名册（§57）、名册字段（§58 撤回）、原文捕获（§60）、原文接进名册（§61）。本轮拿到 `bcf66463`（`limit=120`、`ablation_runs=1`）的产物，**第一次能按 §60.2 的三分法读出模型到底做了什么**。
+
+`tools/classify-raw-outputs.py` 的输出（新增工具，27 条测试）：
+
+| capability | 题数 | `bare` | `other` |
+| --- | --- | --- | --- |
+| ABS | 17 | **17（100%）** | 0 |
+| IE | 52 | **52（100%）** | 0 |
+| KU | 17 | 14（82.4%） | 3（17.6%） |
+| MR | 17 | 16（94.1%） | 1（5.9%） |
+| TR | 17 | **17（100%）** | 0 |
+| **合计** | **120** | **116（96.7%）** | **4（3.3%）** |
+
+### 63.2 §60.2 的三分法被读数判决：只出现第一种
+
+§60.2 定义了三种模型行为都塌缩成 `null`：裸 token、带标签 token、解释后跟 token。**读数只出现第一种**：
+
+- **116 题输出裸 `INSUFFICIENT_EVIDENCE`，且全部 `answer = null`**（100% 一致）
+- **4 题输出了真实文本，且全部 `answer = 值`**（100% 一致）
+
+**`parseAnswer` 完全忠实。** 带标签与"解释后跟 token"这两种形态**一次都没出现**。
+
+**这推翻了 §61.10 里 P1 的前提。** §61.10 写的是「若『带解释』占多数 → 测指令强度」。真相是 **96.7% 是裸 token**——模型一个多余的字都没说，契约被完美执行。
+
+### 63.3 三个假设被逐一实测排除，而不是论证排除
+
+产物读出的关键事实：
+
+| 事实 | 值 |
+| --- | --- |
+| 名册记录数 | 120 |
+| `rawOutput` 非 null 的记录 | **120** |
+| 裸 sentinel | 116 |
+| `answer = null` | 116（与裸 sentinel 完全重合） |
+| `abstentionReasons` | `{empty: 0, threshold: 0, llm: 17, answered: 0}` |
+| `discordant` | `{baselineCorrectFeatureIncorrect: 28, baselineIncorrectFeatureCorrect: 0}` |
+
+由此导出三条，每条都做了隔离测量（探针跑完即删，结论转成正式测试）：
+
+1. **闸门没有拒绝。** `#lastRawOutput` 只在 `#llm.complete` 返回后写入，而 120 条记录全部非 null → **模型被咨询了 120 次** → `#admit` 返回了非空 120 次。一个"什么都不准入"的闸门会在模型调用之前 return。
+2. **证据确实进了 prompt。** 用产物里的精确 gate 配置（`threshold: 0, retrievalThreshold: 0, sessionBudget: ∞, sourceTrust: 0.5`）加 `promptContract: 'abstention-evidence-blocks'`，喂真实形态的证据：MR prompt 逐字携带两个 turn，temporal prompt 同时带日期与证据，abstention prompt 带上其 context。
+3. **解析层没有丢东西。** 见 63.2。
+
+**三个假设全部排除后，剩下的不是缺陷，是实验的覆盖面问题。**
+
+### 63.4 真正的问题：§12.5 的单变量只落在 17 题上
+
+`memory.ts` 的替换条件是一行：
+
+```ts
+const resolved =
+  contract === 'abstention' && this.#options.promptContract !== undefined
+    ? this.#options.promptContract
+    : contract;
+```
+
+而 `runBenchmark` 只为 `capability === 'ABS'` 分派 `answerAbstention`。
+
+**所以 §12.5 的"单变量" `abstention-evidence-blocks` 只作用于 120 题里的 17 题 ABS——而 ABS 的 gold 就是弃答。**
+
+| 路线 | contract | 是否被替换 | 本轮题数 |
+| --- | --- | --- | --- |
+| `answerAbstention` | `abstention` | **是** | 17 |
+| `answerKnowledgeUpdate` | `knowledge-update` | 否 | 17 |
+| `answerTemporal` | `temporal` | 否 | 17 |
+| `answerSessions` | 经 `buildSessionPrompt` | 否 | 17 |
+| `answerAssistant` | `assistant` | 否 | 17 |
+| `answer`（flat） | `extractive` | 否 | 35 |
+
+**28 题的损失全在 MR/TR/IE/KU 上，而它们四个都不含这个实验安装的渲染。**
+
+**所以本轮的 `b−f+ = 0` 不是关于这个变量的证据**，注册文档不能被读成"该变量已被检验"。变量被装在了**弃答是正确答案**的那些题上。
+
+### 63.5 交付
+
+`packages/cortex-memory/src/__tests__/prompt-contract-reach.test.ts`（**10 条测试**）：
+
+- 六条覆盖面：**六条路线逐条驱动并读 prompt**，证明只有 abstention 路线拿到替换后的渲染。这是行为断言而非注释，因为该性质跨两个包的两个文件，且**互不提及**。一个断言 `'abstention-evidence-blocks'` 字符串存在的测试会在坏代码上通过——名字在源码里，无论对错。
+- 两条单变量性：两个 abstention contract 的**指令块逐字节相同**，只有证据渲染不同（`[id]` 溯源标记）。这是让比较**可归因**的前提。
+- 一条 `PROMPT_CONTRACTS` 成员性：用产品自己的列表校验，否则测的是一个不可达状态。
+- 一条形态自检：把路线级形态检查绑到产生它的渲染器上，使 id 格式变化不会让所有路线测试"因匹配不到任何东西"而全部通过。
+
+**测试中修掉的两个自身缺陷**（都由测试自己抓到）：
+1. 首版比较 `TURNS[0].id` 与 prompt 里的 id——但 `answerAbstention` 经 `admitTurns` 从**文本**重建 memory，**id 是新生成的**。正确的实现反而失败。改为按**形态**匹配（`/^\d+\. \[[0-9a-f-]{36}\] /m`）。
+2. `LLM` 需要 `completeStructured`；vitest 通过但 **typecheck 失败**——正是 typecheck 存在的理由。
+
+### 63.6 验收
+
+| 项 | 结果 |
+| --- | --- |
+| `pnpm check` | **exit 0** |
+| `cortex-memory` | **204 passed**（+10），100 / 100 / 100 / 100 |
+| `cortex-eval` | 1686 passed (63 files)，100 / 99.95 / 100 / 100 |
+| `cortex-core` | 252 passed，100 / 100 / 100 / 100 |
+| `cortex-llm` / `cortex-node` | 138 / 17 passed |
+| 提交 / 推送 | `92360c2` / `6daab1fc`，**299 blobs 逐字节一致** |
+
+### 63.7 下一步（判据已由本轮读数确定）
+
+| 优先级 | 项 | 依据 |
+| --- | --- | --- |
+| **P0** | 把证据渲染的覆盖面从「只 ABС」扩到「含 MR/TR」的路线，**或**在注册里明确声明该变量的可达集只有 ABС | 63.4：当前 28 题损失所在的能力一个都没覆盖 |
+| P1 | 32 题 IE/KU 在 baseline 也是 0/52、0/17——这两个能力的失败与 memory arm 无关，是**基线自身的缺口** | §63.1 表：baseline IE 0/52、KU 0/17 |
+| P2 | `turns` / `grounded` 在名册里是硬编码常量（`bench-memory-arm.ts` 明示"genuinely cannot report"）。若 B7 需要它们，须从 trace 侧补一条真通道 | §63.2 探针 1 的第 6 条断言 |
+| P3 | `PATH` 顺序未修（§4g.1 已记录，刻意留待重烧镜像） | 已记录 |
