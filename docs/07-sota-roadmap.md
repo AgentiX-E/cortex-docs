@@ -2394,3 +2394,77 @@ CortexMemory.#recordEvidence        （产品侧单点记录，三处 prompt 构
 | P1 | IE 0/52、KU 0/17 在 baseline 也是 0——**基线自身缺口** |
 | P2 | `grounded` 仍硬编码 `false`（需上游分类器）；`turns` 本轮已变为测量 |
 | P3 | `PATH` 顺序未修（§4g.1 已记录，留待重烧镜像） |
+
+### 4.1.25 运行死在测量中途 —— 于是测量本身被销毁
+
+§4.1.24 把证据向量接成测量后派发 §13.11（run `37942775447`）。**运行失败了**，产物里**只有 `benchmark-error.log`**，内存 arm 的 json / md **都不存在**。
+
+`TypeError: terminated`（`Fetch.onAborted`，TLS socket 关闭），死在 `reference-pipeline run=2 q=157/500`。**500 题里已答完 156 题**，这些答案连同新捕获的证据向量一起消失。
+
+#### 为什么"再派发一次"在修好之前不诚实
+
+§4.2 的 stopping rule 已经预见基础设施失败并预先承诺重派发：
+
+> *If the first dispatch fails for an infrastructure reason (quota, network, artifact loss), it is re-dispatched with the reason recorded.* **A failure is not a result.**
+
+`terminated` 正是基础设施原因，所以重派发**不需要新的判断**。**但这一次的失败销毁了测量**。不修就再派发，第二次失败会以完全相同的方式再销毁一次，§13.11 的两条预测将押在网络的运气上。
+
+#### 缺陷本体：保住了最便宜的东西，丢了唯一被测量的东西
+
+`bench/run-ablation.ts` 只在 `runCortexMemoryArm` **返回后**写报告，而 arm **只在成功时返回**。失败时写报告的代码**从未执行**。同一次运行里被保住的是 **embedding cache**——最便宜、完全确定性、**已经付过钱**的东西；丢掉的是 **answers**——**唯一在被测量的东西**，重新获得的唯一方式是重跑，而重跑需要网络先同意活到 500/500。
+
+**这是把优先级搞反了。** 与 §52.6 同形（值到达 JSON 却到不了 Markdown），但**这次是两者都到不了**——同一个传递链末端未承载值的形状，发生在更早的一跳。
+
+#### 排除错误诊断方向：重试配置是对的
+
+LLM adapter 的 `maxRetries: 5` / `baseDelayMs: 1000` / `timeoutMs: 60000` / `retryBudgetMs: 120_000` 与 `isRetryableStatus`（429 与 >=500）**都正确**。但 **`retryBudgetMs` 是重试序列的墙钟上限，且在每次 sleep 之前检查**——退避花完 120s 后下一个重试不再进行。`Fetch.onAborted` 的连接层掐断在长退避下必然撞上这堵墙。
+
+**所以调大 budget 只是把同一堵墙推远。** 结论是：**任何单次运行都可能死，所以运行必须能在死的时候留下读数。**
+
+#### 修法：TDD 一次失败的空洞测试
+
+按既往教训，新测试**第一版就通过**是危险信号。第一版用 `Object.hasOwn(error, 'partial')` → **5/5 通过**，`attachPartial` 还没写时该断言**恒为 false**，**空洞**。改写为断言 `error.partial` 的五个字段实际值 → **6 failed（红灯）**，红灯之后才实现。
+
+| 层 | 改动 |
+| --- | --- |
+| `benchmark.ts` | 不 export 的 `BenchmarkAnswerCallback`（export 触发 orphan census）；`onAnswer?` 第 7 参；**七个 push 点收敛到单一 `record` helper**，否则总有 push 点漏接线 |
+| `ablation.ts` | `attachPartial`：谓词为 `reached === 0 && baselineAnswers.length === 0` |
+| `types.ts` | `PartialAblation`，**故意不带** `delta` / `pValue` / `perCapability` / aggregate |
+| `bench/run-ablation.ts` | 失败路径写 `benchmark-cortex-memory-partial.json`，打印 `INCOMPLETE, no delta` |
+
+**谓词为什么不是 `reached === 0`**：`reached` 只数**正在运行的那一侧**。feature 侧在第 0 题死亡时 `reached: 0` 而 baseline **完整**。只有两个向量都空才真的没东西可留。一开始写成 `reached === 0`，会**丢弃完整的 baseline 向量**——正是聚合基线最需要的那个。
+
+**为什么不带 `delta`**：它是 `featureAggregate.avg - baselineAggregate.avg`，在同一 index 向量上；一侧缺失时是**对从未配对的数据做有意义的算术**，而 `0/0` 在表格里渲染得和 `0/121` 一样（§12.7）。
+
+**为什么附加到 error 而非返回值**：返回值会假装调用成功，而**调用没有成功**。
+
+#### 两处测试写错、被实现纠正
+
+1. 两条测试用 `dieAt: 0` 却预期附加 partial —— 谓词正确拒绝（确实无物可留）。**实现对、测试错**，改为 `dieAt: 1`。
+2. `record` 一度写成 `answers.push(record(...))` → 双重计数。
+
+#### 验收
+
+`pnpm check` **exit 0**；`cortex-core` 252、`cortex-node` 17、`cortex-llm` 138、`cortex-eval` **1727**（+11 新文件 `partial-ablation.test.ts`）、`cortex-memory` 242；四个包 **100% 四个维度**，`cortex-eval` 100/99.95/100/100，`cortex-node` 98.61 分支为**改动前既有**。`ablation.ts` 由 97.87 回到 **100/100/100/100**。
+
+提交 **`81ef701`** → 推送 **`16520439`**，**303 blobs 逐字节一致**。
+
+#### 先修再派发的理由
+
+注册 §13.11.7 写下：
+
+> *The measurement's durability is repaired **before** re-dispatching rather than after a second loss.*
+
+修好之后，即使死在 499/500，**499 条记录仍然可读**，两条预测**第一次可被检验**。
+
+#### 下一步
+
+| 优先级 | 项 |
+| --- | --- |
+| **P0** | 按 §4.2 重派发 §13.11；判读时**先检查 `partial` 文件是否存在** |
+| **P0** | 两条预测若被否证 → 按 §13.11.4 转 `admission.ts`（**准入门，非呈现变量**） |
+| P1 | IE 0/52、KU 0/17 在 baseline 也是 0——**基线自身缺口** |
+| P2 | `grounded` 仍硬编码 `false`（需上游分类器） |
+| P3 | `PATH` 顺序未修，留待重烧镜像 |
+
+**仍未知道的事**：`turns` 非空只说明证据**存在**，不说明**正确**。正确 turn 是否在其中是**排序**问题，需要本 arm 不携带的 gold-turn 归属信息。

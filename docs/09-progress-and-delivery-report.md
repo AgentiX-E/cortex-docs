@@ -12218,3 +12218,172 @@ CortexMemory.#recordEvidence        （产品侧单点记录，三处 prompt 构
 | P3 | `PATH` 顺序未修（§4g.1 已记录，留待重烧镜像） | 已记录 |
 
 **仍未知道的事**：即使 `turns` 非空，也只能说明证据**存在**，不能说明**正确**。"正确的 turn 是否在其中"是排序问题，需要本 arm 不携带的 gold-turn 归属信息。§13.11 能把候选从"retrieval quality"推进到"**在长度正确上下文内的排序**"，但**不能**单独挑出 ranker。
+
+---
+
+## 67. 一次运行死在测量中途，于是测量本身被销毁了
+
+§66 把证据向量接成了测量，随即派发 §13.11（run `37942775447`，提交 `b4d19c54`）。**这次运行失败了**，而失败的方式暴露出一个与 §52.6 同源、但层次更深的缺陷。本节记录：产物里**没有**什么、为什么没有、以及为什么"再派发一次"在修好之前是**不诚实**的。
+
+### 67.1 产物里只有错误日志
+
+| 期望产物 | 实际 |
+| --- | --- |
+| `benchmark-cortex-memory.json` | **缺失** |
+| `benchmark-cortex-memory.md` | **缺失** |
+| `benchmark-error.log` | 有 |
+
+失败步骤是 `Run cortex-memory A/B`，错误为 `TypeError: terminated`（`Fetch.onAborted`，TLS socket 被关闭），发生位置：
+
+```
+reference-pipeline  run=2  q=157/500  id=a89d7624
+```
+
+**500 题里已经答完 156 题。** 这些答案连同它们新捕获的证据向量，**在进程死亡时一起消失了**。
+
+### 67.2 §4.2 已经预见这件事，所以重派发不是事后选择
+
+预注册 §4.2 的 stopping rule 写得很清楚：
+
+> *If the first dispatch fails for an infrastructure reason (quota, network, artifact loss), it is re-dispatched with the reason recorded.* **A failure is not a result.**
+
+`terminated` 是**基础设施原因**，不是实验读数。所以按注册，重派发是**预承诺的动作**，不需要新的判断。
+
+**但在重派发之前必须修一件事**：这一次的失败**销毁了测量**。若不修，第二次失败会以完全相同的方式再销毁一次，而 §13.11 的两条预测将在**第 N 次**才第一次可读——把实验的成功率押在网络的运气上。
+
+### 67.3 缺陷本体：失败路径持久化了最便宜的东西，丢弃了唯一被测量的东西
+
+`bench/run-ablation.ts` 的结构是：
+
+```
+const result = await runCortexMemoryArm(...)   // 只在成功时返回
+writeFileSync('benchmark-cortex-memory.json', ...)
+```
+
+失败时 `runCortexMemoryArm` **不返回**，于是写报告的代码**从未执行**。
+
+对比同一次运行里**被保住了**的东西：
+
+| 数据 | 是否跨进程存活 | 为什么 |
+| --- | --- | --- |
+| embedding cache | **存活**（落盘） | 最便宜、完全确定性、且**已经付过钱** |
+| answers + 证据向量 | **丢失** | 进程内 `Map`，随进程死亡 |
+
+**这是把优先级搞反了。** 缓存里的东西重新获得只需再花一次钱；答案里的东西**重新获得只能靠重跑，而重跑需要网络先同意活到 500/500**。
+
+**与 §52.6 的关系**：那里是值到达了 JSON 却到不了 Markdown；这里是值**两者都到不了**。同一个形状——**值在传递链的末端发现没有被承载**——只是这次发生在更早的一跳。
+
+### 67.4 transport retry 配置是对的，所以问题不在重试
+
+值得先排除一个错误的诊断方向。LLM adapter 的重试配置**完全正确**：
+
+| 参数 | 值 |
+| --- | --- |
+| `maxRetries` | 5 |
+| `baseDelayMs` | 1000 |
+| `timeoutMs` | 60000 |
+| `retryBudgetMs` | 120_000 |
+
+`isRetryableStatus` 重试 429 与 >=500，抛出的传输错误也被捕获并重试。
+
+**但 `retryBudgetMs` 是重试序列的墙钟上限，且在每次 sleep 之前检查。** 退避把 120s 花完之后，下一个重试不再进行，错误重新抛出。`Fetch.onAborted` 的 TLS socket 关闭在长退避下**必然**撞上这个上限。
+
+**所以这不是"重试没配够"**。把 budget 调大只是把同一堵墙推远——`terminated` 不是瞬时的 5xx，它是连接层被掐断，重试会一直撞。真正的结论是：**任何单次运行都可能死，所以运行必须能在死的时候留下读数。**
+
+### 67.5 TDD：先写一次失败的空洞测试，再把它改成真的
+
+按既往教训（§57 同形问题），新测试**第一版就通过**是危险信号。第一版用 `Object.hasOwn(error, 'partial')` 断言，结果 **5/5 通过**——因为 `attachPartial` 还没写，`Object.hasOwn` 对任何 error 恒为 `false`，**断言是空洞的**。
+
+改写为断言**实际交付机制**：`error.partial` 的 `featureAnswers` / `reached` / `total` / `system` / `run` 五个字段的实际值。立刻 **6 failed（红灯）**。红灯之后才实现。
+
+### 67.6 实现：一个 sink，一个 helper，一条附着规则
+
+**（1）answers 走 sink 出去**（`benchmark.ts`）——新增不 export 的 `type BenchmarkAnswerCallback = (answer: Answer) => void;`（export 会触发 orphan census 门禁），`runBenchmark` 第 7 参数 `onAnswer?`，`evaluateWithScorerDetailed` 第 8 参数透传。
+
+**七个 push 点收敛到单一 helper**，否则总有一个 push 点会被漏掉接线：
+
+```ts
+const record = (answer: Answer): Answer => {
+  answers.push(answer);
+  onAnswer?.(answer);
+  return answer;
+};
+```
+
+**（2）ablation 在抛之前把已答的答案附到 error 上**（`ablation.ts`）：
+
+```ts
+function attachPartial(error: unknown, partial: PartialAblation): unknown {
+  if (partial.reached === 0 && partial.baselineAnswers.length === 0) return error;
+  if (error !== null && typeof error === 'object') {
+    (error as { partial?: PartialAblation }).partial = partial;
+  }
+  return error;
+}
+```
+
+**谓词不是 `reached === 0`。** 这是个容易写错的地方：`reached` 只数**正在运行的那一侧**，所以 feature 侧在第 0 题死亡时 `reached: 0`，而 baseline 侧是**完整的**。只有**两个向量都空**才真的没有东西可留。
+
+**（3）类型**（`types.ts`）新增 `PartialAblation`，**故意不携带** `delta` / `pValue` / `perCapability` / aggregate：
+
+```ts
+export type PartialAblation = {
+  system: string;
+  reached: number;
+  total: number;
+  run: number;
+  baselineAnswers: Answer[];
+  featureAnswers: Answer[];
+};
+```
+
+**为什么附加到 error 而不是作为返回值**：返回值会假装调用成功，而**调用没有成功**。`delta` 更不能带——它是 `featureAggregate.avg - baselineAggregate.avg`，在同一 index 向量上；一侧缺失时它是**对从未配对的数据做有意义的算术**，而 `0/0` 在表格里渲染得和 `0/121` 一模一样（§12.7 已记录过这个渲染陷阱）。
+
+**（4）失败路径落盘**（`bench/run-ablation.ts`）：新增写 `benchmark-cortex-memory-partial.json`，控制台明确打印 **`INCOMPLETE, no delta`**。
+
+### 67.7 两处测试写错、被实现纠正
+
+**（1）两条测试用 `dyingSystem(..., [], 0)`**（第 0 题死亡），预期附加 partial，但谓词正确地拒绝了：`reached === 0` 且 baseline 空，**确实没有东西可留**。**这是实现对、测试错**。改为 `dieAt: 1` 并补断言 `partial.featureAnswers` 的实际内容。
+
+**（2）`attachPartial` 谓词一度是 `reached === 0`**：这会**丢弃完整的 baseline 向量**——正是聚合基线时最需要的那个。改为 `reached === 0 && baselineAnswers.length === 0`，并补测试 `baseline 侧死亡时 feature 向量仍被保留`。
+
+**（3）`record` 一度被写成 `answers.push(record(...))`**，而 `record` 内部也 push → 双重计数。改为直接 `record(...)`。
+
+### 67.8 一次真实类型的 `exactOptionalPropertyTypes` 拦阻
+
+`pnpm check` 第一次 exit 1，报 `featureRetrievedContexts` 类型不符：`(string|null)[] | undefined` 不能赋给 `(string|null)[]`。这是 `exactOptionalPropertyTypes: true` 在**阻止把 `undefined` 悄悄写进一个可选字段**——正是这个项目的门禁该做的事。以 `featFirst.retrievedContexts!` 表达"这里已由上面的分支保证存在"。
+
+### 67.9 验收
+
+| 项 | 结果 |
+| --- | --- |
+| `pnpm check` | **exit 0** |
+| `cortex-core` | **252 passed**，**100/100/100/100** |
+| `cortex-node` | **17 passed**，100/98.61/100/100（98.61 为**改动前既有**） |
+| `cortex-llm` | **138 passed**，**100/100/100/100** |
+| `cortex-eval` | **1727 passed**（+11，新文件 `partial-ablation.test.ts`），**100/99.95/100/100** |
+| `cortex-memory` | **242 passed**，**100/100/100/100** |
+
+`ablation.ts` 单文件覆盖率由 97.87 回到 **100 / 100 / 100 / 100**。
+
+**提交 `81ef701`**（6 files changed, 606 insertions, 31 deletions），推送 **`16520439`**，**303 blobs 逐字节一致**。
+
+### 67.10 为什么先修再派发
+
+注册 §13.11.7 写下这句话：
+
+> *The measurement's durability is repaired **before** re-dispatching rather than after a second loss.*
+
+如果先派发、又失败，我们会在**同一件事上失败第二次**，并把 §13.11 的判读无限期推后。修好之后，即使运行死在 499/500，**499 条记录仍然可读**，两条预测**第一次可被检验**。
+
+### 67.11 后续
+
+| 优先级 | 项 | 依据 |
+| --- | --- | --- |
+| **P0** | 按 §4.2 重新派发 §13.11；判读时**先检查 `partial` 文件是否存在** | §67.2 |
+| **P0** | 若 §13.11 两条预测被否证 → 按 §13.11.4 转 `admission.ts`（**准入门，非呈现变量**） | §66.6 |
+| P1 | IE 0/52、KU 0/17 在 baseline 也是 0——**基线自身缺口** | §63.1 |
+| P2 | `grounded` 仍硬编码 `false`（需上游分类器） | `bench-memory-arm.ts` |
+| P3 | `PATH` 顺序未修，留待重烧镜像 | §4g.1 |
+
+**仍未知道的事**：`turns` 非空只说明证据**存在**，不说明**正确**。"正确的 turn 是否在其中"是**排序**问题，需要本 arm 不携带的 gold-turn 归属信息。
