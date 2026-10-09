@@ -11998,3 +11998,114 @@ const resolved =
 | P1 | IE 0/52、KU 0/17 在 baseline 也是 0——**基线自身缺口**，与 memory arm 无关 | §63.1 表 |
 | P2 | `turns` / `grounded` 在名册里是硬编码常量；B7 若需要须从 trace 侧补真通道 | `bench-memory-arm.ts` 明示 |
 | P3 | `PATH` 顺序未修（§4g.1 已记录，刻意留待重烧镜像） | 已记录 |
+
+## 65. §64.7 的读数判决：渲染假设死亡；把「提问（ask）」作为第二条轴寻址，并在测量之前先注册
+
+### 65.1 一句话结论
+
+**渲染线退役。** `cortex_memory_prompt_contract=abstention-evidence-blocks` 的渲染**确实送达了全部六条路线**（产物 `renderingRoutes` 逐条列出），而 MR 仍 0/17、TR 仍 0/17，`b-f+ = 0`。所以"更清晰的证据呈现"不是瓶颈——**证据已经到达模型，改变它的呈现方式没有改变模型用它做什么**。
+
+**紧接着把「提问」作为独立第二条轴落地。** 新增 `EvidenceAsk = 'route' | 'extractive'`，与「渲染」在类型与解析上都分开，并已按 §13 在**写代码之前**完成注册与否证条件登记。
+
+### 65.2 读数：`37827496757`
+
+| 项 | 值 |
+| --- | --- |
+| 运行 | `37827496757`，`completed success` |
+| 产物 `renderingRoutes` | **六条路线全部**（`abstention` / `multi-session` / `temporal` / `knowledge-update` / `assistant` / `flat`） |
+| MR | 14/17 → **0/17** |
+| TR | 15/17 → **0/17** |
+| `b-f+` | **0**（每一 capability） |
+| `delta` | **-0.2417** |
+| 总计 | 46 → **17** |
+
+**混淆项全部实测排除**（这一条比结论本身重要）：
+
+1. `retrievalThreshold = 0`——检索门未把关，证据不会被拦在门外。
+2. MR 17/17、TR 17/17 的 `rawOutput` **均非 null**——模型确实产出了文本，不是空返回。
+3. 输出分布：**116/120 被裸 `INSUFFICIENT_EVIDENCE`**，4 题 engage 但答错。
+
+第 3 条是判决的关键：**模型不是"没看到证据"，是看到了仍然选择弃答**。渲染无法修复一个"看到了却不回答"的模型。
+
+### 65.3 判决：渲染假设死亡，ask 成为剩余候选
+
+§64.7 的预测死掉了，而它的死法给出了下一步：
+
+- 该臂弃答率 **95.83%**（ablation block 内读数），reference pipeline 在**同样证据**上弃答率 **63.33%**。
+- 33 个百分点的差距**不在证据的可读性里**，它在**指令块向模型提的要求**里：本臂的弃答路线指令块把弃答称为"expected and is a valid outcome"。
+
+> 注：`benchmark-report.json` 主文件里 baseline 弃答率为 0，那是**另一条臂**的读数，与 ablation block 的 0.6333 不是同一个数。两个数字都正确，来源不同，此处显式标注以免后续误读。
+
+**渲染不删除。** 它是可用特性、已被正确寻址，且是 `RENDERING_BY_CONTRACT` 存在的理由；后续实验可以把它与不同的 ask 配对。**退役的只是"它单独就能修复 MR/TR"这个主张。**
+
+### 65.4 实现：ask 是第二条轴，不是第九个契约
+
+`EvidenceAsk = 'route' | 'extractive'`，作为**独立 prompt option** 新增，而不是新的 `PromptContract`。
+
+| | 渲染（第一条轴） | 提问（第二条轴） |
+| --- | --- | --- |
+| 类型 | `EvidenceRendering = 'numbered' \| 'sourced'` | `EvidenceAsk = 'route' \| 'extractive'` |
+| 选择什么 | **呈现方式** | **指令块** |
+| 旋钮 | `promptContract` → `RENDERING_BY_CONTRACT` | `ask` → 直接取值 |
+| 环境变量 | `CORTEX_MEMORY_PROMPT_CONTRACT` | `CORTEX_MEMORY_ASK` |
+| 产物字段 | `renderingRoutes` | `ask` + `askRoutes` |
+
+**为什么不能合并进契约表**：契约同时"命名一个指令块"又"是既有旋钮"，再加第九个契约会让 ask 看起来像渲染选择、渲染看起来像 ask 选择——这正是 §12.9 用四条修正记录下来的混淆。§13.2 要求两轴独立移动，ask 实验**必须把渲染固定在 dispatch 指定的值上**。
+
+**`instructionsFor` 是唯一解析点**，由每个 builder 调用，理由与 `#promptOptions` 单点解析渲染相同：**逐 builder 重复的解析是可以在路线之间互相分歧的解析**，而"可达性报告"届时描述的将是 dispatcher 而不是 prompt。
+
+**`extractive` 刻意不接收 date 参数**：它的块没有相对时间行，传 date 会静默恢复 TR 自己的 ask——而 TR 正是这个实验最可能被派发的路线，在那里静默回退会**测量已发布行为并把它当作治疗**。
+
+### 65.5 可达性是记录的，不是假设的
+
+**§13 的陷阱**：MR 自己的 ask **本来就是 `extractive`**（`buildSessionPrompt` 硬编码），flat 路线也是。所以 `ask: 'extractive'` 在**这两条路线上是逐字节 no-op**。
+
+一个只报"名字"的运行，会读成"MR 接受了一个它从未接受的处置"——**这正是 `bcf66463` 的缺陷，换了一条新轴**。所以 `ASK_ROUTES` 承载可达集，产物以 `askRoutes` 承载它，并按三态渲染（与 `renderingRoutes` 完全一致）：
+
+| 状态 | 渲染 |
+| --- | --- |
+| 非空 | `- Evidence ask reached: N route(s) — \`a\`, \`b\`` |
+| 空数组 | `- Evidence ask reached: \`none\`` |
+| 字段缺失 | `- Evidence ask reach: \`not recorded\` (artifact predates the field)` |
+
+**结构上缺 vs 条件窄**在此再次成立：MR 与 flat 的 builder 收 `extractive`，是**自己的 ask 就是它**，所以替换根本无法表达差异——不是"条件太窄"。
+
+### 65.6 §13.5 否证条件（写于任何运行之前）
+
+| 项 | 内容 |
+| --- | --- |
+| 预测 | `MR >= 7/17` 且 `TR >= 8/17` |
+| 否证 | **MR 与 TR 均 < 4/17 且 `b-f+ = 0`** |
+| 已知陷阱 | MR 是预测主体，却在 `extractive` 下不受影响——所以 MR 的移动**不能**归因于 ask |
+| 空白值 | 默认 `route`（这是真实配置，所有此前产物的含义） |
+| 未识别值 | **拒绝**，非默认 |
+
+最后一条是承重的：**一个打错的 ask 若回退到已发布块，会发布一个"MR/TR 未变"的产物，读起来像是"ask 不重要"的证据——正好是否证条件，却是靠打错字而非靠测量到达的。** 拒绝机制保证否证条件**只能**通过测量到达。
+
+### 65.7 验收
+
+| 门禁 | 结果 |
+| --- | --- |
+| `pnpm check` | **exit 0** |
+| `cortex-memory` | **229 passed**（+14 新文件 `evidence-ask-reach.test.ts`），**100 / 100 / 100 / 100** |
+| `cortex-eval` | **1704 passed**（+11），**100 / 100 / 100 / 100**（`report.ts` 与 `bench-memory-arm.ts` 均 100） |
+| `cortex-core` | 252 passed，100 / 100 / 100 / 100 |
+| `cortex-llm` / `cortex-node` | 138 / 17 passed；`cortex-node` 分支 98.61 为**改动前既有**（已实测确认） |
+| 新增 export 门禁 | `ASK_ROUTES` 通过（接入 barrel + arm 投影，**而非加进 baseline**） |
+| 提交 / 推送 | `7afe827` → **`58865a1`**，**300 blobs 逐字节一致** |
+
+**本轮修掉的两个真实缺陷**（均非为凑覆盖率）：
+
+1. `toMemoryArmConfig` 的 `renderingRoutes: RENDERING_ROUTES[...] ?? []` 回退分支**不可达覆盖**——只有手搓 options 能到。补的是"未知契约报 0 可达而非全可达"这条**语义断言**（`bcf66463` 缺陷本身），顺带把该分支覆盖。
+2. `askRoutes` 的同款回退分支，同样用"未知 ask 报 0 可达"锁住。**方向不能反**：声称未接受的处置是缺陷，声称已接受的是缺一张列表——两者不等价，回退必须偏向 `[]`。
+
+### 65.8 后续
+
+| 优先级 | 项 | 依据 |
+| --- | --- | --- |
+| **P0** | 派发 ask 实验（`cortex_memory_ask=extractive`，其余固定），核对 §13.4 预测 / §13.5 否证 | 65.6 |
+| P1 | IE 0/52、KU 0/17 在 baseline 也是 0——**基线自身缺口**，与 memory arm 无关 | §63.1 |
+| P2 | `turns` / `grounded` 硬编码常量；B7 若需要须从 trace 侧补真通道 | `bench-memory-arm.ts` |
+| P3 | `PATH` 顺序未修（§4g.1 已记录，留待重烧镜像） | 已记录 |
+
+**仍未知道的事**：reference pipeline 的优势**究竟是 ask 还是 retrieval**。本实验只动 ask；若 ask 单独就能补上 33 个百分点，retrieval 侧留待后续；若不能，则下一个候选就是 retrieval 侧——而 §13.6 已把这一点写下来，以免事后把失败重新叙述成"本来就知道"。

@@ -2206,3 +2206,103 @@ MR 与 TR 都在 0%，且 `b-f+ = 0`，**且产物显示渲染已作用于它们
 | P1 | IE 0/52、KU 0/17 在 baseline 也是 0——**基线自身缺口**，与 memory arm 无关 | §4.1.21 读数表 |
 | P2 | `turns`/`grounded` 在名册里是硬编码常量；B7 若需要须从 trace 侧补真通道 | `bench-memory-arm.ts` 明示 |
 | P3 | `PATH` 顺序未修（§4g.1 已记录，刻意留待重烧镜像） | 镜像重建时一并处理 |
+### 4.1.23 渲染假设死亡，ask 作为第二条轴被寻址并在测量前注册（2026-10-09）
+
+§4.1.22 写下的那句预测——**"至少 MR/TR 之一离开零点，否则渲染假设死亡"**——本轮有了判决：**死亡**。
+
+#### 判决：送达了全部六条路线，仍然零移动
+
+`37827496757`（`6000f5ab`）completed success。其产物 `renderingRoutes` **逐条列出全部六条路线**，即 §4.1.22 修掉的那个"名字 ≠ 治疗"的缺陷**没有复现**——渲染**确实送达了**它被送去的地方。
+
+| 项 | 前 | 后 |
+| --- | --- | --- |
+| MR | 14/17 | **0/17** |
+| TR | 15/17 | **0/17** |
+| `b-f+` | — | **0**（每一 capability） |
+| 总计 | 46 | **17** |
+| `delta` | — | **-0.2417** |
+
+**混淆项必须排除，否则是又一个 `VERDICT-B7-NULL-WITHOUT-ADMINISTRATION`**：
+
+| 混淆项 | 实测 | 结论 |
+| --- | --- | --- |
+| 证据被检索闸门拦下 | `retrievalThreshold = 0` | 排除 |
+| 模型空返回 | MR 17/17、TR 17/17 `rawOutput` 均非 null | 排除 |
+| 模型没 engage | **116/120 裸 `INSUFFICIENT_EVIDENCE`**，4 题 engage 但答错 | **证实的不是混淆，是机制** |
+
+第三条是判决的核心：**模型不是没看到证据，是看到了仍然选择弃答**。渲染无法修复一个"看到了却不回答"的模型。
+
+#### 为什么是 ask：33 个百分点的差距不在可读性里
+
+| 系统 | 同证据下的弃答率 | 来源 |
+| --- | --- | --- |
+| 本臂 | **95.83%** | ablation block |
+| reference pipeline | **63.33%** | ablation block |
+
+> 两个数字都取自 ablation block。主 `benchmark-report.json` 的 baseline 弃答率为 0，那**不是同一个数**——它属于另一条臂。显式标注以免后续误读。
+
+33 个百分点的差距在**指令块向模型提的要求**里：本臂的弃答路线指令块把弃答称为 `expected and is a valid outcome`。
+
+**渲染不删除**：它是可用特性、已被正确寻址，且正是 `RENDERING_BY_CONTRACT` 存在的理由。**退役的只是"它单独就能修复 MR/TR"这个主张。**
+
+#### 实现：第二条轴，与渲染正交
+
+| | 渲染 | 提问（ask） |
+| --- | --- | --- |
+| 类型 | `EvidenceRendering = 'numbered' \| 'sourced'` | `EvidenceAsk = 'route' \| 'extractive'` |
+| 选什么 | **呈现方式** | **指令块** |
+| 翻译点 | `RENDERING_BY_CONTRACT`（契约名 → 渲染） | 直接取值 |
+| 环境变量 | `CORTEX_MEMORY_PROMPT_CONTRACT` | `CORTEX_MEMORY_ASK` |
+| 产物 | `renderingRoutes` | `ask` + `askRoutes` |
+
+**为什么不是第九个 `PromptContract`**：契约同时"命名指令块"又"是既有旋钮"。再加一个契约，会让 ask 看起来像渲染选择、渲染看起来像 ask 选择——正是 §12.9 的四条修正记录下来的混淆。§13.2 要求两轴**独立移动**：ask 实验必须把渲染固定在 dispatch 指定的值上。
+
+**`instructionsFor` 是唯一解析点**，每个 builder 都调用它，理由与 `#promptOptions` 单点解析渲染相同——**逐 builder 重复的解析是可以在路线之间互相分歧的解析**，届时可达性报告描述的将是 dispatcher 而不是 prompt。
+
+**`extractive` 刻意不接收 date**：它的块没有相对时间行，传 date 会**静默恢复 TR 自己的 ask**——而 TR 正是本实验最可能被派发的路线。在那里静默回退，会**测量已发布行为并把它当作治疗**。
+
+#### §13 的陷阱：替换在 MR/flat 上根本无法表达
+
+MR 自己的 ask **本来就是 `extractive`**（`buildSessionPrompt` 硬编码），flat 路线亦然。所以 `ask: 'extractive'` 在**这两条路线上是逐字节 no-op**。
+
+一个只报"名字"的运行，会读成"MR 接受了一个它从未接受的处置"——**`bcf66463` 的缺陷，换了一条新轴**。所以可达性**记录**而非假设，三态渲染与 `renderingRoutes` 完全一致：
+
+| 状态 | 渲染 |
+| --- | --- |
+| 非空 | `- Evidence ask reached: N route(s) — \`a\`, \`b\`` |
+| 空数组 | `- Evidence ask reached: \`none\`` |
+| 字段缺失 | `- Evidence ask reach: \`not recorded\` (artifact predates the field)` |
+
+**结构上缺 vs 条件窄**再次成立：MR/flat 收 `extractive`，是因为**自己的 ask 就是它**——替换**根本无法表达差异**，不是"条件太窄"。
+
+#### §13.4 / §13.5：预测与否证，均写于运行之前
+
+| 项 | 内容 |
+| --- | --- |
+| 预测 | `MR >= 7/17` 且 `TR >= 8/17` |
+| 否证 | **MR 与 TR 均 < 4/17 且 `b-f+ = 0`** |
+| 已知陷阱 | MR 是预测主体，却在 `extractive` 下**不受影响**——MR 的移动**不能**归因于 ask |
+| 空白值 | 默认 `route`（真实配置，所有此前产物的含义） |
+| 未识别值 | **拒绝**，非默认 |
+
+最后一条是承重的：**打错的 ask 若回退到已发布块，会发布一个"MR/TR 未变"的产物，读起来像"ask 不重要"的证据——正好是否证条件，却是靠打错字到达的。** 拒绝机制保证否证条件**只能**通过测量到达。
+
+#### 仍未知道的事（写在前面，以防事后重述）
+
+**reference pipeline 的优势究竟是 ask 还是 retrieval，现在仍不知道。** 本实验只动 ask。若 ask 单独能补上 33 个百分点，retrieval 侧留待后续；若不能，下一个候选即 retrieval 侧。§13.6 已把这一点写下来，**以免事后把失败重新叙述成"本来就知道"**。
+
+#### 验收
+
+`pnpm check` **exit 0**；cortex-memory **229 passed**（+14；新文件 `evidence-ask-reach.test.ts`）**100/100/100/100**；cortex-eval **1704 passed**（+11）**100/100/100/100**（`report.ts` 与 `bench-memory-arm.ts` 均 100）；cortex-core 252 passed 100/100/100/100；cortex-llm 138；cortex-node 17（分支 98.61 为**改动前既有**，已用 `git stash` 实测确认）。`ASK_ROUTES` 通过 export census（**接入 barrel + arm 投影，而非加进 baseline**）。提交 `7afe827` → 推送 **`58865a1`**，**300 blobs 逐字节一致**。
+
+**顺带修掉的两个真实缺陷**：`toMemoryArmConfig` 中 `renderingRoutes` 与 `askRoutes` 的 `?? []` 回退分支不可达覆盖，补的是**语义断言**——"未知契约/未知 ask 报 0 可达，而非全可达"（即 `bcf66463` 缺陷本身）。**方向不能反**：声称未接受的处置是缺陷，声称已接受的是缺一张列表，两者不等价，回退必须偏向 `[]`。
+
+#### 下一步
+
+| 优先级 | 项 |
+| --- | --- |
+| **P0** | 派发 ask 实验（`cortex_memory_ask=extractive`，其余固定），核对 §13.4 预测 / §13.5 否证 |
+| P1 | IE 0/52、KU 0/17 在 baseline 也是 0——**基线自身缺口**，与 memory arm 无关 |
+| P2 | `turns` / `grounded` 硬编码常量；B7 若需要须从 trace 侧补真通道 |
+| P3 | `PATH` 顺序未修（§4g.1 已记录，留待重烧镜像） |
+
