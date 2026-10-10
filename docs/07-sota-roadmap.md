@@ -2468,3 +2468,48 @@ LLM adapter 的 `maxRetries: 5` / `baseDelayMs: 1000` / `timeoutMs: 60000` / `re
 | P3 | `PATH` 顺序未修，留待重烧镜像 |
 
 **仍未知道的事**：`turns` 非空只说明证据**存在**，不说明**正确**。正确 turn 是否在其中是**排序**问题，需要本 arm 不携带的 gold-turn 归属信息。
+
+### 4.1.26 产物契约：把"失败时留下什么"从巧合变成规则
+
+§4.1.25 修好了"失败即销毁测量"的**机制**。但机制之外还有第二个洞：**partial 文件写得出来，却没有任何读取方约定** —— 下次失败，读的人得自己猜有个换了名字的文件。与 §52.6 / §4.1.25 同形：值写了，**传递链末端没有承载它的位置**。
+
+#### 契约本身
+
+`AUDIT-CODE-VS-DOCS.md` 新增 **§6.3.1**。§6.3 原本只要求注册三件事（要打败的点估计、算成功的效应量、停止规则），现在追加第四件 —— **三套产物，第三套不是可选的**：
+
+| 集合 | 文件 | 何时写 |
+| --- | --- | --- |
+| Complete | `benchmark-cortex-memory-ablation-report.{md,json}` | arm 正常返回 |
+| Diagnostic | `benchmark-error.log` | 任何抛出，在栈之后 |
+| **Partial** | `benchmark-cortex-memory-partial.json` | 任何抛出，**且任一侧测量到了东西** |
+
+**为什么原来的遗漏是"违约"而非"意外"**：同一个 `catch` 块内部就有不对称 —— **embedding cache 被持久化了，answers 没有**。缓存最便宜、完全确定性、已经付过钱；answers 是唯一被测量的东西。保留前者、丢弃后者，优先级放反了。
+
+#### partial 故意不带什么
+
+不带 `delta`、不带 aggregate、不带 per-capability 表 —— **省略本身是契约**。它们是双侧在同一 index 向量上的函数，一侧短缺时是对**从未配对的数据**做算术，而 `0/0` 与 `0/121` 在表里渲染得一样（§12.7）。携带的是 `system` / `reached` / `total` / `run` 与两个答案向量 —— **这组信息决定下一步是重派发还是改设计**。
+
+#### 两个曾真实存在的缺陷
+
+1. **"测到过东西"的谓词不是 `reached === 0`**：`reached` 只数正在运行的那一侧，feature 侧在第 0 题死亡时 `reached: 0` 而 baseline **完整**，第一版谓词把完整 baseline 丢掉了。条件为 `reached === 0 && baselineAnswers.length === 0`。
+2. **partial 文件名必须匹配上传 glob**：工作流按**模式**捕获 `benchmark-*.{md,json}`，加第三个名字**无需改工作流**；若当初写显式清单，就会出现"修复生效但产物仍缺失"的运行。
+
+代码侧相关：`BenchmarkAnswerCallback` **故意不 export**（无外部消费者，orphan census 会拒绝）。
+
+#### 读取规则
+
+`PREREGISTRATION-CORTEX-MEMORY-ARM.md` 新增 **§13.11.9**：**先查 partial 是否在，再读 complete**；存在即"**arm 没跑完**"而非"更小的结果"。**但 §13.11.3 两条预测不能从 partial 上判读** —— 它们是关于 MR/TR 相对**全总体**的陈述，截断总体无法否证关于总体的陈述。
+
+#### 验收与下一步
+
+`pnpm check` **exit 0**，纯文档改动（代码零改动），覆盖率同 §4.1.25。提交 **`4c5974d`** → 推送 **`2d7eb9f8`**，**303 blobs 逐字节一致**。
+
+| 优先级 | 项 |
+| --- | --- |
+| **P0** | 读 run `38003036421`：**先查 partial**，再按 §13.11.3 两条预测判读 |
+| **P0** | 两条预测若否证 → 按 §13.11.4 转 `admission.ts`（**准入门，非呈现变量**） |
+| P1 | IE 0/52、KU 0/17 在 baseline 也是 0 —— **基线自身缺口** |
+| P2 | `grounded` 仍硬编码 `false`（需上游分类器） |
+| P3 | `PATH` 顺序未修，留待重烧镜像 |
+
+**run `38003036421` 实时状态（写本节时）**：`Run benchmark` **success**，`Run cortex-memory A/B` **in_progress** —— 已优于上一次（上次是主基准之后那一步死掉）。
