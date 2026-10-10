@@ -12447,3 +12447,118 @@ export type PartialAblation = {
 | P3 | `PATH` 顺序未修，留待重烧镜像 | §4g.1 |
 
 **run `38003036421` 的实时状态（写本节时）**：`Run benchmark` 步骤 **success**，`Run cortex-memory A/B` **in_progress**。已优于上一次 —— 上次是主基准之后的那一步死掉。
+
+---
+
+## 69. 第二次失败不是第一次的重复：测量**完成了**，是被写盘动作销毁的
+
+§68 派发了 §13.11 的重跑（run `38003036421` @ `16520439`）。它**又失败了**。但与 §67 的失败**不是同一个** —— 这个区别是整节的起点，因为对两个不同的失败用同一个诊断，会把修复指向错误的地方。
+
+| | §67（run `37942775447`） | 本次（run `38003036421`） |
+| --- | --- | --- |
+| 死在哪里 | 测量**中途** | 测量**之后**，happy path 的**最后一行** |
+| 产物 | 只有 `benchmark-error.log` | `.md`（5636 B）+ `benchmark-error.log`（312 B） |
+| 测量状态 | **不存在** | **完整** —— 4 runs × 500 题，约 40 分钟 |
+| 丢失的东西 | 本来就没有 | **一份完整的测量** |
+| partial 是否触发 | 是（正确） | **否，而且是正确的** |
+
+### 69.1 机制：`JSON.stringify` 撞上 V8 的字符串上限
+
+```
+RangeError: Invalid string length
+    at JSON.stringify
+    at main (.../bench/run-ablation.ts:273)
+```
+
+V8 的字符串上限是 `2**29 - 24` = **536,870,888 字符**（约 537 MB）。本题做了实测标定，而不是引用道听途说：**401.2 MB 通过、531.6 MB 通过、536000 chunk 抛出**。
+
+Markdown 已经写出、JSON 没有 —— 于是产物**无法区分"测了但写不出"和"根本没测"**。一份四十分钟的测量被一个写盘动作销毁了。
+
+### 69.2 partial 未触发是**正确行为**，不是漏挂
+
+这是本轮最重要的判读修正，也是对 §68.1 契约的**补款**。
+
+`attachPartial` 挂在 **`runAblation` 抛出的 error 对象**上（§68 的设计）。而本次 ablation **正常返回** —— 抛出发生在 **arm 自己的 writer 里**，那里**没有 error 可挂**。所以 partial 集合没出现，**恰恰是契约在正确工作**，不是它失效。
+
+这是 §13.11.9 未覆盖的第三种情形（"ablation 成功、writer 失败"），已补为契约的**第四款**。
+
+### 69.3 用实测数据反推无界量级，而不是猜
+
+不引外部估计，用**同一产物里主基准的 `benchmark-report.json`** 标定：
+
+| 量 | 实测值 |
+| --- | --- |
+| 主基准 roster turns/question 中位数 | 53 |
+| 主基准 roster turns/question 最大值 | 262 |
+| 主基准 roster chars/question 中位数 | 11,771 |
+| 主基准 roster chars/question 最大值 | 28,194 |
+| 500 记录 roster 总大小 | 6.98 MB（其中 `turns` 占 **98%**） |
+| 每 turn 平均 | 182.4 bytes |
+| **跨过上限所需** | **~2943 turns/记录 ≈ 主基准最坏情况的 19×** |
+
+**两条无界原因各自独立，缺一条都不足以解释**：
+
+1. `admission.ts` **刻意不截断** —— 它的 docstring 明说 *"Content is passed through untruncated: prompt budget is a property of prompt assembly"*。
+2. 本次运行 `sessionBudget = unbounded`（`Number.POSITIVE_INFINITY` → `null` → 报告头写 `unbounded`）。
+
+而 `#retrievalAdmitted` 只是**布尔门**：决定**是否**回答，**从不裁剪** `turns`。`retrievalThreshold: 0` 等于检索门从不关闭。一次无界 admission 越过 115k-turn 的 haystack，轻易跨过那 19× 门槛。
+
+### 69.4 修复：三个缺陷，第三个是修第一个时发现的
+
+**（1）证据变成有界测量 —— 注册于 §13.12**
+
+`QuestionRecord` **无条件**携带 `evidenceTurns` 与 `evidenceChars`。`toTurns` 接受 bound，超出时以显式 marker 收尾。**三态必须不可混同**：
+
+| 状态 | 编码 |
+| --- | --- |
+| 没给读者看 | `turns: []` + `evidenceTurns: 0` |
+| 完整 | `turns.length === evidenceTurns` |
+| **被裁剪** | 前缀 + marker + **真实计数** |
+
+`serializeReportOrReduce` 先写全量报告；遇 size failure 则从请求的 bound **逐级收紧**到 1，第一个能写的就用（**不是用最小的**），并产出 manifest **逐项点名丢了什么**。**只认 `RangeError` 且 message 含 `Invalid string length`** —— 圆形结构是**报告 bug**，必须原样抛出，而不能藏在更小的产物后面（那会把缺陷登记成运行属性）。
+
+**（2）`featureConfig` 被静默丢弃（真实 BUG）**
+
+`withEvidenceBound` 把 `featureConfig` 当 **per-record 输入**传。但它是 `buildQuestionRecords` 的**第二个形参**（整批共用），`QuestionRecordInput` **压根没有这个字段** —— 于是传进去的值被**无声丢弃**。
+
+后果是：**一次裁剪会丢掉全量报告里有的配置**。这是"**丢失的测量伪装成更小的测量**"，正是本模块存在的理由本身。
+
+改为从 cohort 读取（第一条携带者的值），并传为第二个参数。选择"第一条"是站得住的：`buildQuestionRecords` 给所有记录写同一个值，记录之间不可能不一致。
+
+**（3）`instanceof RangeError` 跨 realm 失效（真实 BUG）**
+
+`instanceof` **绑定 realm**。跑在 worker、`vm` context 或**第二份 runtime**里的序列化器抛出的 `RangeError`，其原型链**不含本 realm 的 `RangeError`** —— 于是**本模块存在的唯一理由**（吸收这个失败）会被报成"不是 size failure"，run 会**原样重演 `38003036421` 的死亡**：测量完整、不可写、没有产物。
+
+改为同时接受 **`RangeError` 形状**的对象（要求字符串 `message`，这是整个判定所依据的字段）。
+
+**连锁收益**：这个改动使 `isSizeFailure` 可以改为**类型守卫**，进而消掉了 `message` 里**没有任何输入能到达**的那条臂 —— 正是本仓库在 §57.6 移除过的"**不可达代码读起来像安全网**"形态。这不是为覆盖率而改，是所有权限都经由的那一个门，本就该在那里收窄类型。
+
+**顺带清理的死代码**：`buildArmRoster` 里的 `featureRetrievedContexts ?? []`。`runAblation` 在**同一行**无条件请求两个 capture，所以这个 fallback 无法触发；而若它真触发，会把**采集失败的 capture 归档成"从未检索的 fixture"** —— 又是一次"死代码读作安全网"。改为 `!`，并在注释里写明**类型可选 ≠ 需要分支**。
+
+### 69.5 注册与派发链路
+
+bound 经 `CORTEX_MEMORY_EVIDENCE_TURNS` 注入，注册于 §10.3，接线进 workflow 与 dispatch 脚本 —— 使**预注册守卫比对文档的那个环境**，就是**运行真正读取的那个环境**。守卫：**4 passed, 9 subtests**。
+
+### 69.6 验收
+
+| 项 | 结果 |
+| --- | --- |
+| `pnpm check` | **exit 0** |
+| cortex-eval 覆盖率 | Stmts **100** / Branch **100** / Funcs **100** / Lines **100** |
+| cortex-memory 覆盖率 | Stmts **100** / Branch **100** / Funcs **100** / Lines **100** |
+| cortex-eval 未覆盖分支 | **0**（逐 branch 核对 JSON reporter，不依赖汇总数字） |
+| 提交 / 推送 | `369b2c6` → **`8f5f4169`**，**306 blobs 逐字节一致** |
+
+新增测试覆盖了四类此前没有的东西：跨 realm 的 size failure、无 message 的冒充者、bound 不生效时的 defect 分支、以及 arm 层三种裁剪状态的确定读数（6 measured / <6 carried / `['q1']`）。
+
+### 69.7 后续
+
+| 优先级 | 项 | 依据 |
+| --- | --- | --- |
+| **P0** | 按 §4.2 重派 §13.11，读产物**先查 partial**，再按 §13.11.3 两条预测判读 | §69.2 |
+| **P0** | 两条预测若被否证 → 按 §13.11.4 转 `admission.ts`（**准入门，非呈现变量**） | §66.6 |
+| P1 | IE 0/52、KU 0/17 在 baseline 也是 0 —— **基线自身缺口** | §63.1 |
+| P2 | `grounded` 仍硬编码 `false`（需上游分类器） | `bench-memory-arm.ts` |
+| P3 | `PATH` 顺序未修，留待重烧镜像 | §4g.1 |
+
+**一条刻意不做的处置**：`sessionBudget = unbounded` 是**对照条件**，不是 bug，本轮**没有**通过收紧它来"修掉"失败。那样做会把一个无界条件偷换成有界条件 —— 失败消失了，但 §13.11.3 关于无界阅读器的判读也随之失去意义。修的是**写盘**，不是**测量条件**。

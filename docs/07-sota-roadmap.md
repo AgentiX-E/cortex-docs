@@ -2513,3 +2513,100 @@ LLM adapter 的 `maxRetries: 5` / `baseDelayMs: 1000` / `timeoutMs: 60000` / `re
 | P3 | `PATH` 顺序未修，留待重烧镜像 |
 
 **run `38003036421` 实时状态（写本节时）**：`Run benchmark` **success**，`Run cortex-memory A/B` **in_progress** —— 已优于上一次（上次是主基准之后那一步死掉）。
+
+---
+
+### 4.1.27 第二次失败不是第一次的重复：测量完成了，是被写盘动作销毁的（2026-10-10）
+
+§4.1.26 派发了 §13.11 的重跑（run `38003036421` @ `16520439`）。它**又失败了**，但与 §4.1.25 **不是同一个失败** —— 这个区别决定了整节内容。
+
+#### 两次失败的对照
+
+| | §4.1.25（run `37942775447`） | 本次（run `38003036421`） |
+| --- | --- | --- |
+| 死在哪里 | 测量**中途** | 测量**之后**，happy path 最后一行 |
+| 产物 | 只有 `benchmark-error.log` | `.md`（5636 B）+ `benchmark-error.log`（312 B） |
+| 测量状态 | **不存在** | **完整**（4 runs × 500 题，约 40 分钟） |
+| 丢失的东西 | 本来就没有 | **一份完整的测量** |
+| partial 是否触发 | 是（正确） | **否** —— 而且是**正确的** |
+
+#### 机制：`JSON.stringify` 撞 V8 字符串上限
+
+```
+RangeError: Invalid string length
+    at JSON.stringify
+    at main (.../bench/run-ablation.ts:273)
+```
+
+V8 的字符串上限是 `2**29 - 24` = **536,870,888 字符（约 537 MB）**。实测标定：401.2 MB 通过、531.6 MB 通过、536000 chunk 抛出。Markdown 已写出、JSON 未写出 —— **产物无法区分"测了但写不出"和"根本没测"**。
+
+#### partial 未触发是正确行为，不是漏挂
+
+这是本轮最重要的判读修正。`attachPartial` 挂在 **`runAblation` 抛出的 error 对象**上（§4.1.26）。而本次 ablation **正常返回**，抛出发生在 **arm 自己的 writer 里** —— **没有 error 可挂**。这是 §13.11.9 契约未覆盖的第三种情形，故补为**第四款**。
+
+#### 用实测数据反推无界量级
+
+不猜，用**同一产物**里主基准的 `benchmark-report.json` 标定：
+
+| 量 | 实测值 |
+| --- | --- |
+| 主基准 roster turns/question 中位数 | 53 |
+| 主基准 roster turns/question 最大值 | 262 |
+| 主基准 roster chars/question 中位数 | 11,771 |
+| 500 记录 roster 总大小 | 6.98 MB（`turns` 占 **98%**） |
+| 每 turn 平均 | 182.4 bytes |
+| 跨上限所需 | **~2943 turns/记录 ≈ 主基准最坏情况的 19×** |
+
+**两条无界原因各自独立**：(1) `admission.ts` **刻意不截断**（docstring 明说 *"prompt budget is a property of prompt assembly"*）；(2) 本次 `sessionBudget = unbounded`。而 `#retrievalAdmitted` 只是**布尔门** —— 决定**是否**回答，**从不裁剪** `turns`。`retrievalThreshold: 0` 意味着检索门从不关闭。无界 admission 越过 115k-turn haystack 轻易跨过 19× 门槛。
+
+#### 修复：三个缺陷，第三个是修第一个时发现的
+
+**1. 证据变成有界测量（注册于 §13.12）**
+
+`QuestionRecord` **无条件**携带 `evidenceTurns` / `evidenceChars`。`toTurns` 接受 bound，超出时以显式 marker 收尾。**三态不可混同**：
+
+| 状态 | 编码 |
+| --- | --- |
+| 没给读者看 | `turns: []` + `evidenceTurns: 0` |
+| 完整 | `turns.length === evidenceTurns` |
+| **被裁剪** | 前缀 + marker + **真实计数** |
+
+`serializeReportOrReduce` 先写全量报告；遇 size failure 则逐级收紧 bound 直到能写，并产出 manifest **逐项点名丢了什么**。**只认 `RangeError` 且 message 含 `Invalid string length`** —— 圆形结构是报告 bug，必须原样抛出而不能藏在更小的产物后面。
+
+**2. `featureConfig` 被静默丢弃（真实 BUG）**
+
+`withEvidenceBound` 把 `featureConfig` 当 **per-record 输入**传，而它是 `buildQuestionRecords` 的**第二个形参**（整批共用），`QuestionRecordInput` **压根没这个字段**。结果是：**一次裁剪会丢掉全量报告里有的配置** —— 这是"丢失的测量伪装成更小的测量"。改为从 cohort 读取（第一条携带者）并传为参数。
+
+**3. `instanceof RangeError` 跨 realm 失效（真实 BUG）**
+
+`instanceof` **绑定 realm**。跑在 worker、`vm` context 或第二份 runtime 里的序列化器抛出的 `RangeError`，原型链**不含本 realm 的 `RangeError`** —— 于是**本模块存在的唯一理由**（吸收这个失败）会被报成"不是 size failure"，run 会**原样重演 `38003036421` 的死亡**。改为同时接受 **`RangeError` 形状**（带字符串 `message`）。
+
+这个改动还带来一个连锁收益：`isSizeFailure` 因此可改为**类型守卫**，进而消掉了 `message` 中**没有任何输入能到达**的那条臂 —— 正是本仓库在 §57.6 移除过的"**不可达代码读起来像安全网**"形态。
+
+**顺带清理的死代码**：`buildArmRoster` 里 `featureRetrievedContexts ?? []`。`runAblation` 在**同一行**无条件请求两个 capture，该 fallback 无法触发；而若真触发，会把**采集失败的 capture 归档成从未检索的 fixture**。改为 `!`，并在注释中说明"类型可选 ≠ 需要分支"。
+
+#### 注册与派发链路
+
+bound 经 `CORTEX_MEMORY_EVIDENCE_TURNS` 注入，注册于 §10.3，接线进 workflow 与 dispatch 脚本 —— 使**预注册守卫比对文档的那个环境**就是**运行真正读取的那个环境**。守卫：**4 passed, 9 subtests**。
+
+#### 验收
+
+`pnpm check` **exit 0**。覆盖率：
+
+| 包 | Stmts | Branch | Funcs | Lines |
+| --- | --- | --- | --- | --- |
+| cortex-eval | **100** | **100** | **100** | **100** |
+| cortex-memory | **100** | **100** | **100** | **100** |
+
+cortex-eval **零未覆盖分支**（逐 branch 核对 JSON reporter，非看汇总数字）。新增测试覆盖：跨 realm 失败、无 message 的冒充者、bound 不生效时的 defect 分支、arm 层三种裁剪状态。提交 **`369b2c6`** → 推送 **`8f5f4169`**，**306 blobs 逐字节一致**。
+
+| 优先级 | 项 |
+| --- | --- |
+| **P0** | 按 §4.2 重派 §13.11，读产物**先查 partial**，再按 §13.11.3 两条预测判读 |
+| **P0** | 两条预测若否证 → 按 §13.11.4 转 `admission.ts`（**准入门，非呈现变量**） |
+| P1 | IE 0/52、KU 0/17 在 baseline 也是 0 —— **基线自身缺口** |
+| P2 | `grounded` 仍硬编码 `false`（需上游分类器） |
+| P3 | `PATH` 顺序未修，留待重烧镜像 |
+
+**注**：`sessionBudget = unbounded` 是**刻意的对照条件**，不是 bug，保持不动。本轮**没有**通过改它来"修"失败 —— 那会把一个无界条件偷换成有界条件，使 §13.11.3 的判读失去意义。
+
