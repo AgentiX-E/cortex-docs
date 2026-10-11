@@ -12727,3 +12727,71 @@ boundRetrievedContexts(texts, b)[i].split('\n') === questions[i].turns.map((t) =
 | P3 | `PATH` 顺序未修，留待重烧镜像 |
 
 `sessionBudget = unbounded` 与 `evidence_turns = 16` **都是对照条件**，不是待修缺陷。**其中 `evidence_turns` 经追踪确认完全不触及模型**，因此它既不是混杂因子，也不需要对照运行。本轮**没有**为了"让失败消失"去改任何测量条件。
+
+---
+
+## 71. 产物说不出模型实际看到多少证据 —— 两份量各留一份
+
+§70 的代码追踪查出一个**测量**缺陷（而非运行缺陷）：`#recordEvidence` 记的是传给 `buildPrompt` 的 turns，而 `buildPrompt` 已把它裁到 `DEFAULT_MAX_PROMPT_CHARS` = 24,000。run `38044858147` 每题 506,338 字符证据，所以产物报 3,016–4,528 个 turn，模型实收约 150–160，**高估约 20 倍**。
+
+它自己的 docstring 却写着这个访问器回答的是 *"which turns reached the reader"*、*"the same turns the prompt carried"* —— 超预算时两句同时为假。
+
+### 71.1 决策：两份量都留
+
+| 量 | 字段 | 回答的问题 |
+| --- | --- | --- |
+| 准入上下文 | `evidenceTurns` / `evidenceChars` | §13.11.3：检索有没有**产出**证据 |
+| prompt 实载证据 | `promptChars` | §13.11.5：证据有没有**到达模型** |
+
+**同一轮运行上的两个不同问题，一个字段答不了两个。** 修复是追加式的，§13.11.3 的判读不受影响 —— 这很重要，因为那是本轮唯一已经成立的判决。
+
+### 71.2 值在它被知道的地方产生
+
+`buildPrompt` / `buildSessionPrompt` 返回 `AssembledPrompt`，携带 `fitToBudget` 之后的**真实**证据字符数。让调用方从 prompt 文本重新算，就是重新推导构建器已有的值 —— `report-write.ts` 点名拒绝的形状。
+
+### 71.3 一个标志，不是两个
+
+复用了既有的 `captureRetrievedContext`。**两者从不需要分开**：只有上下文向量而没有实载量，会高估模型看到的东西，且事后无法校正。一个开关、一次捕获、两个向量。
+
+### 71.4 `null` 到达记录时是缺席，不是零
+
+"系统报不了"与"prompt 什么都没带"是不同陈述，不能渲染成同一种样子 —— 这条规则 `evidenceTurns` / `evidenceChars` 对"读者什么都没看到"已经在用。
+
+### 71.5 顺带修掉的两个同类缺陷
+
+**（1）`withEvidenceBound` 会丢掉新字段。** 裁剪经 `buildQuestionRecords` 重建记录，**不转发的字段被静默丢弃** —— 与 §70.6 修过的 `featureConfig` **同一形态**，在新字段上又出现一次。已在重建处转发并在 arm 层断言。
+
+**（2）门禁现场抓到一个孤儿导出。** `AssembledPrompt` 导出后没有**非测试代码命名它**，census 报 `1 NEW orphan(s)` 并让门禁失败。修法不是写进基线（那是债务台账），而是让真正的消费者 `memory.ts` 在签名上收窄到它：
+
+```ts
+#recordEvidence(turns: readonly AdmittedTurn[], assembled: Pick<AssembledPrompt, 'evidenceChars'>): void
+```
+
+**这是门禁在做它该做的事**：阻止一个"宣告了但没人用"的公开类型进仓库。
+
+### 71.6 断言不与被测代码自证
+
+- **未裁剪**：与 `formatEvidence` 的**渲染输出**比对，而非与输入长度比对 → 报"输入长度"的实现会失败。
+- **裁剪**：把上报的数字**代回它自己发出的 prompt**，要求正好落在 `\n\n` 分节边界上 → 报常数的实现会失败。
+
+### 71.7 验收
+
+| 项 | 结果 |
+| --- | --- |
+| `pnpm check` | **exit 0**，**2445 测试** |
+| cortex-eval | 四维 **100**，**逐项核对未覆盖分支/语句/函数 = 0** |
+| cortex-memory | 四维 **100** |
+| census | `no new orphans beyond the recorded baseline` |
+| 新增测试 | `prompt-evidence-carried.test.ts` 11 条；arm 层 3 条；reducer 转发 1 条 |
+
+改动面：`prompt.ts` / `memory.ts` / `benchmark.ts` / `metrics.ts` / `ablation.ts` / `types.ts` / `bench-memory-arm.ts` / `question-record.ts` / `report-write.ts` —— 从构建器到产物的每一跳都有测试，因为**每一跳都可能静默丢掉这个值，而丢掉的字段与"系统报不了"渲染得一模一样**。
+
+### 71.8 下一步
+
+| 优先级 | 项 |
+| --- | --- |
+| **P0** | 用 `promptChars` 重读下一次运行，按 §13.13.3 两条预测判读 |
+| **P0** | 转 **ranking**（§13.11.5），约束是 **24,000 字符预算**而非"全部证据" |
+| P1 | writer 降级时的 manifest 未进产物 |
+| P1 | IE 0/52、KU 0/17 在 baseline 也是 0 |
+| P2 | `grounded` 仍硬编码 `false` |

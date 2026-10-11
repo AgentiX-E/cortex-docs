@@ -2775,3 +2775,55 @@ boundRetrievedContexts(texts, b)[i].split('\n')  ==  questions[i].turns.map(t =>
 | P3 | `PATH` 顺序未修，留待重烧镜像 | §4g.1 |
 
 **注**：`sessionBudget = unbounded` 与 `evidence_turns = 16` **都是对照条件**，不是待修的缺陷。本轮**没有**为了"让失败消失"去改它们 —— 改测量条件会让判读失去意义。**其中 `evidence_turns` 经追踪确认完全不触及模型**，因此它既不是混杂因子，也不需要对照运行。
+
+---
+
+### 4.1.29 让产物说出模型**实际**看到多少证据：两份量各留一份（2026-10-11）
+
+§4.1.28 的代码追踪查出一个测量缺陷：`#recordEvidence` 记的是**传给** `buildPrompt` 的 turns，而 `buildPrompt` 已把它裁到 24,000 字符。产物报 3,016–4,528 个 turn，模型实收约 150–160 —— **高估约 20 倍**。
+
+#### 决策：两份量都留，而不是二选一
+
+| 量 | 字段 | 回答的问题 |
+| --- | --- | --- |
+| 准入上下文 | `evidenceTurns` / `evidenceChars` | §13.11.3 两条预测：检索有没有**产出**证据 |
+| prompt 实载证据 | `promptChars` | §13.11.5 排序问题：证据有没有**到达模型** |
+
+**这是同一轮运行上的两个不同问题，一个字段答不了两个。** 所以修复是**追加式**的 —— §13.11.3 的判读完全不受影响。
+
+#### 值在它被知道的地方产生，而不是由调用方重新推导
+
+`buildPrompt` / `buildSessionPrompt` 现在返回 `AssembledPrompt`，携带 `fitToBudget` 跑完之后 prompt **真正持有**的证据字符数。让调用方从 prompt 文本里再算一遍，就是在重新推导构建器已经知道的值 —— 正是 `report-write.ts` 点名拒绝的形状。
+
+#### 一个标志、一次捕获、两个向量
+
+新的量**复用了既有的 `captureRetrievedContext` 开关**，没有开第二个。理由：两者**从不需要分开** —— 只有上下文向量而没有实载量，会高估模型看到的东西，而且事后无法校正。
+
+#### `null` 是"系统报不了"，不是"prompt 一个字符都没带"
+
+向量里的 `null` 到达记录时是**缺席**，不是零。**报不了的系统，与"prompt 什么都没带"，不是同一个陈述**，两者不能渲染成同一种样子 —— 这条规则 `evidenceTurns` / `evidenceChars` 对"读者什么都没看到"已经在用。
+
+#### 顺带修掉的两个同类缺陷
+
+1. **`withEvidenceBound` 会丢掉新字段。** 裁剪把每条记录经 `buildQuestionRecords` 重建，**不转发的字段就被静默丢弃** —— 这正是 §4.1.28 修过的 `featureConfig` 同一形态，在新字段上又出现一次。已在重建处转发，并在 arm 层断言。
+2. **门禁现场抓到的一个孤儿导出。** `AssembledPrompt` 类型导出后没有任何**非测试代码命名它**，census 直接判为 `1 NEW orphan(s)`。修法不是加进基线（那是债务台账），而是让它的真正消费者 `memory.ts` 在签名上收窄到它：`#recordEvidence(turns, assembled: Pick<AssembledPrompt, 'evidenceChars'>)`。**门禁在这里起的是它该起的作用 —— 阻止一个"宣告了但没人用"的公开类型进入仓库。**
+
+#### 验收
+
+| 项 | 结果 |
+| --- | --- |
+| `pnpm check` | **exit 0**（2445 测试） |
+| cortex-eval 覆盖率 | 四维 **100**，**逐项核对未覆盖分支/语句/函数 = 0** |
+| cortex-memory 覆盖率 | 四维 **100** |
+| 新增测试 | `prompt-evidence-carried.test.ts` 11 条 + arm 层 3 条 + reducer 转发 1 条 |
+| census | `no new orphans beyond the recorded baseline` |
+
+**断言刻意不与被测代码自证**：未裁剪时与 `formatEvidence` 的**渲染输出**比对（报"输入长度"的实现会失败）；裁剪时把上报数字**代回它自己发出的 prompt**，要求正好落在分节边界上（报常数的实现会失败）。
+
+| 优先级 | 项 |
+| --- | --- |
+| **P0** | 用 `promptChars` 重读 run `38044858147` 之外的下一次运行，按 §13.13.3 两条预测判读 |
+| **P0** | 转 **ranking**（§13.11.5），且约束是 **24,000 字符预算**而非"全部证据" |
+| P1 | writer 降级时的 manifest 未进产物 |
+| P1 | IE 0/52、KU 0/17 在 baseline 也是 0 —— 基线自身缺口 |
+| P2 | `grounded` 仍硬编码 `false` |
