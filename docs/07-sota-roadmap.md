@@ -2692,6 +2692,8 @@ this.#recordEvidence(turns);          // memory.ts:535-536
 
 **因此 §13.11.4 预定的恢复（"去看 `admission.ts`"）本轮不适用，不能照做。** `empty = 0` 已经证明写入门没有拒绝任何东西 —— 对一个不存在的缺陷执行预定恢复，会把下一轮引向错误的地方。
 
+> **⚠️ 本节这一判断已被 §4.1.31 推翻，读时请一并读它。** `admission.ts` **就是**缺陷所在 —— 不在决定*是否*准入的闸门，而在准入的**顺序**（调用方顺序，不含相关性）。预定恢复点对了文件，只是理由接近而非真因。保留原句以记录这次误判：**"这个模块不是问题"与"这个模块在另一个地方才是问题"，从外面看一模一样。**
+
 #### 损失在模型侧，且本轮**无法**区分两种模型侧解释
 
 | Cap | n | baseline | feature | b✓f✗ | b✗f✓ | McNemar p |
@@ -2900,4 +2902,83 @@ boundRetrievedContexts(texts, b)[i].split('\n')  ==  questions[i].turns.map(t =>
 | **P0** | 若 gold 在预算内 → prompt/模型侧实验；若在预算外 → **预算内排序**实验 |
 | P1 | writer 降级时的 manifest 未进产物 |
 | P1 | IE 0/52、KU 0/17 在 baseline 也是 0 —— 基线自身缺口 |
+| P2 | `grounded` 仍硬编码 `false` |
+
+---
+
+### 4.1.31 根因定位：feature 路径**没有任何排序**，prompt 拿到的是 haystack 的时间前缀（2026-10-11）
+
+§4.1.30 把排序问题数字化为"gold 在前 ~160 名之内吗"，然后发现这个问法预设了"有一个排名" —— **而 feature 路径里没有排名。**
+
+#### 代码级证据：从数据集到模型的每一步
+
+| 步骤 | 位置 | 对顺序做了什么 |
+| --- | --- | --- |
+| `flattenSessions(haystack_sessions, haystack_dates)` | `longmemeval-loader.ts` | 会话顺序，即**数据集自己的 haystack 顺序** |
+| `CortexMemory.answer(question, context)` | `memory.ts` | 原样交给 `#admit` |
+| `#admit(context)` | `memory.ts:534` | `admissionOptionsFrom` + `admitTurns`，**不重排** |
+| `admitTurns(turns, options)` | `admission.ts:189` | `for (ordinal = 0; ...)`，**按迭代顺序 push**，无 `sort` |
+| `buildPrompt` → `formatEvidence` | `prompt.ts` | 保持该顺序 |
+| `fitToBudget` | `prompt.ts` | `truncateCodePointSafe` —— **取前缀** |
+
+**`memory.ts` 里没有 `retrieveTopK`、没有 `embedding`、没有 `similarity`、没有 `rank`、没有 `sort(`。** 唯一与检索同形的成员 `#retrievalAdmitted` 是个**布尔闸门**（`decideRetrieval` 取候选最大值），且只被 `answerAbstention` 调用。
+
+#### 测量：gold turn 落在携带前缀内的只有 **12.4%**
+
+`benchmark-*-diagnostics.json` 已携带 `answer_session_ids` / `haystack_dates` / `answer_sessions_content`，所以 **gold 在 haystack 中的位置可以从已存在的产物直接推出，不需要新运行、也不需要访问数据集**。
+
+121 道可定位的题：
+
+| 量 | min | p25 | median | p75 | max |
+| --- | --- | --- | --- | --- | --- |
+| gold 会话位置（占 haystack 比例） | 0.000 | 0.115 | **0.220** | 0.438 | 0.891 |
+| 推导的 gold turn 序号（比例 × `evidenceTurns`） | 0 | 400 | **748** | 1,452 | 3,136 |
+
+**gold turn 落在携带前缀内：15/121 = 12.4%。**
+
+序号是**估计值**（假设 turn 在会话间均匀分布 —— 诊断产物带会话日期但不带每会话 turn 数）。**比例不是估计值，结论建立在它上面**：gold 会话中位在 haystack 的 **22%**，而前缀只到 **4.6%**，要够到中位题得深约 5 倍。两列在方向与数量级上一致。
+
+**12.4% 落在一个覆盖 4.6% 的前缀里**，说明 gold 比均匀抽样**更靠前**约 2.7 倍（数据集确实前置了一部分证据）。但这不改判决：
+
+> **87.6% 的题，其 gold turn 不在模型被展示的内容里。而没有任何 prompt 措辞或模型选择能救回一道证据从未到达 prompt 的题。**
+
+#### 这条推翻了本文档先前的一个判断
+
+§13.11.4 预先把恢复指向 *"去看 `admission.ts`"*。§70.3 / §4.1.28 记录过这个恢复**不适用**，理由是 `empty = 0` 证明写入门没有拒绝任何东西。
+
+**那个判读是错的，而更正值比原句更重要。** `admission.ts` 恰恰就是缺陷所在 —— 不在决定*是否*准入的闸门（`threshold: 0` 几乎全部准入），而在它准入的**顺序**，那是调用方的顺序，**不含任何相关性概念**。预定恢复点对了文件，理由接近但不是缺陷真正的理由。
+
+**教训按原样记下而非改掉原句**：一个点名了模块的预定恢复，应当**先执行再宣布不适用** —— 因为"这个模块不是问题"与"这个模块在另一个地方才是问题"，从外面看是同一个样子。
+
+#### 排序问题的答案是：检索机制已经够好，只是没接进来
+
+`recall-curve.ts` 驱动的是 `retrieveTopKByQueries`（**参考管线用的 bi-encoder**），run `38114272884` 的曲线：
+
+| k | recall | ceiling | gain |
+| --- | --- | --- | --- |
+| 1 | 0.276 | 0.921 | 0.645 |
+| 5 | 0.579 | 0.921 | 0.342 |
+| 20 | 0.868 | 0.921 | 0.053 |
+| 50 | **0.921** | 0.921 | **0.000** |
+
+**k=50 时 gain 归零** —— bi-encoder 自己的 top-50 已经包含池中存在的每一个答案 turn，**再排序也无法增加任何 recall**。ceiling 是 0.921 而非 1.0，因为 76 题中有 6 题的答案**完全不在池中** —— 那是广度问题，不是排序问题。
+
+**因此修复不是"建一个排序器"，而是把已有的检索接进 feature 的准入路径。**
+
+#### 登记的预测
+
+> **用该排名给准入的 turns 排序、并携带同样的 ~160 个 turn，gold 落在前缀内的比例应从 12.4% 升到接近曲线 ceiling 的 92%。**
+
+若升幅显著更小，则差距在"检索分数 → 准入顺序"的传递环节，而不在排名本身。
+
+#### 这一节**不能**确立什么
+
+**模型在 gold turn 到位后是否会答对。** 现在 87.6% 的题 gold 从未到达，所以读数**无法分离**"gold 没来"与"gold 来了但模型弃答"。真正能对第二种发言的只有 gold 确实到达的那 12.4%（15 题）。
+
+| 优先级 | 项 |
+| --- | --- |
+| **P0** | 设计并实现**把检索排名接进 `CortexMemory` 的准入顺序** —— 这是本轮定位到的根因 |
+| **P0** | 用登记的预测（12.4% → ~92%）判读该修复 |
+| P1 | 逐 turn 级 gold 归因，把 §4.1.31 的序号估计换成实测 |
+| P1 | writer 降级时的 manifest 未进产物 |
 | P2 | `grounded` 仍硬编码 `false` |
