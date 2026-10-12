@@ -13147,3 +13147,58 @@ evidenceRoom = maxChars - instruction.length - questionLine.length - separators 
 | P1 | 修 行/turn 单位（独立登记） |
 | P1 | 逐 turn gold 归因，替换会话序号规则 |
 | P2 | 行内标记的歧义 |
+
+## 76. 把「预算买哪些 turn」接成被测量的选择，并在派发之前登记 §13.17
+
+§75 的两条 P0 里，一条（供给已恢复报告）已经落地，另一条就是本轮：**注入检索相关性信号**。
+§75 已经用产物把这件事量化到底 —— `gold-in-carried` **11.6%**（14/121）对天花板 **92.1%** ——
+所以本轮不再论证"要不要做"，只做一件事并把它的预测先写下来。
+
+### 76.1 本轮改了什么，四层
+
+| 层 | 文件 | 内容 |
+| --- | --- | --- |
+| 信号 | `cortex-eval/src/relevance-index.ts`（新） | `buildRetrievalRelevanceIndex`：对每题用**它自己的 context** 与**问题文本**跑一次 `retrieveTopKByQueries`，得到 `(question, turn) → cosine` 的同步查表 |
+| 选项 | `cortex-eval/src/bench-memory-arm.ts` | `relevanceSignal` / `relevanceTopK` 两个 arm 选项；`readRelevanceSignal` 对未识别值**抛错**而非回落 `none`；`readRelevanceTopK` 拒绝 `< 1` |
+| 记账 | `cortex-eval/src/report.ts` | `MemoryArmConfig.relevanceSignal` / `relevanceTopK`，渲染进 Markdown 配置行；`none` 也写 |
+| 通道 | workflow input + `env:` + `tools/dispatch-cortex-memory-ab.py` + `§10.3` | 双向守卫：`test_preregistration_config.py` 比对注册与派发 |
+| 入口 | `cortex-memory/bench/run-ablation.ts` | 构造索引并注入 `relevanceFor`，打印 `scored pairs / questions / topK` |
+
+### 76.2 为什么"不用答案键"在这一层必须是类型而不是约定
+
+`RelevanceCase` 只有 `question` 与 `context` 两个字段，ground truth **不是参数**。这不是文档
+承诺，是编译期事实：想用答案键锐化信号，得先改类型。测试端到端测了它 —— 两个只在未读字段上
+不同的 case 产出同一个索引（含同一 `scoredPairs`）。
+
+**为什么这一层特别要紧**：一个从答案键派生的信号不会在任何产物里显得可疑。它会让
+`gold-in-carried` 趋近 100%、让 delta 变好，而两个数字都是一次自己给自己判分的运行的真实陈述。
+产物本身没有能力反驳它，所以必须在类型上堵住。
+
+### 76.3 登记的预测（§13.17.4）
+
+| 预测 | 内容 | 被 falsify 的含义 |
+| --- | --- | --- |
+| **P1** | `gold-in-carried` ≥ **0.80**，点估计 **0.92** | 机制被否，而不是算术错 —— 首要检查索引键是否真的命中被 admit 的 turn |
+| **P2** | feature 弃答率 **< 80%**（自 95.40%） | 证据在、模型仍拒绝 → 为这个 arm 退掉检索假设 |
+
+P1 成立而 P2 不成立，正是 §13.11 打开却无法关闭的那个状态（产物说不出证据是否在）。任一结果
+都会收窄剩余空间 —— 这正是登记预测该有的性质。
+
+### 76.4 门禁与交付
+
+`pnpm check` exit 0。`test:tools` **300 passed + 24 subtests**；`census:check` 无新增孤儿
+（`UNSCORED_RELEVANCE` 取消导出、`RelevanceCase`/`RelevanceIndex`/`RelevanceIndexOptions`
+由入口点显式标注类型，因而成为真实引用）；cortex-eval **1,811** tests（+21）、cortex-memory
+**269** tests，两包四维覆盖率均 **100%**；prettier 全量通过。
+
+### 76.5 当前状态，以及到目标的最优路径
+
+| 优先级 | 事项 |
+| --- | --- |
+| **P0（本轮）** | 派发 §13.17 的那一次运行：单一变量 `relevanceSignal: retrieval` @ `topK: 64`，其余全部保持 §13 值 |
+| **P0** | 读下一次产物：`gold-in-carried`（P1）、弃答率（P2）、以及**首次可读的 `admittedTurns`**（供给曾经有多少证据） |
+| P1 | 修 行/turn 单位（§13.16.6），作为独立登记的改动 |
+| P1 | 逐 turn gold 归因，替换会话序号规则 |
+| P2 | 行内标记歧义：上下文里恰好带上标记形状的行会被读成一次裁剪 |
+| P2 | `grounded` 仍硬编码 `false`；writer 降级时 manifest 未进产物 |
+| P3 | `PATH` 顺序未修，留待重烧镜像 |
