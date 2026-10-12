@@ -13202,3 +13202,51 @@ P1 成立而 P2 不成立，正是 §13.11 打开却无法关闭的那个状态�
 | P2 | 行内标记歧义：上下文里恰好带上标记形状的行会被读成一次裁剪 |
 | P2 | `grounded` 仍硬编码 `false`；writer 降级时 manifest 未进产物 |
 | P3 | `PATH` 顺序未修，留待重烧镜像 |
+
+### 76.6 第一次派发**失败**了，而且失败在本轮所有测试层之上
+
+派发被平台拒绝：
+
+```
+422 Invalid Argument - failed to parse workflow: you may only define up to 25
+`inputs` for a `workflow_dispatch` event
+```
+
+`benchmark.yml` 在 §13.17 注册两个 input 后达到 **26**。本节建的四层全部测试通过 ——
+arm 选项、产物字段、`env:` 转发、dispatch 脚本的值，以及预注册守卫对 §10.3 的双向比对 ——
+而**运行无法启动**。这是 §7.3 侧信道缺陷的上一层：产物会描述一次从未发生过的配置，因为
+根本没有运行；而且这个上限由平台强制，不由被测文件强制，所以仓库里没有任何测试看得见它。
+
+**修复是结构性的，不是减法。** 上限是**每 workflow** 的，所以 arm 的 inputs 搬到
+`benchmark-cortex-memory.yml`：`benchmark.yml` 15 个、新文件 17 个。反过来"删掉一个 knob"
+会重新制造本节存在的理由 —— `cortex_memory_session_budget` 与 `cortex_memory_confidence`
+是仅有的两个 §10.3 **未注册**的 input，删掉它们当下不花钱，但会让一个注册过的配置在下次
+需要它时不可派发。
+
+失败带来两条守卫（都在 `tools/__tests__/test_dispatch_inputs.py`）：
+
+* 每个 dispatch 脚本**绑定到声明其 inputs 的那个 workflow**，且绑定关系本身被断言 ——
+  没绑定的脚本会**失败**而不是被跳过；
+* **本仓库任何 `workflow_dispatch` 都不得持有 25 个 input**。处于上限的 workflow 距
+  "不可派发"只差一次注册，而它产生的是派发时的 `422`、不是一条红测试。
+
+### 76.7 紧接着的第二个缺陷：`.gitignore` 把 workflow 文件吞了
+
+拆分提交加进了 `benchmark-cortex-memory.yml`，`git add -A` **什么都没报**，提交只含 4 个文件 ——
+于是 dispatch 脚本刚指过去的那个 workflow 在仓库里**不存在**。`.gitignore` 里有一条
+`benchmark-*`（本意是忽略 benchmark **产物**），它没有斜杠，于是在任意层级匹配，包括一个
+以同样前缀开头的 workflow。
+
+这是上一个缺陷的镜像：规则原来是**枚举**，漏掉了下一个产物；改成 glob 后，glob 吞掉了下一个
+**源文件**。两者是同一个错误 —— 一条关于产物的规则被施加到**名字**而不是**位置**上 —— 所以
+修复是加一条限定范围的否定规则，而不是把 glob 改回今天的三个后缀（那会让第四个产物一出现就
+复发原缺陷）。
+
+顺带出一条测试：dispatch 脚本绑定到的每个 workflow 必须**被 git 跟踪**，而不仅是磁盘上存在。
+路径存在这件事此前已经断言过、也确实成立；派发真正依赖的是"仓库里有这个文件"。
+
+### 76.8 派发已发出，运行在跑
+
+拆分后 `Verify` 在 `de51adb6` 上 **success**，arm 自己的 workflow 被接受并进入
+`in_progress`（run `38250133116`，新 workflow 的第一次运行）。单一变量是
+`relevanceSignal: retrieval` @ `relevanceTopK: 64`，其余全部保持 §13 值。
