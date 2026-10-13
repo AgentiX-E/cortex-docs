@@ -13310,3 +13310,50 @@ TR `66.93% → 22.05%`。两侧近乎互补，净 `+10.30pp`。**MR/TR 是净损
 | P1 | 修 行/turn 单位（§13.16.6） |
 | P2 | 行内 marker 歧义；`grounded` 仍硬编码 `false`；writer 降级 manifest 未进产物 |
 | P3 | `PATH` 顺序，待重烧镜像 |
+
+## 78. 把 gold 标注带进产物：P1 从"读不出来"变成"能算"
+
+§77 登记的两条 P0 是同一条：**先能测，才能判**。本轮做的是那一条。
+
+### 78.1 根因不是产物不完整，而是产物里没有那个字段
+
+`loadLongMemEval` 读了 `haystack_session_ids` 与 `answer_session_ids` 却**两个都没用**。于是
+"gold turn 是否在模型读到的东西里"只能靠启发式：先是会话序号规则，后是答案文本子串 ——
+而 §77 的产物当场反驳了后者（`3` ↔ `3. **Humidity:**`）。
+
+### 78.2 修法：一个字段，而不是一个更好的启发式
+
+| 层 | 内容 |
+| --- | --- |
+| loader | `haystack_session_ids[i] ∩ answer_session_ids → sessions[i]`，取 gold session 的 turn |
+| `Question.goldTurns` | 用**渲染 context 的同一个函数**渲染，于是成员判定是**同一函数两次输出的等值** |
+| `goldOverlapOf` | 唯一实现；由 arm 对 **bound 之前**的上下文测量 |
+| `QuestionRecord.goldOverlap` | `{ carried, total }`；无可测量时**缺席**而非 0 |
+| reducer / tools | **转发**而非重算 |
+
+### 78.3 两条差点走错的路，都成了回归测试
+
+1. **放进 `buildQuestionRecords` 计算** → 退回。reducer 用**已裁剪**的上下文重进同一 builder，
+   覆盖率会随 bound 收紧而下降 = 可写性守卫在移动测量。测试断言"被携带的值"，而那条记录
+   turns 已被裁到原对象的三分之一。
+2. **`retrieved.includes(turn)`** → 换成 `\n<turn>\n` 边界匹配。前者在"gold 是另一条 turn 的
+   前缀"处误报；两种前缀用例 + §77 的标记反例都进了测试。
+
+### 78.4 验收与派发
+
+`pnpm check` exit 0；cortex-eval **1,832** tests（+21）、cortex-memory 269；两包四维覆盖率
+**100%**；census 干净；守卫 **303 passed + 31 subtests**。
+
+派发**未改动 workflow 一行**（该字段由数据集派生），单一变量仍是
+`relevanceSignal: retrieval` @ `relevanceTopK: 64` —— 即在 P1 登记时的**同一条件下**重跑，
+这次带一个数而不是一个近似。
+
+### 78.5 下一步
+
+| 优先级 | 事项 |
+| --- | --- |
+| **P0** | 读新产物：`goldOverlap` 的总体与分能力覆盖率，判定 §4.1.34 登记的 **P1（≥0.80）** |
+| **P0** | 按"gold 是否被携带"切开 MR/TR 的弃答率（46.3% / 66.9%）—— 决定检索侧还是模型侧 |
+| P1 | 修 行/turn 单位（§13.16.6）—— 现在是"逐 turn 归因"与"部分携带归因到会话"之间唯一的东西 |
+| P2 | 行内 marker 歧义；`grounded` 硬编码 `false`；writer 降级 manifest 未进产物 |
+| P3 | `PATH` 顺序，待重烧镜像 |
