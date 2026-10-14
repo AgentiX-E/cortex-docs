@@ -13528,3 +13528,69 @@ TR 48.82% vs baseline 64.57%；51 条弃答中 **50 条携带 gold**，其中 **
 | **P1** | 修 行/turn 单位（§13.16.6） |
 | P2 | `grounded` 仍硬编码 `false`；writer 降级 manifest 未进产物；行内 marker 歧义 |
 | P3 | `PATH` 顺序，待重烧镜像 |
+
+## 82. §13.22 的派发失败在基础设施上，而失败挖出的两个缺陷比它更低层
+
+run `38520676669` 跑了 **3h08m**，两侧各完成 **2 个 repetition**（**2000 条已评分作答**），
+死于 `TypeError: terminated`，产物只有 `benchmark-error.log`。**四条预测一条未读** ——
+这是关于 harness 的结论，不是关于模型的。而读它挖出两个此前所有测试都在其上通过的缺陷。
+
+### 82.1 缺陷一：durability 修复只覆盖**第一个** repetition
+
+`partial-ablation.test.ts` 的存在理由（run `37942775447`，40 分钟损失）就是这类故障。它的修复给
+两侧**第一次**评测加了 sink + `attachPartial`；而 `for (let i = 1; i < runs; i++)` **既无 sink 也无
+catch** —— 所以 `i > 0` 的失败让 error 未打包传出，`error.partial` 为 `undefined`，失败路径无东西
+可写。**同一个缺陷晚一个 repetition，代价 ×8**（`ABLATION_RUNS=4`）。
+
+**修复**：逐 repetition 的 sink + wrap。`run: i` 已足以陈述"`0..i-1` 两侧完成、向量属于第 `i` 个"。
+
+**「无可测量」边界随之改变（有意为之，两极性都有测试）**：空向量对与"capture 坏掉"同字节这一论证
+**只对 repetition 0 成立**（唯一没有前序的那一个）；在 `i > 0` 上它是陈述，丢弃就丢了前序已完成的
+唯一 durable 记录。谓词因此加入 `run === 0`。
+
+### 82.2 缺陷二：会计看不见那个最要紧的调用
+
+| 问题 | 后果 |
+| --- | --- |
+| 耗尽路径不经 `withResponse` | **每个尝试都失败的调用在聚合里完全缺席** —— 计数器只描述"恢复了的调用"，恰漏掉唯一被查阅的那个 |
+| 抛出的是传输 error 原文 | 无 endpoint、无 provider、无尝试次数 → "瞬时故障扛过 6 次"vs"循环没包住的 abort"**无处可答** |
+
+**这类故障已摧毁三次运行**（`37942775447` / `38003036421` / `38520676669`），每次日志都足以命名
+错误、不足以据以行动。
+
+**修复**（均遵循 `attachPartial` 的「**挂上**而非**包一层**」，以保住 `Fetch.onAborted` 的栈）：
+
+* **`RetryExhaustion`**：url / 请求数 / 重试数 / 429 数 / 耗时 / 传输消息 → 挂在 `retryExhausted`。
+  参数为 `Error` 且**不设守卫**（循环上一行已把非 Error 转成 Error）—— `unknown` 分支会是不可达却
+  读起来像保险网的代码，**分支覆盖率**正是会发现它的东西。
+* **`recordExhausted` + `exhaustedCalls`**：无重试的耗尽调用**不是 clean**（未完成）。把它算 clean
+  会让"流量整体在失败"的运行报告出比健康运行**更高**的干净调用比例。恒等式
+  `cleanCalls + retriedCalls + exhaustedCalls === calls` 被**断言**。
+
+`bench/run-ablation.ts` 失败路径现在同时打印「耗尽的那次调用」与「进程级重试会计」。
+
+### 82.3 对 §4.1.39 的预测没有影响
+
+修复只碰 durability、会计、一个 error 字段；prompt / gate / selection / parse 均未动 → 重派发
+**就是同一个实验**，四条预测原样成立。丢失那次运行**无法**从日志读出可用信息（进度流只有题号、
+无对错；partial 刻意只携带作答而非比率 —— 变短向量上的比率是关于分母的数）。
+
+### 82.4 验收与重派发
+
+`pnpm check` exit 0；`test:tools` **310 passed + 31 subtests**；census 干净；
+cortex-llm **146**（+8）、cortex-eval **1,838**（+5）、cortex-memory 308；四维 **100%**。
+**缺陷注入**：去 feature 侧 wrap → 2 条失败；去 exhausted 记账 → 1 条失败。
+
+重派发 run **`38566578567`**（`head_sha 954fff11`），预计 GMT+8 **10-15 约 00:00** 完成。
+
+### 82.5 下一步
+
+| 优先级 | 事项 |
+| --- | --- |
+| **P0** | 读 `38566578567`：P1'''/P2'''/P3'''/P4'''（§4.1.39） |
+| **P0** | 若再失败，日志现在会给出 endpoint 与尝试次数 → 可区分"瞬时"与"系统性"，并据以决定重派发或改代码 |
+| **P0** | 若 P3''' 出带 → `instructionsFor` 泄漏缺陷 |
+| **P1** | 补**无信号对照**，分离"句子"与"选择"对 TR 的贡献 |
+| **P1** | 修 行/turn 单位（§13.16.6） |
+| P2 | `grounded` 硬编码 `false`；writer 降级 manifest；行内 marker 歧义 |
+| P3 | `PATH` 顺序，待重烧镜像 |

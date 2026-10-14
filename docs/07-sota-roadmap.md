@@ -3654,3 +3654,86 @@ INSUFFICIENT_EVIDENCE
 `pnpm check` exit 0；`test:tools` **310 passed + 31 subtests**（含新工具的 7 条）；
 cortex-eval **1,833**、cortex-memory **308**（+39）；两包四维覆盖率 **100%**；census 无新增孤儿；
 prettier 全量通过。派发 run **`38520676669`**。
+
+### 4.1.40 派发**失败**在基础设施上，而这次失败挖出两个比它更低层的缺陷（2026-10-14）
+
+**结论先行。** run `38520676669`（§4.1.39 的派发）跑了 **3h08m**，两侧各完成 **2 个 repetition**
+（**2000 条已评分作答**），然后在第 3 个 repetition 开头死于 `TypeError: terminated`。产物只有一个
+文件 `benchmark-error.log`（进度行 + 栈）。**§4.1.39 的四条预测一条都没读到，这次运行不是关于模型的
+结论** —— 它是关于 harness 的结论，而读它挖出两个**此前所有测试都在其上通过**的缺陷。
+
+#### 一、日志自己说了它已经完成了什么
+
+```
+reference-pipeline run=0 q=500/500
+cortex-memory      run=0 q=500/500
+reference-pipeline run=1 q=500/500
+cortex-memory      run=1 q=500/500
+progress: died on cortex-memory run=1 q=500/500 id=778164c6
+```
+
+#### 二、缺陷一：durability 修复**只覆盖了第一个 repetition**
+
+`partial-ablation.test.ts` 的存在理由就是 run `37942775447` —— 约 40 分钟评分被同一个
+`TypeError: terminated` 结束，产物只有栈。它的修复给两侧的**第一次**评测加了 answer sink，并用
+`attachPartial` 把已测向量挂在 error 上。
+
+而跑其余 repetition 的循环**既没有 sink 也没有 catch**：
+
+```ts
+for (let i = 1; i < runs; i++) {
+  const b = await evaluateWithScorer(dataset, baseline, scorer, options.onProgress, i);
+  const f = await evaluateWithScorer(dataset, feature,  scorer, options.onProgress, i);
+  ...
+}
+```
+
+所以 `i > 0` 的失败让 error **未被打包**传出，`error.partial === undefined`，失败路径无东西可写。
+**这是原缺陷晚了一个 repetition，而代价是它的八倍**：`ABLATION_RUNS=4`，四个 repetition 里有三个
+走这条完全没有 durability 的循环。
+
+修复是同款 sink 与同款 wrap，逐 repetition。partial 的含义由类型**已有**的字段承载：repetition 是
+顺序的，所以 `run: i` 即陈述"`0..i-1` 两侧都已完成，向量是第 `i` 个 repetition 的"。不加任何聚合 ——
+no-delta 规则不变。
+
+**并且「无可测量」的边界随之改变。** `attachPartial` 拒绝挂载两条空向量，因为那样的 partial 与
+"capture 坏掉"**同字节**。但那是关于 **repetition 0** 的论证 —— 唯一没有前序的 repetition。在
+`run: i > 0` 上，空向量对是一句**陈述**（*第 i 个 repetition 在测到任何东西之前就死了*），丢弃它
+就丢了"前面那些 repetition 发生过"的唯一durable记录。谓词因此加入 `run === 0`，两个极性都有测试。
+
+#### 三、缺陷二：会计**看不见那个最要紧的调用**
+
+`retryableFetchWithStats` 只经 `withResponse` 记账，而那条路径**有** response。耗尽路径直接抛
+`lastError`，所以**每个尝试都失败的调用在聚合里是完全缺席的**：计数器描述的是"恢复了的调用"，
+唯独漏掉"没恢复的那个" —— 而这恰恰是它唯一被查阅的用途。
+
+第二半是 error 本身携带了什么。`TypeError: terminated` 不含 endpoint、不含 provider、不含尝试次数，
+于是决定"重新派发还是改代码"的那个问题（*是瞬时故障扛过了 6 次尝试，还是循环没包住的某个 abort*）
+在记录里无处可答。**这类故障至今已摧毁三次运行**（`37942775447`、`38003036421`、`38520676669`），
+每次日志都足以**命名**错误、不足以**据以行动**。
+
+两处修复都遵循 `attachPartial` 的同一条论证：诊断**挂在** error 上而不是**包一层**，因为那行
+`Fetch.onAborted` 的栈是"这次损失属于基础设施而非 arm 缺陷"的唯一证据（§13.11.7）。
+
+| 修复 | 内容 |
+| --- | --- |
+| **`RetryExhaustion`** | url / 发出请求数 / 重试数 / 其中 429 数 / 耗时 / 传输层消息，作为 `retryExhausted` 挂上。参数类型是 `Error` 且**不设守卫** —— 循环在上一行已把非 Error 抛出转成 Error，`unknown` 分支会是"读起来像保险网却不可达"的代码，而**分支覆盖率**正是会发现它的东西 |
+| **`recordExhausted`** | 让耗尽的调用被计入。这需要一个新字段：一次没重试过的耗尽调用**不是 clean**（它没有完成），把它算作 clean 会让"流量整体在失败"的运行报告出比健康运行**更高**的干净调用比例。于是有 `exhaustedCalls`，以及 `cleanCalls + retriedCalls + exhaustedCalls === calls` 这条**被断言**的恒等式 |
+
+`bench/run-ablation.ts` 在失败路径上同时打印"耗尽的那次调用"和"进程级重试会计"，让读者能区分
+"单条连接被切断"与"许多次中的最后一次"。
+
+#### 四、对 §4.1.39 的预测**没有影响**
+
+修复只碰 durability、会计和一个 error 字段；prompt、gate、selection、parse 均未改变，所以重派发
+**就是同一个实验**。四条预测原样成立（含 parse 修复给出的修正基线）。丢失的那次运行**无法**从日志
+读出任何可用的东西：进度流只有题号没有对错，而 partial 刻意只携带作答而非比率 —— 在变短的向量上算
+出的比率是关于分母的数，不是关于系统的数。
+
+#### 五、验收与重派发
+
+`pnpm check` exit 0；`test:tools` **310 passed + 31 subtests**；census 无新增孤儿；
+cortex-llm **146**（+8）、cortex-eval **1,838**（+5）、cortex-memory 308；四维覆盖率 **100%**；
+prettier 全过。**缺陷注入**：去掉 feature 侧 wrap → 新测试失败 2 条；去掉 exhausted 记账 → 失败 1 条。
+
+重派发 run **`38566578567`**（`head_sha 954fff11`），携带 §4.1.39 的预测不变。
