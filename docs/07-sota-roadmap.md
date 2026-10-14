@@ -3737,3 +3737,84 @@ cortex-llm **146**（+8）、cortex-eval **1,838**（+5）、cortex-memory 308�
 prettier 全过。**缺陷注入**：去掉 feature 侧 wrap → 新测试失败 2 条；去掉 exhausted 记账 → 失败 1 条。
 
 重派发 run **`38566578567`**（`head_sha 954fff11`），携带 §4.1.39 的预测不变。
+
+### 4.1.41 阻塞确认：嵌入账户**余额不足**；三处修复已上线并在真实环境中验证（2026-10-14）
+
+**结论先行。** §4.1.40 的重派发 run `38566578567` **也失败了**，而这次的记录同时给出了**阶段**与
+**原因** —— 不是 arm 的缺陷，也不是 §4.1.40 修的那种传输故障：
+
+```
+Embedding backend: openai-compatible (model=embedding-3, dimensions=1024)
+progress: no question was started before the failure
+Error: Embedding request failed: 429 Too Many Requests —
+  {"error":{"code":"1113","message":"余额不足或无可用资源包,请充值。"}}
+    at OpenAIEmbedding.embed (packages/cortex-llm/src/embedding/openai.ts:61:13)
+    at async embedManyCached (retrieval.ts:256)
+    at async buildTurnIndex (retrieval.ts:397)
+    at async retrieveTopKByQueries (retrieval.ts:981)
+    at async buildRetrievalRelevanceIndex (relevance-index.ts:169)
+    at async main (bench/run-ablation.ts:233)
+```
+
+`余额不足或无可用资源包,请充值` 是 provider 自己的话，不含歧义。**栈整段落在 relevance index 的构造里，
+所以一题都没有评分** —— 30 分钟嵌入，什么都没产出。
+
+**而且它与上一次不是同一种故障**：`38520676669` 死于 `TypeError: terminated`（3h08m 后，第 2 个
+repetition 中途）。socket 被中止与计费被拒是两种事件、两种补救；两者的共同点是都需要嵌入 provider，
+且都没有产出数字。第一次是否**由**第二次引起，记录无法判定，本段不做此主张。
+
+#### 一、三处修复，各自对应一个测量
+
+| 修复 | 内容 | 为什么 |
+| --- | --- | --- |
+| **preflight** | 在任何耗时动作之前，用**一个**短常量文本要**一个**向量，返回**判决**而非抛出；消息是 provider 原文；`ok` 还要求向量长度等于声明维度 | `429 Too Many Requests` 单独读起来像"限流"（等一等就好），而这个条件恰恰相反。判决 vs 抛出：被拒是**要处理的条件**，崩溃是**要修的缺陷**，两者的读法相反 |
+| **产物记录嵌入后端** | `MemoryArmConfig.embedding` 携 provider / model / dimensions / 是否跑过 preflight，渲染进配置行 | 此前唯一的来源说明是 runner 的 **stdout**，而产物不携带它；且工厂在无凭据时**静默回退**到 256 维 hash embedding —— 于是在 fallback 上跑的运行与在 Zhipu 1024 维上跑的运行**各自都产出完整自洽的报告**。**此举关闭长期挂起的 roadmap item 17** |
+| **嵌入缓存不再被丢弃** | save key 带 `github.run_id`，restore 按 dataset-hash 前缀匹配 | 两次失败都以 `Failed to save: Unable to reserve cache ... another job may be creating this cache` 收尾 —— 因为 save 复用了 restore 请求的那个 key，两个运行争一个 key，输的一方向量被丢弃。这与失败路径的**有意设计相反**（`persistArmEmbeddingCache` 之所以在退出路径上跑，正因"死在第 300 题的运行仍然为嵌入付过钱"） |
+
+**preflight 不能做什么（写明，因为诚实的边界比功能更重要）**：它**不能**阻止余额在运行中途耗尽 ——
+`38566578567` 在被拒之前已经被服务了约 **9,589** 个请求，所以 `t=0` 有余额的账户在 `t=30m` 可以是空的。
+主张是窄的：**每次派发用一次请求学到运行本来要用一次运行学到的事**。
+
+#### 二、探测运行：三处修复的端到端验证
+
+修复用一个**故意**对已阻塞账户发起的派发来验证，理由是两个结果都有用：账户仍空则秒级失败并证明守卫；
+已充值则这次运行**就是** §13.22 登记的那个测量。run `38582212737` 不到两分钟失败，日志即验证：
+
+```
+=== transport retry accounting (process-wide) ===
+{"attempts":6,"retried":5,"rateLimited":6,"retryAfterHonoured":0,
+ "calls":1,"retriedCalls":1,"cleanCalls":0,"exhaustedCalls":0,"retryRate":1}
+Error: embedding preflight failed against openai-compatible (model=embedding-3):
+  Embedding request failed: 429 Too Many Requests — {"error":{...,"余额不足..."}}
+    at main (bench/run-ablation.ts:195:11)
+```
+
+| 读数 | 含义 |
+| --- | --- |
+| **`calls: 1`** | 同一条件此前代价是 **9,589 次 provider 调用 + 30 分钟**，现在代价是**一次调用**（`attempts: 6` = 一次调用重试 5 次；`rateLimited: 6` = 六次尝试全被拒） |
+| **`cleanCalls: 0`** | 这次调用**没有**被报告成"没遇到麻烦"—— 正是 §4.1.40 加的那个字段在为它存在的理由工作 |
+| **栈指向 preflight** | 读者能区分"检查被拒"与"运行死在自己的工作中途" |
+| **`Save embedding cache` success** | key 为 `longmemeval-embedding-<hash>-38582212737`；此前两次运行这一步都失败 |
+
+#### 三、状态：阻塞，以及被什么阻塞
+
+**§13.22 的测量在嵌入 provider 能服务请求之前无法产出。没有代码改动能触及这一点** ——
+要么账户充值，要么换嵌入后端。三条**实测**事实界定选项：
+
+1. **离线 fallback 对这批测量不可用**：工厂唯一的非远端后端是 `HashEmbedding`（256 维，**不是语义模型**），
+   relevance index 会用哈希几何给 turn 打分。它产出的是一份关于**另一个实验**的完整报告 ——
+   这正是新增的产物字段要命名的东西。
+2. **换 provider 不需要代码，只需要环境**：工厂读取 `EMBEDDING_BASE_URL` / `EMBEDDING_MODEL` /
+   `EMBEDDING_API_KEY` / `EMBEDDING_DIMENSIONS`，因此指向任何 openai-compatible 端点 = 一个 secret
+   + workflow 里三行 `env:`。**这里刻意没有接线**，因为后端切换会给每次比较的**两侧全部重新嵌入**，
+   所以它是一份**登记**而不是一个旋钮：四个归档运行将不再与之后任何运行可比（而**单次运行内部的 delta
+   仍然有效**，因为两侧共享同一向量集）。
+3. **归档数字完好**：`38250133116`、`38394103193`、`38439899858`、`38487229554` 都在账户耗尽**之前**
+   由 Zhipu `embedding-3` @ 1024 维产出，§4.1.37 与 §4.1.38 的判读建立在其上。
+   **缺的是一个测量，不是前四个的记录。**
+
+#### 四、验收
+
+`pnpm check` exit 0；`test:tools` **314 passed + 31 subtests**（含新增的缓存 key 形状守卫）；
+cortex-eval **1,849**（+11）、cortex-llm 146、cortex-memory 308；四维覆盖率 **100%**；census 干净；
+prettier 全过。**缺陷注入**：缓存 save key 或 restore 前缀任一被还原，新守卫以可据以行动的消息失败。
