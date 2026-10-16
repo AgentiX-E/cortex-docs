@@ -3769,7 +3769,9 @@ repetition 中途）。socket 被中止与计费被拒是两种事件、两种�
 | --- | --- | --- |
 | **preflight** | 在任何耗时动作之前，用**一个**短常量文本要**一个**向量，返回**判决**而非抛出；消息是 provider 原文；`ok` 还要求向量长度等于声明维度 | `429 Too Many Requests` 单独读起来像"限流"（等一等就好），而这个条件恰恰相反。判决 vs 抛出：被拒是**要处理的条件**，崩溃是**要修的缺陷**，两者的读法相反 |
 | **产物记录嵌入后端** | `MemoryArmConfig.embedding` 携 provider / model / dimensions / 是否跑过 preflight，渲染进配置行 | 此前唯一的来源说明是 runner 的 **stdout**，而产物不携带它；且工厂在无凭据时**静默回退**到 256 维 hash embedding —— 于是在 fallback 上跑的运行与在 Zhipu 1024 维上跑的运行**各自都产出完整自洽的报告**。**此举关闭长期挂起的 roadmap item 17** |
-| **嵌入缓存不再被丢弃** | save key 带 `github.run_id`，restore 按 dataset-hash 前缀匹配 | 两次失败都以 `Failed to save: Unable to reserve cache ... another job may be creating this cache` 收尾 —— 因为 save 复用了 restore 请求的那个 key，两个运行争一个 key，输的一方向量被丢弃。这与失败路径的**有意设计相反**（`persistArmEmbeddingCache` 之所以在退出路径上跑，正因"死在第 300 题的运行仍然为嵌入付过钱"） |
+| **嵌入缓存不再被丢弃** —— **⚠ 此行所述效果在 2026-10-17 被实测证伪，见 §93** | save key 带 `github.run_id`，restore 按 dataset-hash 前缀匹配 | 两次失败都以 `Failed to save: Unable to reserve cache ... another job may be creating this cache` 收尾 —— 因为 save 复用了 restore 请求的那个 key，两个运行争一个 key，输的一方向量被丢弃。这与失败路径的**有意设计相反**（`persistArmEmbeddingCache` 之所以在退出路径上跑，正因"死在第 300 题的运行仍然为嵌入付过钱"） |
+
+> **翻转（§93）**：save key 的改动**为真**，但 restore **主键没有跟着改**。`actions/cache` 先试主键、只有**未命中**才看 `restore-keys`；而 8 月 29 日在**裸哈希键**下的那个条目一直存在，于是主键每轮**命中**、前缀永不触达、带 run id 的条目**没有任何东西去读**。证据是缓存库本身：**每个带 run id 条目的 `last_accessed_at == created_at`**，而裸哈希条目在 10-16 仍被访问。代价：三个连续运行各自恢复到同一个 **170,095** 向量、各自保存一个 **1.59 倍**大的缓存，并且各花 **1h38m–1h49m（约半程墙钟）** 重新嵌入上一轮已付费的向量 —— 直至 run `38910134192` 在**第 0 题**之前烧干账户。同轮的第二处空白：一个**在 restore 合并之前**就死掉的运行会把**空**快照覆盖到已恢复的文件上并发布出去（两个 216/212 字节条目即在库中），所以**只修键会让下一次派发恢复到 216 字节**。两处已一并修复。
 
 **preflight 不能做什么（写明，因为诚实的边界比功能更重要）**：它**不能**阻止余额在运行中途耗尽 ——
 `38566578567` 在被拒之前已经被服务了约 **9,589** 个请求，所以 `t=0` 有余额的账户在 `t=30m` 可以是空的。
@@ -3818,3 +3820,5 @@ Error: embedding preflight failed against openai-compatible (model=embedding-3):
 `pnpm check` exit 0；`test:tools` **314 passed + 31 subtests**（含新增的缓存 key 形状守卫）；
 cortex-eval **1,849**（+11）、cortex-llm 146、cortex-memory 308；四维覆盖率 **100%**；census 干净；
 prettier 全过。**缺陷注入**：缓存 save key 或 restore 前缀任一被还原，新守卫以可据以行动的消息失败。
+
+> **§93 的补充**：那条守卫钉的是 save key 唯一、前缀存在、数据集哈希在键里 —— 三个性质在缺陷旁边**全部通过**。缺陷在它**没有点名的那一半**：restore 的**主键**。新规则（restore 主键不得被 save 键严格扩展，反之亦然）已加入同一文件，并在**未修复的树**上先失败过一次。**注释不是检查，半个模式也不是。**
