@@ -14675,3 +14675,108 @@ $ grep -rn "numeric_mismatch" .
   会归入 `other`；它其实是数值失配，因为读它的那条规则**根本不看** raw output。
   这条测试现在断言它本来要断言的东西 —— **缺 raw output 不构成 abstention** ——
   并另外断言**缺 raw output 不会压制那些不读它的规则**。
+
+## 95. run `38941095220`：**没有读数**，两个缺陷，和第一次诚实的代价核算
+
+### 95.1 一句话
+
+`ask: enumerated` 的第二次派发跑了 **79 分 14 秒**、结论 `failure`、产物 **4,820 字节**。
+§13.34.5 的五条预测**一条都无法裁决**（报告只在成功时写出）。换来的是**两个缺陷**，
+以及 §93 那个缓存修复**实际买到了什么**的第一次测量。
+
+| 时刻 | 事件 |
+| --- | --- |
+| `17:37:59` | 嵌入 preflight `ok` —— 余额可用 |
+| `17:38:06` | **`Restored 239456 embedding vectors`** —— §93 的修复**第一次真正读到 run-keyed 条目** |
+| `18:04:57` | `Relevance index: 32000 scored …` —— **26 分 51 秒**，此前新嵌入 21,709 条 |
+| `18:28:47` | reference-pipeline `run=0` 完成 500/500 |
+| `18:44:07` | cortex-memory `run=0` 完成 500/500 |
+| `18:56:58` | reference-pipeline `run=1` **死在 q=391**，`TimeoutError` |
+| `18:57:09` | `Embedding cache: persisted 261165 vectors` |
+
+### 95.2 缓存修复买到了什么：239,456 → 261,165
+
+修复**生效**。但 §93.7 里被写成"存储周转而非正确性"的那处残余，**比那句话暗示的更贵**：
+缺的 21,709 条向量占掉了这次 79 分钟里的 **26 分 51 秒** —— 因为 restore 解析到的是 **955 MB** 那条，
+而不是 **1.10 GB** 那条。
+
+机制值得写下来，因为它正是修复另一半的直接后果：验收运行 `38939122161` 在 preflight 就死了，
+磁盘上留着已恢复的文件，于是把它**以更新的键再发布了一次**。`restore-keys` 取**最近创建**的条目，
+于是"把已经有的内容再发布一遍"就把最新条目**钉在较小的那份缓存上** —— §13.26 / §13.32 两次运行写下的
+1.10 GB 条目从此在"recency"上不可达。
+
+只要之后有运行真的嵌入够多并发布更大的文件，这是**自纠正**的，而这次就做到了（`261165`）。
+记为一个**被测量到的性质**而不是脚注：**只发布"自己恢复到的内容"的运行，可以把缓存的收敛推迟整整一次索引构建。**
+
+### 95.3 缺陷一：一个**已完成的** repetition 和一个死掉的同样可弃
+
+失败路径写下的 `benchmark-cortex-memory-partial.json`（完全按 §13.31 的规格）：
+
+```json
+{"reached": 390, "total": 500, "run": 1, "baselineAnswers": [390], "featureAnswers": []}
+```
+
+**repetition 0 的两侧各 500/500 已完成。** 一份完整、成对、N=500 的测量在失败路径运行时**就在内存里**，
+而 `featureAnswers` 是一个空列表。
+
+§13.31 修的是**早一个 repetition** 的同一个损失：run `38520676669`
+"completed repetitions 0 and 1 on both sides — two thousand graded answers — and died on `TypeError: terminated`
+at the start of repetition 2"，那次修复给**正在死的**那一趟加了 sink 与 catch。
+但它写下的规则**比修复更宽**：*"a repetition is a measurement, and losing one silently is the defect that
+file exists to prevent."* —— 而只有正在死的那一趟变成了持久的。
+
+`PartialAblation` 现在携带 `completed: CompletedPass[]`：**每一个跑完的 repetition**、两侧、按数据集序，
+repetition 0 在它结束处记录，其余在循环底部记录。**不从中计算任何东西**：
+`delta` 仍然不出现在 partial 里，因为注册的统计量是 4 个 repetition 之上的，
+而一个被救回的 repetition 是一条**完整向量** —— 正是最容易招来 §13.31 所禁止的那种减法的形状。
+一条被救回的 repetition 支持的读数标注为 **`1 of 4`**，不是那个预注册的数字。
+
+### 95.4 缺陷二：超时盖住了**响应头**，没盖住**body**
+
+同一次运行的传输账目：
+
+```
+{"attempts":6702,"retried":0,"rateLimited":0,"calls":6702,"retriedCalls":0,
+ "cleanCalls":6702,"exhaustedCalls":0,"retryRate":0}
+```
+
+**6,702 次调用里零重试、零耗尽，而一个 `TimeoutError` 杀掉了进程。** 两个事实**只有一种方式同时成立**：
+`attemptSignal` 把 `AbortSignal.timeout(timeoutMs)` 挂在**请求**上；`fetch` 在**响应头**到达时就 resolve；
+包装器把那个 response 返回了。于是当**调用方**去读 body 时，倒计时**仍在走** ——
+一个在它触发时仍在到达的 body，会在调用方的 `res.json()` 处抛错，**比重试循环高一帧**，
+而那次调用已被记为 `clean`、没有任何 attempt 还开着可重试。
+
+§13.31 的注释**逐字点名过**这种可能 —— *"a single abort from somewhere the retry loop does not wrap"* ——
+并把它列为"决定正确响应是重派还是改代码"的那个问题。现在它有答案了，**是改代码**。
+
+**修复**：一次 attempt 等于**完整的往返**。body 在发出请求的**同一个 `try` 内**读完（`withBufferedBody`），
+于是 body 层的 abort 与其它传输失败同类，走正常的退避与重试；回调方拿到的 response 由这些字节**重建**，
+所以没有任何调用方需要改。**不改的**：倒计时的值、重试次数、退避、状态分类 —— 那些不是失败的原因。
+
+### 95.5 验证
+
+- `pnpm check` **exit 0**；除 `cortex-node` 分支列（§13.29）外**四维全 100%**。
+  tools **338 passed + 40 subtests**；cortex-llm **149**（+3）；cortex-eval **1888**（+5）。
+- **两个修复都先红**。五条 `completed` 测试在未修复的树上因 `partial.completed` 未定义而失败；
+  超时那条则是**通过"resolve 成功"失败** —— 那正是缺陷本身（循环返回了一条活着的流，abort 落在所有计数器之外）。
+- **超时测试是判别器，不是描述。** 它的假 fetch 立刻返回响应头、永不完成 body，
+  所以**只有**包装器在自己 `try` 内读 body 才可能通过。两条伴随测试守住缓冲本身：
+  正常完成的响应仍必须给出状态、响应头与解析后的 JSON；`204` 无 body 仍必须给出状态。
+- **我自己写错的一条测试被改正而不是绕过。** `completed` 测试的第一版假设两个 system 共用一个调用计数器；
+  实际 `countingSystem` 各自计数，于是序号是应有值的两倍，每条测试都"resolve 成功"而不是 reject。
+  针对真实消融跑了一次探针把次序钉死（`base` 1-5、`feat` 6-10、`base` 11-15 …），序号**从测量中**改正。
+
+### 95.6 本轮之后的状态与最优路径
+
+| 优先级 | 事项 | 需要 provider |
+| --- | --- | --- |
+| **P0** | **已重新派发** `ask: enumerated`（树 `63a39e45`）。§13.34.5 五条预测仍未裁决；预测 2 的仪器已存在（§94），而这次运行**丢掉自己工作的三条路**已关掉两条 | 是（余额可用） |
+| **P0 ✅** | 缓存耦合（§93）；预测 2 背后的分类法（§94）；已完成的 repetition 持久（§95.3）；超时覆盖 body（§95.4） | 否 |
+| P1 | 恢复 trace 产物的 turn 单位与 `goldOverlap`（§13.33.3，注册改动而非清理） | 否 |
+| P1 | **无信号对照**（§13.22.8）：机制已存在（`cortex_memory_relevance: none`），需要一次注册派发 | 否（稍后派发） |
+| P2 | 只发布"已恢复内容"的运行会推迟缓存收敛一次索引构建（§95.2）；writer 的 reduced manifest 未上传；行内 reduction marker 有歧义 | 否 |
+| P3 | `PATH` 顺序，等待重烧镜像 | 否 |
+
+**这次运行本可以保住自己工作的三条路是**：缓存（§93 已修，而且它**确实**保住了 `261165` 条向量）、
+**已完成的 repetition**（本节修复）、以及**那次 abort**（本节修复）。
+下一次派发是**同一个请求**，但**自己更多的工作被保护起来** —— 这就是本轮买到的东西。
