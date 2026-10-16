@@ -14541,7 +14541,33 @@ its embeddings"*），于是**用空文件覆盖了 workflow 刚恢复到同一�
 - 一条测试断言持久化调用的**返回计数**，三条断言 `describeEmbeddingCachePersist` 产出的句子 ——
   于是"一次被跳过的发布"**再也不会在日志里沉默**，而沉默正是两个 216 字节条目在库里躺了七周的原因
 
-### 93.7 本节之后的项目状态与最优路径
+### 93.7 验收运行：每一条判据都命中
+
+run **`38939122161`**（`63c5ce9e`），**故意**对仍然干涸的账户派发 —— 沿用 §13.24.3 的方法：
+预期会失败的运行，仍是**唯一**能观察到"restore 到底解析到哪个条目"的方式，而两个结果都有价值。
+job `17:22:05Z` → `17:23:23Z`，**78 秒**，`failure`。
+
+| 验收判据 | 日志原文 |
+| --- | --- |
+| 前缀路径**是否真的触发** | `Cache hit for restore-key: longmemeval-embedding-fc18…-38910134192` |
+| 解析到**最近创建**的条目 | `Cache restored from key: …-38910134192`，`Cache Size: ~955 MB (1001342784 B)` |
+| 新的保存键已生效 | `Cache saved with key: …-38939122161-1` —— 含 `run_id` **与** `run_attempt` |
+| **空快照被拒绝** | `Embedding cache: nothing to persist, …/embedding-cache.bin left as restored` |
+| 干涸账户被**点名**而非推断 | `embedding preflight failed against openai-compatible (model=embedding-3): … 429 … {"error":{"code":"1113"…}}` |
+| 失败记录依然完整 | `progress: no question was started before the failure` |
+
+`Cache hit for **restore-key**` 是 action 自己的措辞，意思是"**主键未命中、前缀命中**" ——
+正是本仓库在修复前从未产出过的那句话。修复前同样的投递是 `Cache hit for: …<裸哈希>`：主键，以及搜索的终点。
+
+**78 秒，对比同一干涸账户修复前的 1h17m33s。** 差别的全部内容就是：运行不再先花 77 分钟重新嵌入，
+然后才发现自己根本嵌不了。
+
+**一处残余，被测量而不是被隐藏**：在 preflight 就死掉的运行，磁盘上仍是**已恢复**的那份文件，
+于是保存步骤会把约 1.0 GB 以新键**再发布一次**。这是新规则**按规范**工作的结果（"left as restored"），
+代价是存储周转，而非正确性：再发布的字节正是 restore 刚读到的那些，存储受 10 GB LRU 预算约束，
+且一次运行最多发生一次。
+
+### 93.8 本节之后的项目状态与最优路径
 
 | 优先级 | 事项 | 是否需要 provider |
 | --- | --- | --- |
