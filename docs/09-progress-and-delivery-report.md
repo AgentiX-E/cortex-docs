@@ -15566,3 +15566,81 @@ GitHub runner 两样都没有，而 `tools/__tests__` 在每次推送时都会�
 这也是**两轮内第二次**由"测试对环境的依赖而非对代码的依赖"造成的 CI 失败 ——
 §13.36 那次是未声明的 PyYAML，在收集阶段失败。两次都是 CI 发现的而不是本地门禁发现的，
 这**正是 CI 的用处**；两次都记录在案，因为**门禁的绿是对门禁所处环境的断言**。
+
+## 103. 缺陷在**三个文件**里，而只有一个有测试
+
+### 103.1 普查
+
+§102 修好派发脚本的模块级 token 读取，是因为**一条 import 它的测试**打红了 CI。
+随之而来的问题显而易见：**那个脚本是唯一一个吗？** 于是从"不是 checkout 的目录"import 每一个 `tools/*.py`：
+
+```
+32 个脚本；3 个在空目录下 import 失败
+  dispatch-b7-ab.py:   FileNotFoundError: '.git/config'
+  inject-b7-cohort.py: AttributeError: 'NoneType' object has no attribute '__dict__'
+  push-via-api.py:     CalledProcessError: 'git remote get-url origin' returned non-zero
+```
+
+其中两个与 §102 是**同一个缺陷**，一个是伪影：
+
+| 文件 | 顶层做了什么 | 判定 |
+| --- | --- | --- |
+| `dispatch-b7-ab.py` | `TOKEN = token()` —— 读 `.git/config` | **真实** |
+| `push-via-api.py` | `REPO, BRANCH = _origin()` —— 跑 `git remote get-url origin`，且 `TOKEN = token()` | **真实** |
+| `inject-b7-cohort.py` | 什么都没做；`AttributeError` 是 `@dataclass` 在 `sys.modules` 里找自己，而加载器没登记 | **测试的伪影** |
+
+两个真实的都**没有失败过**，原因与 §102 相同：**没有测试 import 它们**。
+`push-via-api.py` 承担了本攻关**每一次**推送，却从未被除"以脚本方式运行它的解释器"以外的任何东西 import 过。
+
+### 103.2 修复，以及一条消息背后的三个问题
+
+两个文件都把读取移到带缓存的访问器后面。`push-via-api.py` 新增 `origin()`、`repo()`、`branch()` 并保留
+`token()`；`dispatch-b7-ab.py` 新增 `token()`。而三个访问器现在都**区分它们此前混淆的问题**，
+因为每一个的修法都不同：
+
+| 情形 | 之前 | 之后 |
+| --- | --- | --- |
+| 没有 `.git` 目录 | 关于某条路径的 `FileNotFoundError` | "run this from the repository root" |
+| 有 `.git` 但没有 `origin` | 关于某个子进程的 `CalledProcessError` | "run this from the repository root, in a checkout whose origin is the repository you mean to push" |
+| 有 `origin` 但没有 token | `SystemExit`（本来就对） | 不变 |
+
+**中间那一条是新点名的**，而它重要，因为 `_origin` 的 docstring 里已经记着一次险情：
+从错误的 checkout 推送，会把 cortex-docs 的内容推进 cortex 仓库。
+**"我在往哪个仓库推"恰恰是 `CalledProcessError` 答得最差的问题。**
+
+### 103.3 守卫是**遍历目录**，不是逐个文件
+
+`tools/__tests__/test_tools_import_cleanly.py` 对**每一个** `tools/*.py` 参数化，从临时目录 import 它。
+逐个文件的测试会发现 §102 与本节修掉的那两个；**只有目录级普查会在没人想到去看的情况下找到第三个。**
+
+三个细节让它诚实：
+
+- **非空断言。** `assert len(SCRIPTS) >= 20` —— 对零个文件的参数化会**空过**，而这正是普查最可能的失败模式
+- **加载器在执行前把模块登记进 `sys.modules`**，因为 `@dataclass` 会在那里找自己。
+  不登记的话，`inject-b7-cohort.py` 会以一个与脚本毫无关系的 `AttributeError` 失败 ——
+  **一个会被当成"发现"报告的测试伪影**
+- **失败消息说明该怎么做**：点名 §102 与"把它移到访问器后面"，
+  于是下一个写出模块级 `git` 调用的人不必重新发现它为什么被拒
+
+另有四条测试断言访问器**在** checkout 里仍返回正确的值 —— `repo() == 'AgentiX-E/cortex'`、
+`branch() == 'master'`、token 长度 > 20 —— 因为"惰性"否则与"坏掉"无法区分，
+而它被改成惰性的那个文件**是每一次推送都依赖的文件**。
+
+### 103.4 验证
+
+- tools **408 passed + 40 subtests**（原 371，+37 —— 每个脚本一条参数化，加四条访问器测试）；`pnpm check` **exit 0**
+- **推送脚本的修复是靠"用它推送"验证的**：包含该改动的那个 commit，就是由改动后的代码推出去的**第一个**。
+  对于一个整个职责就是推送的文件，这是唯一有意义的测试
+- 提交前先在仓库内手工核对：`repo() = AgentiX-E/cortex`、`branch() = master`、`token()` 93 字符；
+  然后从空目录：32 个脚本全部 import 成功
+
+### 103.5 这对本攻关**自身工具**意味着什么
+
+这三个文件在本仓库里、在整个攻关期间**一直在工作**。它们不是坏的 ——
+**它们是不可测的**，而没有任何东西说出这一点，因为没有任何东西试过。
+`pnpm check` 的绿从来不是关于它们的证据：它们唯一的执行路径是"在 checkout 里 `python3 tools/x.py`"。
+
+**这与本轮找到的每一个缺陷形状相同。** §94 的分类法是对的，读的是错误的字段；
+§97 的门是对的，读的是错误的数字；§102 的派发是可用的，却无法被 import。
+**一个东西可以做好它的工作，同时无法回答关于它自己的一个问题** ——
+而唯一能发现这件事的方式，是在一个**答案没有被预先安排**的地方去问那个问题。
