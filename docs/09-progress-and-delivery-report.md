@@ -15499,3 +15499,70 @@ cortex_memory_relevance: none     # 到达序前缀，即 §13.16 之前的 ship
 | **P1** | 恢复 trace 产物的 turn 单位与 `goldOverlap`（§13.33.3） | 否 |
 | P2 | 只发布"已恢复内容"会推迟缓存收敛一次索引构建；writer 的 reduced manifest 未上传 | 否 |
 | P3 | `PATH` 顺序，等待重烧镜像 | 否 |
+
+## 102. 十条**在测试套件运行的地方跑不起来**的测试
+
+### 102.1 发生了什么
+
+本地 `pnpm check` **exit 0**，而 `Verify` 在 `9fcb7fe1` 上**失败**。十条新的派发覆盖测试全部报同一句：
+
+```
+SystemExit: no oauth2 token in .git/config
+```
+
+**覆盖本身没有问题。** `tools/dispatch-cortex-memory-ab.py` 在**模块级**读了 PAT：
+
+```python
+TOKEN = token()      # 模块级，而 token() 在没有 token 时会 exit
+```
+
+于是**import 这个脚本**就要求一份 `.git/config` 里带 oauth2 token 的 checkout。
+GitHub runner 两样都没有，而 `tools/__tests__` 在每次推送时都会被收集。
+
+### 102.2 为什么一直没人发现 —— 而这才是要点
+
+另外三个测试文件引用了这个脚本，而且**全都通过**。
+其中 `test_dispatch_inputs.py` 与 `test_preregistration_config.py` 把它当**源文本**读（`ast.parse`），
+**不执行**它。我的新文件是第一个真正 **import** 它的 —— 因为 `apply_overrides` 与 `parse_argv` 是纯函数，
+而测一个纯函数的方式就是 import 它。
+
+**所以这个缺陷从该文件被写出时就在，并且对一个从未 import 过它的测试套件完全不可见。**
+那套测试覆盖了脚本的**内容**，从未覆盖它的**模块**。
+
+### 102.3 修复
+
+读取移到首次使用，带缓存：
+
+| 操作 | 之前 | 之后 |
+| --- | --- | --- |
+| 从任意目录 `import` 该脚本 | **需要一个 token** | 成功；`_TOKEN is None` |
+| `apply_overrides(INPUTS, [...])` | 无 token 不可达 | 可用 |
+| `token()` | import 时读取 | 首次调用时读取、缓存，并以一句话退出 |
+
+只有 `req` 需要凭证，所以只有 `req` 为它付费。而访问器现在区分它此前混淆的**两个不同问题**：
+
+- **根本没有 `.git/config`** —— "run this from the repository root"。
+  此前 `open` 会抛 `FileNotFoundError`，给出一个关于路径的 traceback，而它的修法与下一个不同
+- **有 config 但没有 token** —— "no oauth2 token in .git/config"
+
+### 102.4 验证
+
+- 四条新测试，其中三条**精确复现** CI 失败：`chdir` 到一个不是 checkout 的目录，
+  断言 import 成功、`_TOKEN is None`、`apply_overrides` 可用、**只有** `token()` 拒绝。
+  第四条断言 token **只读一次**而不是每次请求都读 —— 重读会拿到一个被轮换过的文件，而不是运行开始时的那个 token
+- **修复是靠在推送前模拟 runner 验证的**，不是靠读代码：临时目录 + 一份含
+  `[remote "origin"] url = https://github.com/x/y` 而没有 `oauth2:` 的 `.git/config`。
+  `import` 成功、`_TOKEN` 为 `None`、`apply_overrides` 生效、`token()` 以正确的那句话退出
+- tools **371 passed + 40 subtests**（+3）；本地 `pnpm check` exit 0，随后 `2d893799` 上
+  **`Verify` success** —— 在 runner 上确认，而不是从本地运行推断
+
+### 102.5 教训：这是关于**测试套件**的，不是关于脚本的
+
+**`pnpm check` 通过是关于这台机器的证据，不是关于 runner 的证据**，
+而差别恰恰是模块在 import 时可以依赖的那类状态：凭证、工作目录、环境变量、`.git` 目录是否存在。
+**一条 import 模块的测试会执行它的顶层代码**，所以一个顶层就去拿凭证的脚本，
+是一个**只能在开发者的 checkout 里跑测试**的脚本。
+
+这也是**两轮内第二次**由"测试对环境的依赖而非对代码的依赖"造成的 CI 失败 ——
+§13.36 那次是未声明的 PyYAML，在收集阶段失败。两次都是 CI 发现的而不是本地门禁发现的，
+这**正是 CI 的用处**；两次都记录在案，因为**门禁的绿是对门禁所处环境的断言**。
