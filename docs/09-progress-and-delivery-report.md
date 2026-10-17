@@ -15163,3 +15163,54 @@ return statedNumbers(predicted).includes(e);
 **本轮的形状值得直白写下来**：注册的五条预测**全部成立**，而它的核心数字**仍然是错的** ——
 因为产出那个数字的仪器正在读**一个操作数**。
 **一条预测可以被一台朝同方向坏掉的仪器"满足"**，唯一防线是去读那个数字所由之计算的**记录**。
+
+## 98. 报告必须说出它数的是哪个字段
+
+### 98.1 两张表，两个字符串
+
+§97 的字段修复之后，工具里有**两份报告**，各自分类**不同的字符串**：
+
+| 调用 | 字段 | run `38985220145` 的 MR |
+| --- | --- | --- |
+| 默认 | `rawOutput` —— 模型写出的文本 | `bare 2 / prose-then-token 33 / other 86` |
+| `--failures` | `answer` —— 判分器实际读的字符串 | `abstention 35 / plan_output 0 / numeric_mismatch 52 / long_prose 1 / other 4` |
+
+在 §13.40 之前公布的**每一份** roster 上，这两个字符串是**同一个值**，所以两张表一致、区别不可见。
+在 enumerated 运行上，它们在 **121 条中的 86 条**上不一致 —— 而**两份报告都没说**自己数的是哪个。
+把第一张表当成第二张读的人，会得出"MR 的 71% 答案既不是数值也不是散文"，
+而真相是"MR 的 71% **raw output** 是转写"。
+
+**这是本攻关同一缺陷类的第五次**，也是最便宜的一次收口：§13.24 的 docstring、§13.34.6 的文本 grep、
+§13.36 的渲染注释、§13.37 的 workflow 注释，以及 §13.40–13.42 的字段混淆。
+**报告是关于某个字段的断言，那就必须点名那个字段。**
+
+### 98.2 改动
+
+两份报告都在表格之前打印一行：
+
+```
+field: rawOutput -- the text the model wrote, not necessarily the graded answer. Pass --failures for the answer-level taxonomy.
+field: answer -- the string the scorer graded (null where the arm declined)
+```
+
+而 `--failures` 的**定义块**——它此前仍把每条规则描述成"读 rawOutput"——现在按实际写：
+
+| 形状 | 原措辞 | 现措辞 |
+| --- | --- | --- |
+| `abstention` | "the last non-empty line of rawOutput is INSUFFICIENT_EVIDENCE" | "the arm returned no answer (`answer` is null)" |
+| `plan_output` | "rawOutput opens with 'Let me gather' or 'Step 1'" | "the answer opens with …" |
+| `soft_refusal` | "a refusal written out in prose, in the answer or the raw output" | "a refusal written out in prose, in the answer" |
+
+**定义块正是读者用来判断"这张表是否就是我要的东西"的东西**，而它是上次修复中**唯一**还在描述旧规则的部分。
+只改 `failure_shape` 而不动定义块是完全可能的 —— **数字会对，而关于数字的解释会错**，
+这正是本攻关反复遇到的那种失败。
+
+### 98.3 验证
+
+- tools **350 passed + 40 subtests**（+3，即本节的三条新测试）；`pnpm check` **exit 0**
+- **先红**：三条新测试在未修的工具上全红 —— 两行 `field:` 不存在，普查断言也无法匹配
+- **我自己的一条断言写错了，按实测改正而非绕过**：第一版钉住了报告的**列宽**
+  （`'other                86'` 与 `'numeric_mismatch   52'`），后者因空格数不符而失败。
+  两条普查断言现在改为**宽松空白匹配** —— 因为一条**会在外观改动时失败、却对它所守的缺陷视而不见**的测试，
+  比没有测试更糟
+- `--failures` 的定义块被断言**必须点名 answer**，于是日后把措辞改回去会在 CI 失败，而不是在读者的理解里失败
