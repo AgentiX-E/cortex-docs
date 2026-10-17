@@ -15214,3 +15214,78 @@ field: answer -- the string the scorer graded (null where the arm declined)
   两条普查断言现在改为**宽松空白匹配** —— 因为一条**会在外观改动时失败、却对它所守的缺陷视而不见**的测试，
   比没有测试更糟
 - `--failures` 的定义块被断言**必须点名 answer**，于是日后把措辞改回去会在 CI 失败，而不是在读者的理解里失败
+
+## 99. 判读此前每次都是**临时脚本** —— 而 §13.38 正是这么来的
+
+### 99.1 模式与代价
+
+连续四节都用一段**为该节写的、没有提交的**脚本去引用运行里的数字：
+
+| 章节 | 脚本 | 它产出的东西 |
+| --- | --- | --- |
+| §13.38 | 一次性，从未提交 | §13.34.5 预测 2 背后的 `41 of 47` —— **该预测无法被重新推导** |
+| §13.41 | 内联 `python3 - <<'PY'` | `52` 条数值失配，以及四份 roster 的转移矩阵 |
+| §13.42 | 内联 | 同一个 52，**第二次**计算 |
+| §13.43 | 内联 | 两个字段的不一致计数 |
+
+§13.38 正是**修第一个**的那一节，而它自己的修复是用**同一个缺陷**的脚本复现的。
+**一个数字的持久性等同于产出它的代码的持久性**；这个模式还意味着每一节都从零重算同一批量
+（合计、逐能力计数、分类法），每次算对的概率都不一样。
+
+### 99.2 `tools/readout-arm-run.py`
+
+```
+$ python3 tools/readout-arm-run.py --reference run-38985220145.json
+
+config: ask=enumerated relevanceUnits=turn relevanceSignal=retrieval relevanceTopK=64 promptContract=abstention-evidence-blocks
+accuracy (this repetition): baseline 0.4440  feature 0.6540  -> +21.00pp
+aggregates (the repetitions behind the register): baseline avg 0.442 (min 0.438 max 0.444)  feature avg 0.6745 (min 0.654 max 0.706)
+registered statistic: delta +23.25pp -- the mean of the repetitions above, which is the number the register uses. McNemar p=1.814e-09 (significant)
+discordant: baseline-incorrect/feature-correct 205, baseline-correct/feature-incorrect 100
+
+per capability (feature side, counted from the roster):
+  ABS: 30/30  against 38595325261: 29 (+1)
+  IE: 132/150  against 38595325261: 133 (-1)
+  KU: 61/72  against 38595325261: 62 (-1)
+  MR: 29/121  against 38595325261: 51 (-22)
+  TR: 75/127  against 38595325261: 72 (+3)
+
+MR failure taxonomy (field: answer)
+  abstention: 35
+  plan_output: 0
+  ...
+  numeric_mismatch with plan_output folded in: 52  (§13.34.4's reading)
+```
+
+**两个准确率被分开打印，因为它们是不同的数字。** `feature.metrics.accuracy` 是**一次** repetition ——
+四次里最差的那次（这正是它等于 `featureAggregate.min` 的原因），而 `ablation.delta` 是**均值之差**。
+在 run `38985220145` 上两者分别是 `+21.00pp` 与 `+23.25pp`，而 §97.5 花了整整一段在事后分辨哪个是哪个。
+**判读工具现在把这件事说在前面。**
+
+### 99.3 工具守住的三个边界
+
+- **分类法是 import 的，不是重写的。** `failure_census` 来自 `classify-raw-outputs.py`，
+  所以本仓库的两份报告**不可能**对"`numeric_mismatch` 是什么意思"产生分歧 ——
+  那正是 §97 的缺陷，而一个用来**汇总**它的工具会把缺陷重新引入
+- **§13.26 的逐能力计数是常量，只在 `--reference` 时显示，且只对它们被产出的那个数据集显示。**
+  报告若写着 `dataset: <别的>`，得到的是一条**警告**而不是一个 delta ——
+  因为对着另一个基准的数字算 delta，是一个没有人做过的断言
+- **评分通道拆分故意不在这里计算。** 那是 `judgeScorer` 的账目、需要 TypeScript 的 judge；
+  arm 自己打印（自 §13.40.9 起在成功与失败两条路径都打印），日志被读取即可。
+  **Python 侧重写会是同一个数字的第二个定义**，而且与第一个隔了一个包
+
+### 99.4 验证
+
+- tools **358 passed + 40 subtests**（+8）；`pnpm check` **exit 0**
+- **先红**：八条在工具不存在时全红；随后两条因输出格式失败（`MR 1/3` 而工具打印 `MR: 1/3`），
+  **改的是测试而不是把工具格式改成猜测的样子** —— 格式是工具的，断言才是需要描述它的东西
+- **归档用例是真实产物**：`TestAgainstAnArchivedRoster` 跑的是入库的 MR 夹具，
+  断言 `MR: 29/121`、`abstention: 35`、`numeric_mismatch: 52` —— 于是 roster 路径与分类法 import
+  是在**数据**上被验证的，不是在桩上
+- 一条测试用**两个刻意不同的数**（metrics 给 `+20.00pp`、aggregate 给 `+24.00pp`）同时断言两个读数，
+  因为一个两者恰好相等的测试，会让"把同一个数打印两遍"的工具通过
+
+### 99.5 状态
+
+P0 行不变：§13.41.6 的五条预测仍是待读的那个东西。
+改变的是**下一次读数可被任何拿到产物的人复现** —— 而这正是 §13.38 想建立、却没有建立起来的东西。
