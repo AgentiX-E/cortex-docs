@@ -255,4 +255,13 @@ export interface MemoryGraph {
 5. **双端一致性**：core 的纯算法在 Node 与浏览器跑同一套测试（vitest + playwright），杜绝环境漂移。
 6. **CI 真实全绿**：`ci = lint && typecheck && test && format`，绝不 `continue-on-error`/`|| true`。
 
+7. **证据角色的边界（`evidenceRoles` / `roleOf`）**：证据房间按**角色**过滤，但产品**不解析任何数据集的格式**。
+   `CortexMemory` 接受三个输入 —— `evidenceRoles`（允许的角色集合）、`evidenceRolesRoutes`（触达哪些路由）、
+   `roleOf`（把一轮文本读成角色的回调）；格式知识由调用方（benchmark 臂的 `roleOfTurn`）提供。
+   三个状态都是被决定的而非默认的：缺席 = 不过滤且提示词逐字节不变；`roleOf` 返回 `undefined` = **保留**该轮
+   （分类器失败不能读成"没有证据"）；空集合 = **构造期拒绝**（它会在每条被触达的路由上什么都不放行）。
+   过滤发生在**准入之后、选择之前**，多会话路径上**逐会话**执行，捕获（`lastRetrievedContext` /
+   `admittedEvidence`）在过滤之后，因此覆盖率数字描述的是读者可能被展示的东西。
+   设计理由见 `09-progress-and-delivery-report.md` §133、注册见 `PREREGISTRATION-CORTEX-MEMORY-ARM.md` §13.83。
+
 > 完整实现推进与验收见 `03-implementation-and-acceptance-plan.md`。
