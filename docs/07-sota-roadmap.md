@@ -3895,7 +3895,7 @@ prettier 全过。**缺陷注入**：缓存 save key 或 restore 前缀任一被
 
 | # | 步骤 | 依赖 | 判定依据 |
 | --- | --- | --- | --- |
-| 1 | **§13.88 逐能力按重复聚合**（`featureByCapability` / `baselineByCapability`，单次重复时缺席） | — | 已注册，验收在 §13.88.2 |
+| 1 | **§13.88 逐能力按重复聚合** —— **已完成**：`featureByCapability` / `baselineByCapability` / `questionsByCapability`，单次重复时缺席；Markdown 表头带单位；`--caps` 读数器；顺带删除两个失去调用者的封装 | — | §138 的验收 |
 | 2 | **§13.89 同伴助手轮**（同会话内保留助手轮）：前提 10/10 已测，机制预测写在**均值**上 | 1 | §137.3 |
 | 3 | MR 剩余 `numeric_mismatch` + 弃答 | 1 | §134.1 |
 | 4 | TR 剩余 11 题 | 1 | §137.1 |
