@@ -272,4 +272,10 @@ export interface MemoryGraph {
    其余五条路由保持 shipped 块逐字节不变，于是 IE/KU/ABS/TR 成为这次实验的内部对照。
    设计理由见 `09-progress-and-delivery-report.md` §140、注册见 `PREREGISTRATION-CORTEX-MEMORY-ARM.md` §13.92。
 
+9. **第二遍咨询（`reviewPass`）**：`audit` 在多会话路由上**再咨询一次**，给模型同一批证据、逐字引用的第一遍回答，
+   以及三个"清单会错的地方"（漏条目 / 把两件事并成一条 / 证据不支持的条目），要求以强制写出的 `Step 2 — <数>` 收尾。
+   触达是**结构性**的（它长在 `answerSessions` 里），所以其它五条路由不可能被配置进来；
+   预算用 `fitToBudget` **重新选证据**而不是在第一份提示词后追加；第一遍弃答时不做第二遍。
+   设计理由见 `09-progress-and-delivery-report.md` §142、注册见 `PREREGISTRATION-CORTEX-MEMORY-ARM.md` §13.94。
+
 > 完整实现推进与验收见 `03-implementation-and-acceptance-plan.md`。
