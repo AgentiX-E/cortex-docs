@@ -264,4 +264,12 @@ export interface MemoryGraph {
    `admittedEvidence`）在过滤之后，因此覆盖率数字描述的是读者可能被展示的东西。
    设计理由见 `09-progress-and-delivery-report.md` §133、注册见 `PREREGISTRATION-CORTEX-MEMORY-ARM.md` §13.83。
 
+8. **问法与渲染是两条独立的轴（`EvidenceAsk`）**：一次提示词由**证据**、**渲染**（`numbered` / `sourced`：证据怎么印）
+   与**问法**（`route` / `extractive` / `aggregate` / `computed` / `enumerated` / `sweep`：模型被要求做什么）
+   三者组成，三者可以各自移动。问法的**触达**（`ASK_ROUTES`）是实验的一部分而不是注释：
+   一个 run 的产物必须说清哪些路由的指令真的变了，否则"处理没有到达提示词"会被读成"处理无效"。
+   `sweep` 是第一个**只触达一条路由**的问法 —— 它要求逐会话写一行（`Session <n>: <items, or none>`）再数，
+   其余五条路由保持 shipped 块逐字节不变，于是 IE/KU/ABS/TR 成为这次实验的内部对照。
+   设计理由见 `09-progress-and-delivery-report.md` §140、注册见 `PREREGISTRATION-CORTEX-MEMORY-ARM.md` §13.92。
+
 > 完整实现推进与验收见 `03-implementation-and-acceptance-plan.md`。
