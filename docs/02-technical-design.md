@@ -726,8 +726,14 @@ TD(λ) 资格迹。**当前只实现前三项的前两项与阈值遗忘；`sink
 | Chrome Prompt API | 浏览器内置 Gemini Nano | Chrome 148+ 桌面、>4 GB VRAM、约 22 GB 磁盘、会被驱逐；移动端与 FF/Safari 无 | `[文档]` |
 | ~~MediaPipe LLM~~ | —— | 维护模式，后继 LiteRT-LM | `[文档]` |
 
-**直接含义**：`cortex-llm` 依赖 `@xenova/transformers@2.17.2`，落后 v4 两个大版本，于是**拿不到
-WebGPU、拿不到 q4、拿不到 v4 的 ModelRegistry 缓存**。这是 P0 级债务，不是优化项。
+**直接含义（第 4 步之前）**：`cortex-ai` 曾依赖 `@xenova/transformers@2.17.2`，落后 v4 两个大
+版本，于是**拿不到 WebGPU、拿不到 q4、拿不到 v4 的 ModelRegistry 缓存**。这条 P0 债务已在实现
+第 4 步关闭（4.3.1），**代价与收益都量过了**（§4.4）：升级本身逐位等价，需要提防的是 `dtype`
+默认值从量化变成 fp32，以及 `text-classification` 单标签 softmax 把重排压成全员并列（§4.4.1）。
+
+**仍未关闭的是"能不能用上"**：`device: 'webgpu'` 这条路径**已实现但未在本仓库测过** —— 需要
+一个带 WebGPU 的浏览器与真机；q4 权重同理（`dtype: 'q4'` 可传，但没有一次实测读数）。这两条记在
+§13 的债务表里，而不是写成"已支持"。
 
 ---
 
@@ -800,7 +806,8 @@ WebGPU、拿不到 q4、拿不到 v4 的 ModelRegistry 缓存**。这是 P0 级�
 
 | 债务 | 严重度 | 影响 |
 |---|---|---|
-| `cortex-llm` 停在 `@xenova/transformers@2.17.2` | **P0** | 无 WebGPU / q4 / 缓存，端侧质量无法评估 |
+| ~~`cortex-ai` 停在 `@xenova/transformers@2.17.2`~~ | ~~P0~~ **已关闭** | 第 4 步升到 4.3.1；`dtype` 钉死 fp32（§4.4） |
+| `device: 'webgpu'` 与 `dtype: 'q8'/'q4'` **可传但未实测** | P1 | 无真机读数；不影响默认路径（fp32/CPU） |
 | 认知层不在评测路径（价值写入、巩固、双时态、冲突、图） | **P0** | 净贡献未知，任何"护城河"陈述都不成立 |
 | `sinkhorn` 未接线 + 收敛检测器曾恒真 | P1 | 接线那一刻才激活 |
 | 默认配置下 `consolidate` 的遗忘时钟量纲错误 | **P0** | 会**删除全部记忆**（已定位） |
