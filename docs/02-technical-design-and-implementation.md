@@ -278,4 +278,14 @@ export interface MemoryGraph {
    预算用 `fitToBudget` **重新选证据**而不是在第一份提示词后追加；第一遍弃答时不做第二遍。
    设计理由见 `09-progress-and-delivery-report.md` §142、注册见 `PREREGISTRATION-CORTEX-MEMORY-ARM.md` §13.94。
 
+10. **包布局调整（设计阶段，尚未实现）**：`cortex-llm` → `cortex-ai`（含 embedding / rerank / 端侧推理，
+    条件导出 `"."` / `"./local"` / `"./web"`），`cortex-node` → `cortex-storage`（`./sqlite`、`./pg`、
+    `./opfs`、`./idb`、`./analytics` 五个 subpath，native 依赖全部 optional peer），
+    `FederatedStorage` 与 `TriageRules` 落 `cortex-core`（纯组合、零 I/O）。
+    **包数不变（4 个）**；浏览器入口的体积守卫要求 ≤300 KB 且不含 native 依赖。
+    详见 [12](12-browser-and-federation-design.md) §6。
+
+11. **一处必须记住的事实**：`cortex-memory` **不消费 `Storage`**——契约与两个实现都在，消费方为零。
+    因此"四种部署形态"的工作量主要在组合层与读侧策略，不在新目录。
+
 > 完整实现推进与验收见 `03-implementation-and-acceptance-plan.md`。

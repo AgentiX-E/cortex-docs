@@ -1,0 +1,17 @@
+{
+  "name": "cortex-docs-poc",
+  "private": true,
+  "type": "module",
+  "description": "Proof-of-concept experiments backing the design claims in docs/12-15. Not a product package.",
+  "scripts": {
+    "p01": "node p01-browser-storage/run.mjs",
+    "p02": "node p02-vector-scan/run.mjs",
+    "p03": "node p03-federation/run.mjs",
+    "p04": "node p04-triage-rules/run.mjs",
+    "all": "npm run p02 && npm run p03 && npm run p04 && npm run p01"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.56.0",
+    "@sqlite.org/sqlite-wasm": "3.54.1-build1"
+  }
+}

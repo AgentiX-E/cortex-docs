@@ -1,0 +1,50 @@
+{
+  "generatedAt": "2026-10-22T05:01:25.558Z",
+  "checks": [
+    {
+      "check": "routing follows the prefix, unprefixed is private",
+      "result": "PASS",
+      "detail": "shared/facts -> shared, facts -> private"
+    },
+    {
+      "check": "the shared store holds the shared row and not the private one",
+      "result": "PASS",
+      "detail": "1 row(s) in the shared store: the project plan"
+    },
+    {
+      "check": "private query returns only private rows",
+      "result": "PASS",
+      "detail": "1 row(s)"
+    },
+    {
+      "check": "queryAcross labels every row with its origin",
+      "result": "PASS",
+      "detail": "private:my dentist a, shared:the project "
+    },
+    {
+      "check": "delete touches one scope only",
+      "result": "PASS",
+      "detail": "1 row(s) left"
+    },
+    {
+      "check": "an expiring shared row does not expire the private row",
+      "result": "PASS",
+      "detail": "2 row(s) left after ttl"
+    },
+    {
+      "check": "a federated transaction is refused, not faked",
+      "result": "PASS",
+      "detail": "FederationError raised"
+    },
+    {
+      "check": "an unknown scope is refused",
+      "result": "PASS",
+      "detail": "\"both\" rejected: it is not a store"
+    },
+    {
+      "check": "a scoped transaction rolls back",
+      "result": "PASS",
+      "detail": "row absent after abort"
+    }
+  ]
+}

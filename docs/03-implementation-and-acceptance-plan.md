@@ -165,4 +165,39 @@
 4. **废弃代码直接删除**（不 @deprecated），架构方向调整时整体重写；
 5. **每个 green 里程碑后主动给出"最优路径下一步"**。
 
+
+---
+
+## 设计阶段（2026-10）与其准入
+
+浏览器端、存储联邦、私有/共享分诊三块在进入实现前先走了一轮**设计阶段**，产物是
+[12 设计](12-browser-and-federation-design.md)、[13 综述](13-competitive-and-literature-survey.md)、
+[14 证据登记](14-evidence-register-and-poc.md)、[15 指标与消融](15-metrics-benchmarks-and-ablation-plan.md)
+与 `poc/` 四个可复跑实验。
+
+### 0.1 设计阶段的"完成"定义
+
+| # | 门槛 | 状态 |
+| --- | --- | --- |
+| 1 | 每个技术域都有竞品/论文/测评集调研，并写明"借什么、不借什么及原因" | ✅ 13 |
+| 2 | 每条量化结论有证据等级（E1–E5）与出处 | ✅ 14（23 条） |
+| 3 | POC 代码入库、结果入库、方法可复跑 | ✅ `poc/` + `results/` |
+| 4 | 未取证项被显式列出，而不是被措辞掩盖 | ✅ 14 §3（6 项） |
+| 5 | 每个功能有 L1/L2/L3 指标 | ✅ 15 §1（10 个） |
+| 6 | 每个机制有消融设计 | ✅ 15 §3（10 个） |
+| 7 | **Safari OPFS 探针** | ❌ 阻塞 iOS 承诺 |
+| 8 | **规则层 n≥600 复测**（false-share 上界 ≤5%） | ❌ 阻塞对外引用 |
+| 9 | **端到端双库场景（F7 读侧策略）** | ❌ 阻塞拓扑 D 排期 |
+
+### 0.2 实现阶段的启动顺序（不依赖 7–9 的部分）
+
+1. `cortex-storage` 改名 + 五个 subpath + optional peer + **体积守卫**（≤300 KB、不含 native）；
+2. `FederatedStorage` 进 `cortex-core`（`poc/p03` 的 9 条断言直接变成单测）；
+3. `./opfs` 实现（`poc/p01` 的 Worker + SAH-pool 形状直接复用）；
+4. `cortex-ai` 改名 + `@huggingface/transformers` v4 升级（P0 债务）；
+5. 分诊规则层进 `cortex-core`（`poc/p04` 的规则表与 60 条标注直接变成测试夹具）；
+6. 卡片与 HITL 需 8、9 关闭后启动。
+
+**第 1–5 项的共同点**：全部有 POC 或单测可依据，不含"边做边定"的设计决定。
+
 > 术语与算法背景见 `04-knowledge-dictionary.md`。

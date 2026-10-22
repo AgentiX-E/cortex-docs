@@ -1,0 +1,9 @@
+# The browser profile a POC creates is a test artefact, not a source file.
+.profile-p01/
+node_modules/
+
+# The corpus is LongMemEval-S text, redistributed here only as derived fixtures. The 60 labelled
+# rows in labels.json are what the measurement needs; the 1.4 MB of surrounding conversation is
+# not committed, and extract.mjs regenerates it from a benchmark artifact (see README).
+p04-triage-rules/corpus.json
+p04-triage-rules/candidates.json

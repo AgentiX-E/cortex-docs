@@ -17,6 +17,11 @@
 | [09 进度追踪报告](docs/09-progress-and-delivery-report.md) | 每轮迭代的交付、验收证据、发现的 BUG、对计划的修正与诚实差异清单 |
 | [10 A2 收口结果](docs/10-a2-closure-results.md) | 发布级 LongMemEval-S 全量测量（run `35523328949`，N=500）：主结果、独立复算、增量归因、召回曲线与优先级结论 |
 | [11 供应商限流审计](docs/11-provider-throttling-audit.md) | 那次 429 的根因**不是配额耗尽**：错误码 1305 是并发上限，附三个复合缺陷、诊断产物的来源缺口，与五项按依赖排序的修复需求 |
+| [12 浏览器端、存储联邦与私有/共享分诊](docs/12-browser-and-federation-design.md) | 四种部署拓扑、零新增子包的包布局、三值分诊、知识卡片与读侧策略（**设计阶段**） |
+| [13 竞品与文献综述](docs/13-competitive-and-literature-survey.md) | 按域（浏览器存储/向量/端侧推理/记忆作用域/人机协同/评测集）的现状、借什么、不借什么 |
+| [14 证据登记与 POC](docs/14-evidence-register-and-poc.md) | 23 条结论的证据等级与出处、四个 POC 的方法与结果、6 项未取证缺口 |
+| [15 指标、测评集与消融计划](docs/15-metrics-benchmarks-and-ablation-plan.md) | 每个功能的 L1/L2/L3 指标、10 个机制的消融设计、实现阶段的准入门槛 |
+| [poc/](poc/README.md) | 四个可复跑实验的源码与结果（`npm run all`） |
 
 ## 约定
 

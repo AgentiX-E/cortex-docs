@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8" /><title>cortex poc-1</title></head>
+  <body>
+    <script type="module">
+      // The page owns nothing but the worker handle. Every measurement happens in the worker,
+      // because that is where OPFS is reachable at all.
+      const worker = new Worker('/worker.js', { type: 'module' });
+      let nextId = 1;
+      const pending = new Map();
+      worker.onmessage = (event) => {
+        const { id, ok, result, error } = event.data;
+        const entry = pending.get(id);
+        if (!entry) return;
+        pending.delete(id);
+        if (ok) entry.resolve(result);
+        else entry.reject(new Error(error));
+      };
+      window.rpc = (cmd, payload) =>
+        new Promise((resolve, reject) => {
+          const id = nextId++;
+          pending.set(id, { resolve, reject });
+          worker.postMessage({ id, cmd, payload });
+        });
+      window.ready = true;
+    </script>
+  </body>
+</html>

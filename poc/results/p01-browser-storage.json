@@ -1,0 +1,59 @@
+{
+  "generatedAt": "2026-10-22T05:05:02.726Z",
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.0.0 Safari/537.36",
+  "sqliteVersion": "3.54.1",
+  "sqliteVfs": "opfs-sahpool",
+  "rows": 10000,
+  "initMs": 288.5,
+  "reopenMs": 56.39999961853027,
+  "writeMs": 175.89999961853027,
+  "checkpointMs": 0.8000001907348633,
+  "rowsPerSecond": 56850.4833523976,
+  "pointReadMs": 0.04650000095367432,
+  "tagQueryMs": 3.1999998092651367,
+  "fullScanMs": 59.5,
+  "digestPhaseOne": 128079214,
+  "digestPhaseTwo": 128079214,
+  "rowsPhaseOne": 10000,
+  "rowsPhaseTwo": 10000,
+  "persisted": true,
+  "vector": {
+    "small": {
+      "count": 20000,
+      "dimensions": 384,
+      "storedBytes": 30720000,
+      "p50Ms": 5.59999942779541,
+      "p95Ms": 9.799999237060547,
+      "top": [
+        24.717383290621743,
+        23.771039430254913,
+        22.50955296187571
+      ]
+    },
+    "large": {
+      "count": 60000,
+      "dimensions": 384,
+      "storedBytes": 92160000,
+      "p50Ms": 22.300000190734863,
+      "p95Ms": 33.39999961853027,
+      "top": [
+        26.427841542642582,
+        26.315970608737132,
+        26.143292621465257
+      ]
+    },
+    "wide": {
+      "count": 20000,
+      "dimensions": 1024,
+      "storedBytes": 81920000,
+      "p50Ms": 18.699999809265137,
+      "p95Ms": 25.100000381469727,
+      "top": [
+        40.69655701761222,
+        38.469801379922835,
+        37.397245037349435
+      ]
+    }
+  },
+  "profileBytes": 11476308
+}
