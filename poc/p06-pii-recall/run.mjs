@@ -144,7 +144,7 @@ const markdown = [
   'the hand-labelled set.',
   '',
   ...(leak.length > 0
-    ? ['## Leaks found (these are the next rule bugs, not statistics)', '', ...leak.slice(0, 10).map((row) => `- \`${row.rule}\` on ${row.id}: ${row.text.slice(0, 150)}`), '']
+    ? ['## Leaks found (these are the next rule bugs, not statistics)', '', ...leak.slice(0, 10).map((row) => `- \`${row.rule}\` on ${row.id}: ${row.text}`), '']
     : ['## Leaks found', '', 'None in this sample. The bound is the claim; the count is not.', '']),
 ].join('\n');
 

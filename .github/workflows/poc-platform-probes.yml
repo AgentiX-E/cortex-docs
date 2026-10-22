@@ -168,7 +168,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p poc/results/ci
-          cp collected/*.json collected/*.md collected/*.log poc/results/ci/ 2>/dev/null || true
+          # The artifact root preserves repository-relative paths, so a flat `cp` silently missed
+          # every file that sat under a directory. Safari's JSON went missing exactly that way
+          # while its log arrived, which is how the bug was noticed.
+          find collected -type f \( -name '*.json' -o -name '*.md' -o -name '*.log' \) \
+            -exec cp {} poc/results/ci/ \;
           ls -la poc/results/ci
           git config user.name Lambertyan
           git config user.email lambertyan@users.noreply.github.com
