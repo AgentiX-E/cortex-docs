@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-22T10:24:57.604Z",
+  "generatedAt": "2026-10-22T10:31:35.074Z",
   "artifact": "run-39699987781/benchmark-cortex-memory-ablation-report.json",
   "dataset": "longmemeval",
   "questions": 500,
@@ -20,15 +20,15 @@
     "exercised": true
   },
   "ruleCounts": {
-    "defer": 52039,
-    "money": 2730,
-    "health": 2451,
+    "defer": 52019,
+    "money": 2726,
+    "health": 2449,
     "family": 1153,
     "third-party": 539,
     "org-knowledge": 310,
     "credential": 166,
-    "career-status": 149,
-    "strong-pii": 138
+    "strong-pii": 164,
+    "career-status": 149
   },
   "byRole": {
     "user": {

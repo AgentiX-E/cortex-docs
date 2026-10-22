@@ -40,7 +40,12 @@ const RULES = [
     scope: 'private',
     policy: 'identifiers that are regulated by form: email, phone, card, postal address',
     pattern:
-      /[\w.+-]+@[\w-]+\.[\w.]+|\+?\d[\d ()-]{7,}\d|\b\d{4}[ -]?\d{4}[ -]?\d{4}[ -]?\d{4}\b|\b\d+\s+[A-Z][a-z]+\s+(street|st|avenue|ave|road|rd|lane|ln|drive|dr|boulevard|blvd)\b/,
+      // Account numbers and apartment designators were added after the second CI run: of the four
+      // rows it still published, all four were bank accounts in sentences that otherwise read as
+      // organisational ("charge your travel to our company account, number 40387..."). An account
+      // number is a regulated identifier in the same sense a card number is, so it belongs here
+      // rather than in a new rule.
+      /[\w.+-]+@[\w-]+\.[\w.]+|\+?\d[\d ()-]{7,}\d|\b\d{4}[ -]?\d{4}[ -]?\d{4}[ -]?\d{4}\b|\b\d+\s+[A-Z][a-z]+\s+(street|st|avenue|ave|road|rd|lane|ln|drive|dr|boulevard|blvd)\b|\b(account|acct|card)\s*(number|no\.?|#)\s*[\d*]{4,}|\bapt\.?\s*\d+/i,
   },
   {
     id: 'money',

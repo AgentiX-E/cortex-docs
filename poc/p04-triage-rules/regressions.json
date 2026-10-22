@@ -1,5 +1,5 @@
 {
-  "what": "Rows published to the shared store by the CI run of POC-6 over 3,000 identifier-bearing rows (ai4privacy/pii-masking-200k). Each one is a defect: the published policy says these must stay private. Text is as quoted in that run report, truncated there at 160 characters, so a truncated row cannot exercise a pattern that would have matched only after the cut.",
+  "what": "Rows published to the shared store by CI runs of POC-6 over 3,000 identifier-bearing rows (ai4privacy/pii-masking-200k). The first run published 16; after the credential patch the second published 4, all of them bank-account numbers. Text is as quoted in those reports, truncated there, so a row whose identifier fell past the cut cannot be judged here.",
   "source": "ci-results branch, poc/results/ci/p06-pii-recall.md, run 39762477932",
   "rows": [
     {
@@ -50,9 +50,24 @@
     {
       "rule": "org-knowledge",
       "id": "pii01216",
-      "text": "In our latest Quality Assurance meeting, we decided to conduct an audit of all our transactions, paying special attention to those from Home Loan Acco",
+      "text": "In our latest Quality Assurance meeting, we decided to conduct an audit of all our transactions, paying special attention to those from Home Loan Account with I",
       "truncated": true,
-      "reason": "The quoted text stops at \"Home Loan Acco\", so the identifier that made this row policy-forced is not in the string. It cannot be judged here; the CI re-run, which has the full row, is what decides it."
+      "reason": "The quoted text stops at \"Home Loan Account with I\", so the account number that made this row policy-forced is not in the string. The CI re-run, which has the full row, is what decides it."
+    },
+    {
+      "id": "pii01967",
+      "text": "The Auto Loan Account segment performs well in our business model canvas. Discuss this with our team in Apt. 447.",
+      "rule": "org-knowledge"
+    },
+    {
+      "id": "pii02177",
+      "text": "Regarding our company's investments in green tech, details about the account Credit Card Account with account number 89543511 are needed.",
+      "rule": "org-knowledge"
+    },
+    {
+      "id": "pii02216",
+      "text": "For those who will be traveling for the upcoming project meeting, your travel expenses should be charged to our company account. Please use account number 40387",
+      "rule": "org-knowledge"
     }
   ]
 }

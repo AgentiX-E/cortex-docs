@@ -16,15 +16,15 @@ Every turn the reader was actually shown is classified by the shipped rule table
 
 | rule | turns | share |
 | --- | --- | --- |
-| defer | 52039 | 87.2% |
-| money | 2730 | 4.6% |
-| health | 2451 | 4.1% |
+| defer | 52019 | 87.2% |
+| money | 2726 | 4.6% |
+| health | 2449 | 4.1% |
 | family | 1153 | 1.9% |
 | third-party | 539 | 0.9% |
 | org-knowledge | 310 | 0.5% |
 | credential | 166 | 0.3% |
+| strong-pii | 164 | 0.3% |
 | career-status | 149 | 0.2% |
-| strong-pii | 138 | 0.2% |
 
 ## By speaker
 

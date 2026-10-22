@@ -48,9 +48,14 @@ const ENGINE = BROWSER === 'webkit' ? webkit : chromium;
 // whose only job is the persistence question.
 const WITH_VECTOR = (process.env.POC_VECTOR ?? 'on') !== 'off';
 
+// Headless is the default, but Playwright's WebKit on macOS 14 arm64 has been observed failing at
+// launch in headless mode only ("Unknown setting: PushAPIEnabled"), and the macOS runner does have
+// a GUI session, so a retry with a real window costs one line and may well be the difference.
+const HEADLESS = (process.env.POC_HEADLESS ?? '1') !== '0';
+
 
 async function withPage(port, fn) {
-  const options = { headless: true };
+  const options = { headless: HEADLESS };
   if (BROWSER === 'chromium') {
     options.executablePath =
       process.env.CHROMIUM_PATH ?? '/root/.cache/ms-playwright/chromium-1208/chrome-linux64/chrome';

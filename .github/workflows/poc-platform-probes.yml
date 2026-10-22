@@ -64,31 +64,41 @@ jobs:
           POC_ROWS: ${{ github.event.inputs.rows }}
           POC_VECTOR: 'off'
         run: |
-          set -o pipefail
-          node p01-browser-storage/run.mjs 2>&1 | tee p01-webkit.log
-          echo "status=$?" >> "$GITHUB_OUTPUT"
+          # `set -e` here after the first dispatch taught the lesson twice: without it, a crashed
+          # node left the step reporting success and the missing JSON looked like a flaky upload.
+          set -eu -o pipefail
+          if ! node p01-browser-storage/run.mjs 2>&1 | tee p01-webkit.log; then
+            echo "headless launch failed, retrying with a window"
+            POC_HEADLESS=0 node p01-browser-storage/run.mjs 2>&1 | tee -a p01-webkit.log
+          fi
 
       - name: Real Safari through safaridriver
         if: always()
         continue-on-error: true
         working-directory: poc
         run: |
-          set -x
-          node p01-browser-storage/serve.mjs --port 8000 &
-          SERVER=$!
-          sleep 2
-          # Enabling remote automation needs an authorisation the runner has but a user does not.
-          # A refusal here is recorded verbatim: "we could not enable it" is a result.
-          sudo safaridriver --enable || echo "safaridriver --enable failed" > safari-enable.log
-          safaridriver -p 4444 &
-          DRIVER=$!
-          sleep 4
-          # One session, one shot. If the SAH pool throws, the probe returns ok:false with the
-          # browser's own message, which is more useful than a generic timeout.
-          python3 p01-browser-storage/safari-wd-probe.py --rows 1000 \
-            --out results/p01-safari-webdriver.json || true
-          kill $SERVER $DRIVER 2>/dev/null || true
-          cat results/p01-safari-webdriver.json || true
+          # Everything is teed to a file that travels with the results: the job log redirects to a
+          # host this sandbox cannot reach, so a step that fails without leaving a file is a step
+          # we can only guess about. That already happened once.
+          {
+            set -x
+            safaridriver --version || true
+            node p01-browser-storage/serve.mjs --port 8000 &
+            SERVER=$!
+            sleep 2
+            # Enabling remote automation needs an authorisation the runner has but a user does not.
+            # A refusal here is recorded verbatim: "we could not enable it" is a result.
+            sudo safaridriver --enable || echo "safaridriver --enable failed"
+            safaridriver -p 4444 &
+            DRIVER=$!
+            sleep 4
+            # One session, one shot. If the SAH pool throws, the probe returns ok:false with the
+            # browser's own message, which is more useful than a generic timeout.
+            python3 p01-browser-storage/safari-wd-probe.py --rows 1000 \
+              --out results/p01-safari-webdriver.json || true
+            kill $SERVER $DRIVER 2>/dev/null || true
+            cat results/p01-safari-webdriver.json || true
+          } 2>&1 | tee safari.log
 
       - name: Keep both results
         uses: actions/upload-artifact@v4
@@ -98,7 +108,7 @@ jobs:
             poc/results/*.json
             poc/results/*.md
             poc/p01-webkit.log
-            poc/safari-enable.log
+            poc/safari.log
           if-no-files-found: warn
 
   corpus:
