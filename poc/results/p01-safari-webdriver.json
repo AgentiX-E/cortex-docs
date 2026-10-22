@@ -1,0 +1,25 @@
+{
+  "browser": "safari",
+  "mechanism": "safaridriver",
+  "origin": "http://127.0.0.1:8000",
+  "rows": 1000,
+  "ok": true,
+  "session": "022004EF-71F2-4DAA-A8D0-5FB622270969",
+  "probe": {
+    "ok": true,
+    "digest": 2318548821,
+    "scanned": 1000,
+    "writeMs": 72,
+    "wallMs": 419,
+    "rows": 1000,
+    "checkpointMs": 1,
+    "rowsPerSecond": 13888.88888888889,
+    "init": {
+      "sahPool": true,
+      "initMs": 185,
+      "vfs": "opfs-sahpool",
+      "version": "3.54.1"
+    },
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Safari/605.1.15"
+  }
+}
