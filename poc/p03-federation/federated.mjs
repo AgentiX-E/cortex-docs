@@ -83,7 +83,7 @@ export class FederatedStorage {
    * Query both stores and label every row with where it came from.
    *
    * The label is the point: a prompt assembled from two origins must be able to say which is
-   * which, because the read-side policy (docs/13) is "a shareable answer sees shared rows only"
+   * which, because the read-side policy (docs/02) is "a shareable answer sees shared rows only"
    * and that decision needs the origin to be visible at the assembly site rather than inferred
    * from the table name by whoever remembers to check.
    */

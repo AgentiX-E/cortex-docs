@@ -6,7 +6,7 @@
   "defer": "Neither clearly: a preference, opinion, intent, or trivia. The product treats defer as private at write time, so defer defers the decision to the user rather than naming a third destination."
  },
  "labelling": "One author (Lambertyan), one pass, before any rule existed. Labels were assigned from the sentence alone, so the measurement below is not circular with the rule set.",
- "limits": "n=60, single annotator, no inter-annotator agreement. The Wilson bound quoted in docs/14 is about sampling error only; annotator error is real and unquantified here.",
+ "limits": "n=60, single annotator, no inter-annotator agreement. The Wilson bound quoted in docs/04 is about sampling error only; annotator error is real and unquantified here.",
  "rows": [
   {
    "id": "g00",

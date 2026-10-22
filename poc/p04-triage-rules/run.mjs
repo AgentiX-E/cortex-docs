@@ -4,7 +4,7 @@
  *
  * ## The question, stated as a measurement
  *
- * docs/13 claims that the disclosure decision must not be delegated to a model, and that a rule
+ * docs/02 claims that the disclosure decision must not be delegated to a model, and that a rule
  * layer plus the user is the alternative. That claim is only worth something if the rule layer
  * can be measured on real text -- so this script runs it over 60 hand-labelled real utterances
  * and reports four numbers:
@@ -21,7 +21,7 @@
  * ## Why the bound and not the count
  *
  * Zero false-shares in 60 is not a rate of zero. `wilsonUpper` turns it into "at most 5.9% at
- * 95%", which is the form a review can argue with. docs/14 quotes that number and says what
+ * 95%", which is the form a review can argue with. docs/04 quotes that number and says what
  * sample size would be needed to claim 1%.
  */
 

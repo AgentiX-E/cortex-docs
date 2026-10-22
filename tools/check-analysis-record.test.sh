@@ -20,7 +20,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
-RECORD_REL="docs/05-longmemeval-sota-analysis"
+RECORD_REL="evidence/longmemeval"
 
 SOURCES=""
 NO_SELF_TEST=0

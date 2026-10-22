@@ -6,7 +6,7 @@
  * The design documents make claims of the form "a scan costs 10-20 ms" and "the rule layer
  * false-shares at most X%". A claim like that needs an estimator with a stated method, not a
  * printed average: an average hides the tail, and a count of zero failures is not a rate of
- * zero. Every number quoted in docs/12-15 is produced here or by a function beside it.
+ * zero. Every number quoted in docs/01-04 is produced here or by a function beside it.
  */
 
 /** Sorted copy, for percentile work that must not mutate the caller's array. */

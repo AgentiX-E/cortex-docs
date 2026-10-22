@@ -7,13 +7,13 @@
  * sqlite-wasm build routes its `opfs` VFS through an async proxy for the same reason. A design
  * that kept storage on the main thread would have to use the async-only handle API and lose the
  * synchronous VFS entirely -- so the Worker boundary is not an optimisation, it is the only
- * shape that works. This also validates the claim in docs/13 that `Storage`'s Promise-shaped
+ * shape that works. This also validates the claim in docs/02 that `Storage`'s Promise-shaped
  * contract fits an RPC boundary without change.
  *
  * ## What it reports
  *
  * Raw timings and a digest, nothing interpreted. The runner turns them into the table in
- * docs/14; keeping interpretation out of the browser keeps the measurement honest.
+ * docs/04; keeping interpretation out of the browser keeps the measurement honest.
  */
 
 import sqlite3InitModule from '/vendor/index.mjs';
@@ -52,7 +52,7 @@ let pool = null;
  * synchronously-usable OPFS handles allocated to database files, which is the same technique
  * PGlite's documentation describes borrowing from wa-sqlite.
  *
- * That distinction matters for the Safari question in docs/14: PGlite's OPFS-AHP VFS is the one
+ * That distinction matters for the Safari question in docs/04: PGlite's OPFS-AHP VFS is the one
  * their docs say breaks in Safari on a 252-handle limit. This POC therefore exercises exactly the
  * VFS shape that has a known Safari risk, not a different one that happens to work in Chromium.
  */
@@ -148,7 +148,7 @@ const handlers = {
   },
 
   async vectorScan({ count, dimensions }) {
-    // Dense f32 store in memory, the shape docs/13 recommends, scanned with the same
+    // Dense f32 store in memory, the shape docs/02 section 4 recommends, scanned with the same
     // insertion-buffer top-k as POC-2 so the two numbers are comparable.
     const flat = new Float32Array(count * dimensions);
     let state = 0x9e3779b9;

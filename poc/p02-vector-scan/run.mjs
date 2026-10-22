@@ -4,10 +4,11 @@
  *
  * ## The claims under test
  *
- * 1. docs/13 quotes 10-20 ms for an exact cosine scan at 60k turns x 384 dimensions. That was
- *    arithmetic (mul-adds / assumed throughput), not measurement.
- * 2. docs/12 recommends storing f32/int8 and widening only the query, on the assumption that
- *    the narrower store is *cheaper*. The memory half of that is obvious; the time half is not.
+ * 1. The design originally carried 10-20 ms for an exact cosine scan at 60k turns x 384
+ *    dimensions. That was arithmetic (mul-adds / assumed throughput), not measurement.
+ * 2. The design recommends storing f32/int8 and widening only the query, on the assumption
+ *    that the narrower store is *cheaper*. The memory half of that is obvious; the time half
+ *    is not.
  *
  * ## What the first version of this script got wrong, kept here as the method's own lesson
  *
@@ -16,8 +17,8 @@
  * `Array.prototype.sort()` on every candidate that beat the threshold, and that bookkeeping
  * dominated the loop. Rewriting it as an insertion into a fixed-size array moved the same
  * measurement to 17-19 ms for f32. The numbers below are from the corrected implementation,
- * and the earlier pair is quoted in docs/13 as evidence that a benchmark's *bookkeeping* can
- * masquerade as its algorithm.
+ * and the earlier pair is quoted in docs/02 section 4 as evidence that a benchmark's
+ * *bookkeeping* can masquerade as its algorithm.
  *
  * ## Shapes measured
  *

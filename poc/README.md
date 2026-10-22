@@ -1,4 +1,4 @@
-# POC: the experiments behind docs 12–15
+# POC: the experiments behind docs 01–04
 
 Every quantitative claim in the design documents is produced here, by a script that a reviewer
 can run. Nothing in this directory is product code; it exists so that a number in a doc has a
@@ -11,6 +11,7 @@ cd poc && npm install          # playwright-core + @sqlite.org/sqlite-wasm, no a
 npm run p02                    # vector scan cost (Node)
 npm run p03                    # federation semantics (Node)
 npm run p04                    # disclosure rules on 60 labelled real utterances
+npm run p05                    # write/read boundary end to end, plus the A1/A4/A5 ablations
 npm run p01                    # SQLite-WASM on OPFS in Chromium, across a browser restart
 ```
 
@@ -54,6 +55,7 @@ labelled rows are the input, the corpus is only how they were sampled.
 | `p02-vector-scan` | What does an exact cosine scan cost, and what does the storage dtype buy? | Wasm SIMD. It is plain JS, so the int8 result is a memory result only. |
 | `p03-federation` | Does a router over two stores hold the privacy boundary, and what must it refuse? | Speed, and real cross-store durability. Cross-store atomicity is refused by design. |
 | `p04-triage-rules` | Does a deterministic rule layer keep private facts out of the shared store, and how much of the traffic does it decide? | Anything about the LLM proposer, which needs a provider. The rule layer is measured alone, on purpose. |
+| `p05-read-side` | Does the boundary hold once the rules, two stores and the read-side assembler are wired together, and what does holding it cost in reachable evidence? | Retrieval quality (60 rows are the whole corpus), the proposer, real users, non-English text. |
 
 ## The method rules these POCs follow
 
@@ -70,3 +72,8 @@ labelled rows are the input, the corpus is only how they were sampled.
 5. **Never tune a rule to the label you just measured, except to fix a word-sense bug.** The one
    change made after seeing the gold set (`raise` firing on "raise funds") is recorded in
    `p04-triage-rules/rules.mjs` and it moved no metric.
+6. **A guard that never fires in a clean run has not been tested.** `p05`'s scope guard is
+   redundant while the writer is correct, so it is exercised by injecting a private row into the
+   shared store on purpose. With the guard on the run refuses to assemble a prompt; with it off
+   the same row reaches the window. A guard only shown to pass is indistinguishable from one that
+   cannot fail — the same defect `p03`'s `async () => true` assertion had.

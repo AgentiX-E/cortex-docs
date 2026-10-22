@@ -1,61 +1,89 @@
 # AgentiX-E Cortex 内部文档
 
-本仓库为 [AgentiX-E/cortex](https://github.com/AgentiX-E/cortex)（Node.js/TypeScript 智能体记忆系统）的**内部中文文档**。
+本仓库为 [AgentiX-E/cortex](https://github.com/AgentiX-E/cortex)（TypeScript 智能体记忆层，
+Node + 浏览器双端）的**内部中文文档**与**设计阶段的证据**。
 
-## 文档索引
+## 四份文档
 
-| 文档 | 内容 |
+| # | 文档 | 回答什么 | 谁该读 |
+|---|---|---|---|
+| 01 | [产品白皮书](docs/01-product-whitepaper.md) | 这是什么、给谁、凭什么是它；竞品与文献调研覆盖矩阵；功能清单与**实现状态** | 所有人，先读这份 |
+| 02 | [技术设计方案](docs/02-technical-design.md) | 怎么造：包布局、抽象层、选型、分诊与读写边界、提示词接口、供应商契约 | 实现者 |
+| 03 | [项目执行推进计划](docs/03-execution-plan.md) | 按什么顺序做、做到什么算过：启动顺序、里程碑、覆盖率、评测协议、指标与消融 | 实现者与验收者 |
+| 04 | [执行追踪报告](docs/04-execution-tracking-report.md) | 实际做了什么、证据是什么、和计划差在哪；缺陷登记簿、证据登记、未取证缺口 | 决策者，每轮更新 |
+
+**建议顺序**：01 → 04 → 03 → 02。先知道它是什么、现在在哪，再知道要做什么、怎么做。
+
+四份文档的分工是排他的：**01 不写实现细节，02 不写进度，03 不写历史，04 不写未来**。
+任何跨文档重复的结论以 01 为准；任何与实测冲突的表述以 04 为准。
+
+## 证据与实验
+
+| 目录 | 内容 |
 |---|---|
-| [01 竞品分析与产品白皮书](docs/01-competitive-analysis-and-product-whitepaper.md) | 竞品全景、功能列表、复刻学习整合、创新超越、行业标杆路径 |
-| [02 技术设计与实现](docs/02-technical-design-and-implementation.md) | 架构、子包、抽象层、核心算法、npm 包选型、底层实现 |
-| [03 实现推进与验收计划](docs/03-implementation-and-acceptance-plan.md) | 迭代计划、测试方法、≥95% 覆盖率、权威测试集、公平科学验收 |
-| [04 知识字典](docs/04-knowledge-dictionary.md) | 心智模型、算法、数学工具、工程概念、参考文献、自学路径 |
-| [05 LongMemEval-S SOTA 分析记录](docs/05-longmemeval-sota-analysis/00-ANALYSIS-README.md) | 94 篇验收判决、根因审计与计划，附可复现脚本索引 |
-| [06 代码与文档一致性审计](docs/06-code-docs-consistency-audit.md) | 代码真实状态核对：哪些能力被验证、哪些未接入评测路径、偏差清单与证据 |
-| [07 SOTA 推进计划](docs/07-sota-roadmap.md) | 可执行的超车路线：优先序、前置契约、验收判据与消融设计（v2.0） |
-| [08 阅读器判断再研究](docs/08-reader-parity-analysis.md) | 证伪「阅读器是约束」：架构归因 4.7 倍于阅读器归因，附可复现脚本 |
-| [09 进度追踪报告](docs/09-progress-and-delivery-report.md) | 每轮迭代的交付、验收证据、发现的 BUG、对计划的修正与诚实差异清单 |
-| [10 A2 收口结果](docs/10-a2-closure-results.md) | 发布级 LongMemEval-S 全量测量（run `35523328949`，N=500）：主结果、独立复算、增量归因、召回曲线与优先级结论 |
-| [11 供应商限流审计](docs/11-provider-throttling-audit.md) | 那次 429 的根因**不是配额耗尽**：错误码 1305 是并发上限，附三个复合缺陷、诊断产物的来源缺口，与五项按依赖排序的修复需求 |
-| [12 浏览器端、存储联邦与私有/共享分诊](docs/12-browser-and-federation-design.md) | 四种部署拓扑、零新增子包的包布局、三值分诊、知识卡片与读侧策略（**设计阶段**） |
-| [13 竞品与文献综述](docs/13-competitive-and-literature-survey.md) | 按域（浏览器存储/向量/端侧推理/记忆作用域/人机协同/评测集）的现状、借什么、不借什么 |
-| [14 证据登记与 POC](docs/14-evidence-register-and-poc.md) | 23 条结论的证据等级与出处、四个 POC 的方法与结果、6 项未取证缺口 |
-| [15 指标、测评集与消融计划](docs/15-metrics-benchmarks-and-ablation-plan.md) | 每个功能的 L1/L2/L3 指标、10 个机制的消融设计、实现阶段的准入门槛 |
-| [poc/](poc/README.md) | 四个可复跑实验的源码与结果（`npm run all`） |
+| [`poc/`](poc/README.md) | 5 个可复跑实验（`npm run all`）。每个都写明"能证明什么 / 不能证明什么" |
+| `poc/results/` | 每个实验的原始数（`.json`）与文档引用的表（`.md`） |
+| [`evidence/`](evidence/README.md) | 94 篇验收判决、分析脚本、run id、日志。**是记录不是文档，不需要读** |
+
+`[POC-n]` 标记的每个数字都能在 `poc/results/` 找到同名键；`[实测]` 标记的每个数字都能在
+`evidence/longmemeval/run-ids/` 找到 run id。
 
 ## 约定
 
-- 内部文档使用中文；
-- 代码注释、外部文档、commit message 一律使用英文，见 [AgentiX-E/cortex](https://github.com/AgentiX-E/cortex)。
-
-关于 **05 分析记录**的语言选择：该目录由英文原始记录翻译而来，遵循本仓库的中文约定。
+- 文档使用中文；代码注释、外部文档、commit message、**POC 脚本注释**一律英文。
+- 所有改动以 **Lambertyan** 名义提交。
+- API key / PAT **不得**出现在任何文件里，只通过环境变量注入。
+- 记录（`evidence/`）只读：发现记录与文档冲突时，改文档，不改记录。
 
 ## 记录完整性守卫
 
-翻译保真度不能靠人工纪律维持，因此由 `tools/check-analysis-record.sh` 机械校验。
-它自身可失败，这一点由 `tools/check-analysis-record.test.sh` 保证——该套件会重现守卫
-存在的每一种失效场景，并断言守卫确实报告了它：
+文档的完整性不靠人工纪律，靠机械校验：
 
 ```bash
-tools/check-analysis-record.sh --sources <英文源目录>
-tools/check-analysis-record.test.sh --sources <英文源目录>
+tools/check-analysis-record.sh                  # 结构与自测
+tools/check-analysis-record.sh --sources <dir>  # 追加数值保真（需英文原文目录）
 ```
-
-守卫包含四项检查：
 
 | 检查 | 捕获的失效 | 为什么数值比对查不到 |
 |---|---|---|
 | 守卫自测 | 某项检查的模式已静默失配 | 不适用（元检查） |
 | 检查器回归套件 | 容差被放宽或无差别拒绝 | 不适用（元检查） |
-| 结构完整性 | 空文档、残留英文、冻结引用被本地化 | 未翻译的文档与源文件完全相同 |
+| 结构完整性 | 空文档、残留英文、冻结引用被本地化 | 未翻译的文档与源文件逐字节相同 |
 | 数值保真 | 数值被篡改、丢弃、改精度或改符号 | 反过来说：它抓不到"照抄原文" |
 
-其中「未翻译」这一项尤其依赖 CJK 判定：一个从未翻译的文档与源文件逐字节相同，
-数值比对会以构造性方式通过。因此该检查把中文字符类写作 Unicode 属性 `\p{Han}` 而非
-范围 `[一-鿿]`——后者在 `en_US.UTF-8` 下是*排序*范围，`grep` 会报
-`Invalid collation character` 并且**一个字符都匹配不到**，从而让每个英文文档都通过。
+「未翻译」这一项依赖 CJK 判定：一个从未翻译的文档与源文件逐字节相同，数值比对会**以构造性
+方式通过**。因此中文字符类写作 Unicode 属性 `\p{Han}`，而不是范围 `[一-鿿]` —— 后者在
+`en_US.UTF-8` 下是*排序*范围，`grep` 会报 `Invalid collation character` 且**一个字符都匹配
+不到**，从而让每个英文文档都通过。
 
-数值检查的标准是**每个文档的数值 token 多重集完全一致**——整数、小数、百分比、pp 增量、
-指数与带符号值必须逐一复现，只有语言相关的裸小整数计数允许单向调和。
+守卫同时覆盖两处：`evidence/longmemeval/`（记录，需数值保真）与 `docs/`（四份文档，需结构
+完整）。四份文档不参与"翻译保真"比对，因为它们不再是译文的逐句复刻，而是重新组织的论证。
 
-当前状态：守卫自测 7/7，检查器回归 12/12，文档 94/94，语言相关计数调和 194 项。
+## 历史归档
+
+2026-10 之前本仓库有 15 份文档（01–15）。为满足"只保留四份"的要求，其中 06–15 的内容被抽取
+重组进四份文档，`05` 的分析记录整体移入 `evidence/longmemeval/`。**旧文档全文仍可从 git 取回**：
+
+```bash
+git show 020d9eb:docs/07-sota-roadmap.md                  # 旧 SOTA 推进计划（3900 行）
+git show 020d9eb:docs/09-progress-and-delivery-report.md  # 旧进度追踪（19500 行）
+git show 020d9eb:docs/06-code-docs-consistency-audit.md   # 旧一致性审计
+```
+
+| 旧文档 | 去向 |
+|---|---|
+| 01 竞品分析与白皮书 | → `docs/01` §1–§2、§5 |
+| 02 技术设计与实现 | → `docs/02` §1–§13 |
+| 03 实现推进与验收计划 | → `docs/03` §1–§12 |
+| 04 知识字典 | → `docs/01` 附录 A（仅保留本文出现过的词） |
+| 05 LongMemEval-S 分析记录 | → `evidence/longmemeval/`（原样迁移） |
+| 06 代码与文档一致性审计 | → `docs/04` §4.5 |
+| 07 SOTA 推进计划 | → `docs/03` §2/§7/§8、`docs/04` §2 |
+| 08 阅读器判断再研究 | → `docs/01` §7 第 6 条、`docs/04` §2 |
+| 09 进度追踪报告 | → `docs/04` §2–§5（判决原文见 `evidence/`） |
+| 10 A2 收口结果 | → `docs/04` §1.3、§5 第 4 条 |
+| 11 供应商限流审计 | → `docs/02` §11 |
+| 12 浏览器与联邦设计 | → `docs/02` §3/§5/§6 |
+| 13 竞品与文献综述 | → `docs/01` §3（覆盖矩阵） |
+| 14 证据登记与 POC | → `docs/04` §6/§7 |
+| 15 指标与消融计划 | → `docs/03` §6/§7 |

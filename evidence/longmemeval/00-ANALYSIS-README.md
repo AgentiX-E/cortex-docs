@@ -1,12 +1,17 @@
 # 分析工作区 — LongMemEval-S SOTA 冲刺
 
-本目录是 Cortex 记忆层上 LongMemEval-S SOTA 迭代的证据链。它**不是** git 仓库；
-可复现代码与冻结的基线位于 `/workspace/cortex`（参见该目录下的 `SOTA-BASELINE.md`）。
+本目录是 Cortex 记忆层上 LongMemEval-S SOTA 迭代的**原始证据链**（2026-09 至 2026-10）。
+它不是文档，不需要逐篇阅读：结论已被抽取进 [`docs/04`](../../docs/04-execution-tracking-report.md)，
+这里保留的是每一份判决的原文、脚本、run id 与日志，供复核。可复现代码与冻结的基线位于
+`/workspace/cortex`（参见该目录下的 `SOTA-BASELINE.md`）。
+
+> 路径已变更：本目录原为 `docs/05-longmemeval-sota-analysis/`。目录内正文中出现的
+> `docs/07`、`docs/09` 等引用指向**历史文档编号**，其全文可用 git 取回，见仓库根 `README.md`
+> 的「历史归档」一节。
 
 ## 目录结构
 
-原始工作区中，验收判决位于 `verdicts/` 子目录。发布到本仓库时文档被平铺到顶层，
-以便与 `docs/01`–`04` 的设计文档并列；脚本与派发文件保持原有分层。
+原始工作区中，验收判决位于 `verdicts/` 子目录。发布到本仓库时文档被平铺到顶层；脚本与派发文件保持原有分层。
 
 | 路径 | 内容 |
 | --- | --- |

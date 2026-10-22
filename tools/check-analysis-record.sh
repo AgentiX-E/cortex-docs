@@ -21,10 +21,16 @@
 #      a source directory is supplied. Without one the guard still runs the
 #      structural checks rather than silently passing.
 #
-#   4. The published record is structurally complete: no empty documents, no
-#      documents that lost their frozen citations, and none that are still in
-#      English. The last one matters because a document that was never
-#      translated passes a numeric check trivially — it matches itself.
+#   4. Both roots are structurally complete: no empty documents, no documents
+#      that lost their frozen citations, and none that are still in English. The
+#      last one matters because a document that was never translated passes a
+#      numeric check trivially — it matches itself.
+#
+#      The two roots are checked separately because they are different kinds of
+#      thing: evidence/longmemeval is a translation and must keep its citations
+#      verbatim, while docs/ holds four documents authored in Chinese and
+#      reorganized rather than translated, so only emptiness and accidental
+#      English apply to them. Fidelity against an original is meaningless there.
 #
 # Usage:
 #   tools/check-analysis-record.sh [--sources <dir>] [--no-self-test]
@@ -35,7 +41,8 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
-RECORD="$REPO/docs/05-longmemeval-sota-analysis"
+RECORD="$REPO/evidence/longmemeval"
+DOCS="$REPO/docs"
 
 SOURCES=""
 SELF_TEST=1
@@ -79,70 +86,78 @@ else
   node "$HERE/check-numeric-fidelity.test.mjs" 2>&1 | grep -E '^FAIL' | sed 's/^/        /' || true
 fi
 
-# 3. Structural completeness.
-shopt -s nullglob
-docs=("$RECORD"/*.md)
-shopt -u nullglob
-
-if [ ${#docs[@]} -eq 0 ]; then
-  fail_check "no documents found under $RECORD"
-else
-  pass_check "${#docs[@]} documents present"
-fi
-
-empty=0
-for f in "${docs[@]}"; do
-  if [ ! -s "$f" ]; then
-    fail_check "empty document: $(basename "$f")"
-    empty=1
-  fi
-done
-
-# A document with almost no CJK content was never translated. This is the check
-# that a numeric comparison cannot make: an untranslated document is identical
-# to its source, so it passes the fidelity gate by construction.
+# 3. Structural completeness, for both roots:
 #
-# The character class must be written as a Unicode property (\p{Han}), not as a
-# range such as [一-鿿]. A bracketed CJK range is a *collation* range, and under
-# the en_US.UTF-8 locale that these scripts run in grep reports "Invalid
-# collation character" and matches nothing — so the range form would have passed
-# every English document while printing "all documents carry Chinese prose".
-# -P is required for \p{...}; the count is taken with `|| true` so that a file
-# with zero matches (the correct state for an English source) does not abort the
-# script under `set -e`.
-THRESHOLD=40
-untranslated=0
-for f in "${docs[@]}"; do
-  cjk=$(grep -oP '\p{Han}' "$f" 2>/dev/null | wc -l | tr -d ' ' || true)
-  cjk=${cjk:-0}
-  # 00-ANALYSIS-README.md is authored in Chinese directly; every other document
-  # is a translation and must carry substantial Chinese prose.
-  if [ "$cjk" -lt "$THRESHOLD" ]; then
-    fail_check "not translated (${cjk} Han chars, need >=${THRESHOLD}): $(basename "$f")"
-    untranslated=1
-  fi
-done
-[ "$untranslated" -eq 0 ] && pass_check "all documents carry Chinese prose"
+#      $RECORD  the analysis record -- a translation of English originals, so it must
+#               carry Chinese prose and keep its frozen citations verbatim;
+#      $DOCS    the four maintained documents -- authored in Chinese, reorganized rather
+#               than translated, so fidelity against an original does not apply but
+#               emptiness and accidental English still do.
+#
+#    The record and the documents are checked by the same code on purpose: two copies of
+#    the "is it empty / is it really Chinese" logic would drift, and the drift would be
+#    invisible because both would still print ok.
+structure_check() {
+  local root="$1" label="$2" enforce_frozen="$3"
+  shopt -s nullglob
+  local docs=("$root"/*.md)
+  shopt -u nullglob
 
-# Citations into other documents and into the source tree are frozen strings.
-# They were reproduced verbatim on purpose: a reader follows them to a real file,
-# so a localized or garbled copy is a broken pointer. Two families are checked,
-# chosen because each one is a literal that appears in the source tree:
-#
-#   * "Hindsight Tempr step N"  — names a section of another document
-#   * "Step N" before "—"       — names a labelled branch of a model prompt
-#
-# A bare "第 N 步" is deliberately NOT flagged: that is ordinary prose counting
-# iterations ("the second step of the plan"), which a translation is entitled to
-# phrase in Chinese. Flagging it would punish correct writing.
-frozen_lost=0
-for f in "${docs[@]}"; do
-  if grep -qE 'Hindsight Tempr 第 ?[0-9]+ ?步' "$f" 2>/dev/null; then
-    fail_check "frozen citation translated: $(basename "$f")"
-    frozen_lost=1
+  if [ ${#docs[@]} -eq 0 ]; then
+    fail_check "no documents found under $label"
+    return
   fi
-done
-[ "$frozen_lost" -eq 0 ] && pass_check "no frozen citation was translated"
+  pass_check "${#docs[@]} documents present under $label"
+
+  local bad=0 f cjk
+  for f in "${docs[@]}"; do
+    if [ ! -s "$f" ]; then
+      fail_check "empty document: $label/$(basename "$f")"
+      bad=1
+    fi
+  done
+
+  # A document with almost no CJK content was never translated. This is the check that a
+  # numeric comparison cannot make: an untranslated document is identical to its source,
+  # so it passes the fidelity gate by construction.
+  #
+  # The character class must be a Unicode property (\p{Han}), not a range such as
+  # [一-鿿]. A bracketed CJK range is a *collation* range, and under the en_US.UTF-8
+  # locale these scripts run in grep reports "Invalid collation character" and matches
+  # nothing -- so the range form would pass every English document while printing "all
+  # documents carry Chinese prose".
+  local THRESHOLD=40
+  for f in "${docs[@]}"; do
+    cjk=$(grep -oP '\p{Han}' "$f" 2>/dev/null | wc -l | tr -d ' ' || true)
+    cjk=${cjk:-0}
+    if [ "$cjk" -lt "$THRESHOLD" ]; then
+      fail_check "not in Chinese (${cjk} Han chars, need >=${THRESHOLD}): $label/$(basename "$f")"
+      bad=1
+    fi
+  done
+
+  # Frozen citations are only meaningful where a translation exists. Two families are
+  # checked, chosen because each one is a literal that appears in the source tree:
+  #
+  #   * "Hindsight Tempr step N"  -- names a section of another document
+  #   * "Step N" before "--"      -- names a labelled branch of a model prompt
+  #
+  # A bare "第 N 步" is deliberately NOT flagged: that is ordinary prose counting
+  # iterations, which a translation is entitled to phrase in Chinese.
+  if [ "$enforce_frozen" -eq 1 ]; then
+    for f in "${docs[@]}"; do
+      if grep -qE 'Hindsight Tempr 第 ?[0-9]+ ?步' "$f" 2>/dev/null; then
+        fail_check "frozen citation translated: $label/$(basename "$f")"
+        bad=1
+      fi
+    done
+  fi
+
+  [ "$bad" -eq 0 ] && pass_check "structure intact under $label"
+}
+
+structure_check "$RECORD" "evidence/longmemeval" 1
+structure_check "$DOCS" "docs" 0
 
 # 2. Numeric fidelity against the originals, when they are available.
 if [ -n "$SOURCES" ]; then

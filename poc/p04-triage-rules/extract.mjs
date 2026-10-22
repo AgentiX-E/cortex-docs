@@ -12,7 +12,7 @@
  *
  * ## Why extraction is heuristic and not a model
  *
- * The design (docs/13) puts extraction on the model and disclosure on the rules. This script
+ * The design (docs/02) puts extraction on the model and disclosure on the rules. This script
  * is the *ruler* for the disclosure layer, so it must not itself be a model: a model-based
  * extractor would make the measurement circular. The heuristic below is deliberately crude --
  * first-person marker, no question mark, a stative or event predicate -- and its recall is

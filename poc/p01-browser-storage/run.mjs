@@ -4,7 +4,7 @@
  *
  * ## What this answers, and what nothing else could
  *
- * docs/12 rejects DuckDB-WASM as the system of record and calls SQLite-WASM + OPFS the default.
+ * docs/02 rejects DuckDB-WASM as the system of record and calls SQLite-WASM + OPFS the default.
  * That choice rests on three things that cannot be settled by reading documentation:
  *
  *   1. does the `opfs` VFS actually work in a Worker in this Chromium (no cross-origin isolation)?
@@ -19,7 +19,7 @@
  * ## What this does NOT show
  *
  * Safari. PGlite's documentation records a 252-handle limit in Safari that breaks its own OPFS
- * VFS, and nothing here can speak to whether sqlite-wasm's VFS hits the same wall. docs/14
+ * VFS, and nothing here can speak to whether sqlite-wasm's VFS hits the same wall. docs/04
  * records that as the one open blocker and names the probe that would close it.
  */
 

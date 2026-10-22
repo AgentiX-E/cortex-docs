@@ -4,7 +4,7 @@
  *
  * ## The claim under test
  *
- * docs/13 says the four storage topologies reduce to one contract plus a router, and that the
+ * docs/02 says the four storage topologies reduce to one contract plus a router, and that the
  * router can live in `cortex-core` because it is pure composition over `Storage`. This script
  * is that router, and the seven checks below are the ones a reviewer would ask for: routing,
  * read isolation, labelled provenance, delete scoping, ttl independence, and two refusals

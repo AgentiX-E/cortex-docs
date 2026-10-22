@@ -3,7 +3,7 @@
  *
  * ## Why rules first, and why this file is short
  *
- * docs/13 splits the triage into extraction (a model's job) and disclosure (not a model's job),
+ * docs/02 splits the triage into extraction (a model's job) and disclosure (not a model's job),
  * and cites CIMemories: frontier models violate context-appropriate flow on up to 69% of
  * attribute-level checks, violations accumulate with use, and privacy prompting makes them
  * worse rather than better. A layer with that error profile cannot be the last word on "may
@@ -22,7 +22,7 @@
  * measured without a provider.
  */
 
-/** One rule: an id (quoted in docs/14), a target scope, and the pattern that fires it. */
+/** One rule: an id (quoted in docs/04), a target scope, and the pattern that fires it. */
 const RULES = [
   {
     id: 'credential',
