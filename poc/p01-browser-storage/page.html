@@ -23,6 +23,44 @@
           worker.postMessage({ id, cmd, payload });
         });
       window.ready = true;
+
+      // Autorun exists for the WebDriver path, where no `page.evaluate` helper is available:
+      // the page has to drive itself and publish a result the driver can poll. Playwright runs
+      // never set ?autorun, so the measured sequence there is unchanged.
+      //
+      // What it can answer in one session: whether the SAH-pool VFS installs at all (the 252
+      // handle limit that breaks PGlite's VFS would surface here) and whether a batch of rows
+      // round-trips. What it cannot answer: persistence across a browser restart -- that stays
+      // with the Playwright path, which relaunches the process.
+      const autorun = new URLSearchParams(location.search).has('autorun');
+      if (autorun) {
+        const rows = Number(new URLSearchParams(location.search).get('rows') ?? 1000);
+        const started = performance.now();
+        (async () => {
+          const init = await window.rpc('init');
+          const write = await window.rpc('write', { rows });
+          const read = await window.rpc('read', { rows });
+          await window.rpc('closeDb');
+          window.__probe = {
+            ok: true,
+            rows,
+            init,
+            writeMs: write.writeMs,
+            checkpointMs: write.checkpointMs,
+            rowsPerSecond: write.rowsPerSecond,
+            digest: read.digest >>> 0,
+            scanned: read.scanned,
+            wallMs: performance.now() - started,
+            userAgent: navigator.userAgent,
+          };
+        })().catch((error) => {
+          window.__probe = {
+            ok: false,
+            error: String((error && error.stack) || error),
+            userAgent: navigator.userAgent,
+          };
+        });
+      }
     </script>
   </body>
 </html>

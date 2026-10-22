@@ -1,0 +1,160 @@
+name: poc-platform-probes
+
+# Why this workflow exists at all
+#
+# Two of the design phase's open gaps are properties of a *host*, not of the code:
+#
+#   G1  does Safari's OPFS access-handle pool work at all, or does it hit the 252-handle wall
+#       that breaks PGlite's VFS? A Linux container cannot answer this; it has no Safari.
+#   G2  can the false-share / coverage numbers be re-estimated on a corpus that already carries
+#       human annotation, instead of labelling 600 sentences by hand? The corpus lives on the
+#       Hub, which the authoring sandbox cannot reach.
+#
+# A GitHub-hosted macOS runner has Safari, and a hosted Ubuntu runner has the network. Both are
+# therefore part of the measurement apparatus, not a convenience -- and that is worth writing
+# down, because "we could not measure it" was true only of one machine.
+#
+# Results are committed to the `ci-results` branch rather than uploaded as an artifact: the
+# authoring sandbox can reach api.github.com and nothing else, so a plain file in git is the only
+# retrieval path that works without a proxy trick.
+
+on:
+  workflow_dispatch:
+    inputs:
+      rows:
+        description: 'Rows written by the persistence probe'
+        required: false
+        default: '10000'
+      corpus_limit:
+        description: 'Maximum policy-forced rows kept from the corpus'
+        required: false
+        default: '3000'
+
+permissions:
+  contents: write
+
+jobs:
+  browser:
+    name: webkit + safari (macOS)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install POC dependencies
+        working-directory: poc
+        run: npm ci
+
+      - name: Install Playwright WebKit
+        working-directory: poc
+        run: node node_modules/playwright-core/cli.js install webkit
+
+      - name: WebKit, across a browser restart
+        working-directory: poc
+        env:
+          POC_BROWSER: webkit
+          POC_ROWS: ${{ github.event.inputs.rows }}
+          POC_VECTOR: 'off'
+        run: node p01-browser-storage/run.mjs
+
+      - name: Real Safari through safaridriver
+        continue-on-error: true
+        working-directory: poc
+        run: |
+          set -x
+          node p01-browser-storage/serve.mjs --port 8000 &
+          SERVER=$!
+          sleep 2
+          # Enabling remote automation needs an authorisation the runner has but a user does not.
+          # A refusal here is recorded verbatim: "we could not enable it" is a result.
+          sudo safaridriver --enable || echo "safaridriver --enable failed" > safari-enable.log
+          safaridriver -p 4444 &
+          DRIVER=$!
+          sleep 4
+          # One session, one shot. If the SAH pool throws, the probe returns ok:false with the
+          # browser's own message, which is more useful than a generic timeout.
+          python3 p01-browser-storage/safari-wd-probe.py --rows 1000 \
+            --out results/p01-safari-webdriver.json || true
+          kill $SERVER $DRIVER 2>/dev/null || true
+          cat results/p01-safari-webdriver.json || true
+
+      - name: Keep both results
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser
+          path: |
+            poc/results/p01-browser-storage-webkit.json
+            poc/results/p01-browser-storage-webkit.md
+            poc/results/p01-safari-webdriver.json
+          if-no-files-found: warn
+
+  corpus:
+    name: policy-forced corpus recall (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install the corpus reader
+        run: pip install --quiet datasets
+
+      - name: Fetch the policy-forced subset
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python3 poc/p06-pii-recall/fetch.py \
+            --limit ${{ github.event.inputs.corpus_limit }} \
+            --out poc/p06-pii-recall/candidates.json
+          head -c 400 poc/p06-pii-recall/candidates.json || true
+
+      - name: Measure leak and coverage against the rule layer
+        run: node poc/p06-pii-recall/run.mjs
+
+      - name: Keep the result
+        uses: actions/upload-artifact@v4
+        with:
+          name: corpus
+          path: |
+            poc/results/p06-pii-recall.json
+            poc/results/p06-pii-recall.md
+          if-no-files-found: warn
+
+  publish:
+    name: commit results to ci-results
+    needs: [browser, corpus]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: collected
+          merge-multiple: true
+
+      - name: Push what was measured
+        run: |
+          set -euo pipefail
+          mkdir -p poc/results/ci
+          cp collected/*.json collected/*.md poc/results/ci/ 2>/dev/null || true
+          ls -la poc/results/ci
+          git config user.name Lambertyan
+          git config user.email lambertyan@users.noreply.github.com
+          git checkout -B ci-results
+          git add poc/results/ci
+          # `--allow-empty` keeps the branch shape stable when a probe produced nothing, so the
+          # absence of a file is itself visible instead of the push failing silently.
+          git commit -m "ci: platform probe results (run ${{ github.run_id }})" --allow-empty
+          git push --force origin ci-results
