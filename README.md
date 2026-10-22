@@ -21,7 +21,7 @@ Node + 浏览器双端）的**内部中文文档**与**设计阶段的证据**�
 
 | 目录 | 内容 |
 |---|---|
-| [`poc/`](poc/README.md) | 6 个可复跑实验（`npm run all`）。每个都写明"能证明什么 / 不能证明什么" |
+| [`poc/`](poc/README.md) | 7 个可复跑实验（`npm run all`）。每个都写明"能证明什么 / 不能证明什么" |
 | `poc/results/` | 每个实验的原始数（`.json`）与文档引用的表（`.md`） |
 | [`evidence/`](evidence/README.md) | 94 篇验收判决、分析脚本、run id、日志。**是记录不是文档，不需要读** |
 
@@ -29,9 +29,10 @@ Node + 浏览器双端）的**内部中文文档**与**设计阶段的证据**�
 `evidence/longmemeval/run-ids/` 找到 run id。
 
 两个实验需要**本机没有的东西**，因此写成可派发的工作流（[`poc-platform-probes.yml`](.github/workflows/poc-platform-probes.yml)）：
-Safari 需要 macOS，Hub 语料需要外网。结果提交到 `ci-results` 分支。
-注意：**本仓库是 private，Actions 作业当前不会启动**（见 04 §7 G1）—— 这不是"Safari 测不了"，
-而是仓库可见性；`ci-smoke.yml` 就是用来区分这两件事的。
+Safari 需要 macOS（`safaridriver`），Hub 语料需要外网。结果提交到 `ci-results` 分支，
+主分支只保留被引用的那几份（如 `poc/results/p01-safari-webdriver.json`）。
+仓库曾是 private，Actions 作业因此**不启动**；设为 public 后两条链一次跑通 —— `ci-smoke.yml`
+保留下来，因为它正是用来区分"没有 runner"与"工作流写错了"的那件仪器。
 
 ## 约定
 
