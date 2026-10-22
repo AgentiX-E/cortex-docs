@@ -52,15 +52,24 @@ jobs:
         working-directory: poc
         run: node node_modules/playwright-core/cli.js install webkit
 
+      # `continue-on-error` plus a tee'd log, because the first attempt failed here and the job
+      # log is the one artefact this sandbox cannot read: the logs endpoint redirects to a host it
+      # cannot reach. A step that fails silently is a step we would still be guessing about.
       - name: WebKit, across a browser restart
+        id: webkit
+        continue-on-error: true
         working-directory: poc
         env:
           POC_BROWSER: webkit
           POC_ROWS: ${{ github.event.inputs.rows }}
           POC_VECTOR: 'off'
-        run: node p01-browser-storage/run.mjs
+        run: |
+          set -o pipefail
+          node p01-browser-storage/run.mjs 2>&1 | tee p01-webkit.log
+          echo "status=$?" >> "$GITHUB_OUTPUT"
 
       - name: Real Safari through safaridriver
+        if: always()
         continue-on-error: true
         working-directory: poc
         run: |
@@ -86,9 +95,10 @@ jobs:
         with:
           name: browser
           path: |
-            poc/results/p01-browser-storage-webkit.json
-            poc/results/p01-browser-storage-webkit.md
-            poc/results/p01-safari-webdriver.json
+            poc/results/*.json
+            poc/results/*.md
+            poc/p01-webkit.log
+            poc/safari-enable.log
           if-no-files-found: warn
 
   corpus:
@@ -148,7 +158,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p poc/results/ci
-          cp collected/*.json collected/*.md poc/results/ci/ 2>/dev/null || true
+          cp collected/*.json collected/*.md collected/*.log poc/results/ci/ 2>/dev/null || true
           ls -la poc/results/ci
           git config user.name Lambertyan
           git config user.email lambertyan@users.noreply.github.com

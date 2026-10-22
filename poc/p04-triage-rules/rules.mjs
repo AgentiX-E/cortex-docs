@@ -28,8 +28,12 @@ const RULES = [
     id: 'credential',
     scope: 'private',
     policy: 'credentials are never stored, not even as a card',
+    // CVV and wallet addresses were added after POC-6's CI run over 3,000 identifier-bearing
+    // rows found 16 publications, and every one of them was a payment secret no rule claimed:
+    // "the CVV is 412", "provide your Bitcoin address 3D1mKZ…". A credential that is not
+    // recognised is not a card the user can dismiss; it is a string that leaves the device.
     pattern:
-      /\b(password|passcode|api[ _-]?key|secret|token|private key|passphrase|ssn|social security|\bpin\b|ghp_|sk-)/i,
+      /\b(password|passcode|api[ _-]?key|secret|token|private key|passphrase|ssn|social security|\bpin\b|ghp_|sk-|cvv|cvc|seed phrase)\b|\b(bitcoin|litecoin|ethereum|wallet)\s+address\b|\b0x[0-9a-f]{40}\b|\bbc1[a-z0-9]{25,}\b|\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b/i,
   },
   {
     id: 'strong-pii',

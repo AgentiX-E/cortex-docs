@@ -13,6 +13,8 @@ npm run p03                    # federation semantics (Node)
 npm run p04                    # disclosure rules on 60 labelled real utterances
 npm run p05                    # write/read boundary end to end, plus the A1/A4/A5 ablations
 npm run p06                    # the rule layer on 1,467 candidate facts (coverage at scale)
+npm run p07 -- <artifact.json>  # the split applied to the turns a real run admitted
+npm run regress                # rows CI published in the past must stay private
 python3 p06-policy-scale/fetch.py p06-policy-scale/statements.json   # regenerate the corpus
 npm run p01                    # SQLite-WASM on OPFS in Chromium, across a browser restart
 ```
@@ -58,7 +60,12 @@ labelled rows are the input, the corpus is only how they were sampled.
 | `p03-federation` | Does a router over two stores hold the privacy boundary, and what must it refuse? | Speed, and real cross-store durability. Cross-store atomicity is refused by design. |
 | `p04-triage-rules` | Does a deterministic rule layer keep private facts out of the shared store, and how much of the traffic does it decide? | Anything about the LLM proposer, which needs a provider. The rule layer is measured alone, on purpose. |
 | `p05-read-side` | Does the boundary hold once the rules, two stores and the read-side assembler are wired together, and what does holding it cost in reachable evidence? | Retrieval quality (60 rows are the whole corpus), the proposer, real users, non-English text. |
+| `p07-dual-store-real-corpus` | With a real run's 59,675 admitted turns, what would a shared task have left to read? | Which turn carried the gold answer — the artifact records ranks, not identities. |
 | `p06-policy-scale` | Does the coverage number survive two orders of magnitude more rows, and does the rule layer hold on facts that are already atomic? | False-share: the publishing rule never fires on persona attributes, so the leak column is deliberately reported as *not measured*. |
+
+`p07` reads a benchmark artifact you already have; it is not committed (50 MB, regenerable from a
+run id). `regress` reads `p04-triage-rules/regressions.json`, which holds the rows a CI run of
+`p06` published, so the defects that corpus found cannot come back.
 
 ## The method rules these POCs follow
 
