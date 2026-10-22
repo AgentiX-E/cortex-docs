@@ -1,0 +1,92 @@
+{
+  "generatedAt": "2026-10-22T10:44:51.278Z",
+  "status": "ok",
+  "dataset": "ai4privacy/pii-masking-200k",
+  "corpus": {
+    "scanned": 52173,
+    "kept": 3000,
+    "droppedMixed": 49173
+  },
+  "leak": {
+    "count": 1,
+    "n": 3000,
+    "upper": 0.0018858188843041794,
+    "examples": [
+      {
+        "id": "pii01216",
+        "rule": "org-knowledge",
+        "text": "In our latest Quality Assurance meeting, we decided to conduct an audit of all our transactions, paying special attention to those from Home Loan Account with I"
+      }
+    ]
+  },
+  "coverage": {
+    "count": 2624,
+    "n": 3000,
+    "rate": 0.8746666666666667,
+    "interval": [
+      0.8623374940250748,
+      0.8860375553300811
+    ]
+  },
+  "byCategory": [
+    {
+      "category": "strong-pii",
+      "n": 2524,
+      "leak": 1,
+      "leak upper": "0.2%",
+      "coverage": "88.6%",
+      "top rule": "strong-pii: 1181"
+    },
+    {
+      "category": "credential",
+      "n": 476,
+      "leak": 0,
+      "leak upper": "0.8%",
+      "coverage": "81.3%",
+      "top rule": "credential: 248"
+    }
+  ],
+  "labelCensus": {
+    "FIRSTNAME": 16150,
+    "LASTNAME": 5677,
+    "DATE": 5371,
+    "EMAIL": 4800,
+    "PREFIX": 4041,
+    "AMOUNT": 3596,
+    "USERNAME": 3534,
+    "JOBTITLE": 3470,
+    "MIDDLENAME": 3398,
+    "TIME": 3378,
+    "URL": 3370,
+    "JOBAREA": 3354,
+    "STREET": 3348,
+    "ACCOUNTNUMBER": 3347,
+    "ACCOUNTNAME": 3318,
+    "BUILDINGNUMBER": 3306,
+    "CITY": 3302,
+    "COUNTY": 3260,
+    "STATE": 3249,
+    "JOBTYPE": 3244,
+    "IPV4": 3213,
+    "SEX": 3179,
+    "CURRENCYSYMBOL": 3173,
+    "PASSWORD": 3134,
+    "CREDITCARDNUMBER": 3125,
+    "COMPANYNAME": 2976,
+    "GENDER": 2916,
+    "DOB": 2905,
+    "PHONENUMBER": 2905,
+    "AGE": 2897,
+    "BITCOINADDRESS": 2886,
+    "IPV6": 2858,
+    "ZIPCODE": 2848,
+    "SECONDARYADDRESS": 2830,
+    "MASKEDNUMBER": 2591,
+    "USERAGENT": 2543,
+    "SSN": 2508,
+    "IP": 2413,
+    "IBAN": 2377,
+    "PHONEIMEI": 2298
+  },
+  "provenance": "Produced by .github/workflows/poc-platform-probes.yml (run 39765338028) on ubuntu-latest; the corpus is downloaded there because the authoring host cannot reach the Hub. Mirrored here so the number cited in docs/04 is readable without switching branches."
+}
