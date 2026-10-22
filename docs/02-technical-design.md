@@ -31,18 +31,23 @@
 
 ```
 packages/
-  cortex-core/      契约 + 纯算法（零 I/O），双端
-                    + FederatedStorage（纯路由）
-                    + TriageRules（确定性规则，纯函数）
-                    + KnowledgeCard / ScopePolicy 类型
-  cortex-memory/    组合层：把 core 的能力组合成 MemorySystem（不消费 Storage）
-  cortex-ai/        ← cortex-llm 更名
+  cortex-core/      契约 + 纯算法（零 I/O），双端            [现状]
+                    + FederatedStorage（纯路由）            [待实现]
+                    + TriageRules（确定性规则，纯函数）      [待实现]
+                    + KnowledgeCard / ScopePolicy 类型      [待实现]
+  cortex-memory/    组合层：把 core 的能力组合成 MemorySystem（不消费 Storage）  [现状]
+  cortex-ai/        ← cortex-llm 更名                        [待实现]
                     ".":        远程 provider 契约
                     "./local":  transformers.js v4（本地 embedding / rerank）
                     "./web":    webllm / chrome-ai（离线演示档）
                     + TriageProposer（产出卡片，不落库）+ PiiDetector
-  cortex-storage/   ← cortex-node 更名
-                    ./sqlite  ./pg  ./opfs  ./idb  ./analytics
+  cortex-storage/   ← cortex-node 更名（已完成）
+                    "."         空入口（零导出；见 §1.2）
+                    "./sqlite"  better-sqlite3（optional peer）   [现状]
+                    "./pg"      pg（optional peer）              [现状]
+                    "./opfs"    SQLite-WASM + SAH pool            [待实现]
+                    "./idb"     IndexedDB 降级层                  [待实现]
+                    "./analytics" DuckDB-WASM 侧车                [待实现]
 ```
 
 依赖方向（严格单向，无环）：
@@ -67,8 +72,19 @@ cortex-core  ←  cortex-memory  ←  { cortex-ai, cortex-storage }   ←  corte
 ### 1.2 依赖分层与 optional peer
 
 `better-sqlite3` / `pg` / `@sqlite.org/sqlite-wasm` / `@duckdb/duckdb-wasm` 全部声明为
-**optional peerDependencies**：装了才用，没装则对应 subpath 在 `import` 时给出明确错误
-（"this subpath needs X" 而不是 `MODULE_NOT_FOUND`）。
+**optional peerDependencies**：装了才用，没装则只有真正 `import` 那个 subpath 的构建会失败。
+
+**一条必须写清楚的更正**：设计初稿说"没装时给出 `this subpath needs X`"，**这一点做不到**——
+ESM 的静态 `import` 在链接期就失败，早于任何我们自己的代码。实际行为是 Node 自己的
+`Cannot find package 'better-sqlite3' imported from …/dist/storage/sqlite.js`：它点名了包和文件，
+信息量其实够用，而包装它需要把静态 import 换成运行时 `require`，那会同时失去类型与 tree-shaking。
+所以这里不承诺自定义错误，只承诺**错误出现在正确的 subpath 上**。
+
+**根入口是空的，这是设计不是占位**：`"."` 只导出 `export {}`。如果根再导出两个 backend，
+任何 `import '@agentix-e/cortex-storage'` 都会把 native addon 拉进构建——那正是改名要解决的问题。
+因此体积守卫在这里是**入口闭包守卫**：`tools/entry-guard.mjs` 走 import 闭包，禁止可移植入口
+触达 native 或 `node:` 内建；它的**对照项**是 `./sqlite`（本来就该触达 `better-sqlite3`），
+对照项一旦"干净"就说明走查坏了，根上的绿也就没有意义。
 
 ---
 

@@ -19,6 +19,7 @@
 | **端到端双库（G3）** | ✅ `[POC-7]`：59,675 条真实轮次里可共享 **0.52%**，**63.6%** 的问题共享窗口为空 |
 | **规则修补** | 报告两轮共补 vitals / CVV+钱包 / 账号+门牌；12/12 冻结行恢复私有，p04 三项一位未动 |
 | **设计门槛** | **9/9 ✅**（03 §10.1）；剩余五条是设计边界，不是缺口（03 §10.1.1） |
+| **实现第 1 步** | ✅ `cortex-storage` 落地：根入口零导出、两个 backend subpath、optional peer、入口闭包守卫；`pnpm check` 全绿（2,860 测试，5 包中 4 个 100/100/100/100） |
 | **SOTA 读数** | 名单均值 **405.0 / 500**（397–412）；MR 落后参考管线 **20 题**，"超越竞品"仍不成立 |
 
 **本期最重要的两个读数，都不是"分数"**：
@@ -298,9 +299,67 @@ LongMemEval 的成绩由 `cortex-eval` 自己实现的独立系统产生。
 
 ---
 
-## 9. 本期变更与下轮计划
 
-### 9.1 本期变更（本仓库）
+---
+
+## 9. 实现阶段第 1 步（2026-10-22）：`cortex-storage` 与入口守卫
+
+设计阶段结束后进入实现阶段，第 1 步是改名与入口拆分。**它不是搬运**：改名的理由是原来的根入口
+把 `better-sqlite3`（native addon）和 `pg`（socket 客户端）一起导出，于是任何
+`import '@agentix-e/cortex-node'` 都会把两者拉进构建——包括根本不想要它们的浏览器构建。
+
+### 9.1 交付
+
+| 项 | 结果 |
+|---|---|
+| 包名 | `@agentix-e/cortex-node` → `@agentix-e/cortex-storage`（`packages/` 目录、lockfile、台账基线同步） |
+| 入口 | `.` = `export {}`（**零导出，故意的**）；`./sqlite`；`./pg` |
+| 依赖 | `better-sqlite3` / `pg` 从 `dependencies` 移到 **optional peerDependencies**，测试留在 devDependencies |
+| 守卫 | `tools/entry-guard.mjs`：走 import 闭包，禁可移植入口触达 native 或 `node:`；**对照项**是 `./sqlite`（必须触达 `better-sqlite3`，否则说明走查坏了）；`--self-test` 用真实注入证明它会红 |
+| 守卫的门禁 | 接进根 `check`（`pnpm guard:entry`），排在 build 之后、lint 之前；配套 5 个 pytest |
+| 测试 | `cortex-storage` 27 个（原 19 个行为测试 + 8 个入口/清单断言） |
+
+### 9.2 读数
+
+`pnpm check` 全绿（exit 0）：test:tools（含新增 5 个）→ build → guard:entry → lint → typecheck →
+census:check（"no new orphans beyond the recorded baseline"）→ test → format。
+
+| 包 | 测试 | 语句 | 分支 | 函数 | 行 |
+|---|---|---|---|---|---|
+| cortex-core | 252 | 100 | 100 | 100 | 100 |
+| **cortex-storage** | **27** | **100** | **98.64** | **100** | **100** |
+| cortex-llm | 149 | 100 | 100 | 100 | 100 |
+| cortex-eval | 1,992 | 100 | 100 | 100 | 100 |
+| cortex-memory | 440 | 100 | 100 | 100 | 100 |
+
+**唯一没到 100 的是 storage 的分支列**：1.36 个点全部落在 `PgStorage.transaction` 的 `} finally {`
+这一行（v8 对 `finally` 的隐式路径计数）。它 ≥95% 的门槛，但按本项目的标准"能查清就不留"——
+下轮的候选是把它做成显式 `try/catch` + 无 `finally` 的等价写法再测，若仍是幽灵分支，
+就按既有先例记成 v8 产物，而不是加注解。
+
+### 9.3 这一步里发现的四个缺陷（都不是"改名"本身）
+
+| # | 缺陷 | 怎么发现 | 修法 |
+|---|---|---|---|
+| 1 | **守卫把文档当代码读**：根入口的 docstring 里有一行示例 `import { … } from '@agentix-e/cortex-storage'`，守卫因此报告"这个包 import 了自己" | 第一次跑就红，但红的理由不对 | 匹配前先 blank 注释；**字节数仍按原文算**（那才是发货体积） |
+| 2 | **同名函数让台账变绿**：守卫里我把剥注释的 helper 也叫 `stripComments`，而 `cortex-core` 正好导出一个同名函数；台账把 `tools/*.mjs` 里的标识符算作调用者，于是 `cortex-core: stripComments` 这条**真实孤儿**从报告里消失（232 → 231） | `pnpm check` 在 `export-census-gate` 上红：观测比基线少一条 | 改名为 `blankComments`，并在注释里写明原因——**用巧合买来的绿比红更危险** |
+| 3 | **旧测试钉的是旧契约**：`storage.test.ts` 里"exports storage backends"断言根入口导出两个 backend，与本次目标正好相反 | 拆分后立刻红 | 改写为"根入口不导出任何东西"+"每个 subpath 导出自己的类" |
+| 4 | **设计稿承诺了一件做不到的事**："没装 peer 时给 `this subpath needs X`"。ESM 静态 import 在链接期就失败，早于我们的代码 | 实现第 1 步时撞到 | 02 §1.2 改写：不承诺自定义错误，只承诺**错误落在正确 subpath 上**，并写明代价（换 `require` 会丢类型与 tree-shaking） |
+
+### 9.4 还没做
+
+| 项 | 归属 |
+|---|---|
+| `./opfs`（SQLite-WASM + SAH pool，浏览器） | 第 3 步；`[POC-1]` 的 Worker 形状直接复用 |
+| `./idb`（OPFS 不可用时的降级层） | 第 3 步的失败路径 |
+| `./analytics`（DuckDB-WASM 侧车） | P2，按需 `import()` |
+| `cortex-core` 里的 `FederatedStorage` / `TriageRules` | 第 2 / 5 步 |
+
+---
+
+## 10. 本期变更与下轮计划
+
+### 10.1 本期变更（本仓库）
 
 | 变更 | 内容 |
 |---|---|
@@ -318,7 +377,7 @@ LongMemEval 的成绩由 `cortex-eval` 自己实现的独立系统产生。
 | 诊断 | `ci-smoke.yml`：把"CI 跑不了 Safari"与"作业根本没启动"分开 —— 结论是后者 |
 | 守卫 | `check-analysis-record.sh` 的记录路径改指 `evidence/longmemeval`；结构检查扩展到四份文档 |
 
-### 9.2 下轮计划（按依赖排序）
+### 10.2 下轮计划（按依赖排序）
 
 | # | 动作 | 为什么是这个顺序 |
 |---|---|---|
