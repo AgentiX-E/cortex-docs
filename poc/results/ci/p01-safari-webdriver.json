@@ -1,0 +1,8 @@
+{
+  "browser": "safari",
+  "mechanism": "safaridriver",
+  "origin": "http://127.0.0.1:8000",
+  "rows": 1000,
+  "ok": false,
+  "error": "HTTP 500 from safaridriver: {\"value\":{\"error\":\"session not created\",\"message\":\"Could not create a session: The session timed out while connecting to a Safari instance. The following asynchronous operation timed out: Finding or launching a compatible local Safari and waiting for its RWIApplication to appear and become ready.\",\"stacktrace\":\"\"}}"
+}

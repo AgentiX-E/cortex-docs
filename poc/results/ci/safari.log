@@ -1,0 +1,30 @@
++ safaridriver --version
+Included with Safari 26.6 (19624.4.5.18.1)
++ SERVER=1213
++ sleep 2
++ node p01-browser-storage/serve.mjs --port 8000
+serving p01 on http://127.0.0.1:8000
++ sudo safaridriver --enable
++ DRIVER=1225
++ sleep 4
++ safaridriver -p 4444
++ python3 p01-browser-storage/safari-wd-probe.py --rows 1000 --out results/p01-safari-webdriver.json
+{
+  "browser": "safari",
+  "mechanism": "safaridriver",
+  "origin": "http://127.0.0.1:8000",
+  "rows": 1000,
+  "ok": false,
+  "error": "HTTP 500 from safaridriver: {\"value\":{\"error\":\"session not created\",\"message\":\"Could not create a session: The session timed out while connecting to a Safari instance. The following asynchronous operation timed out: Finding or launching a compatible local Safari and waiting for its RWIApplication to appear and become ready.\",\"stacktrace\":\"\"}}"
+}
++ true
++ kill 1213 1225
++ cat results/p01-safari-webdriver.json
+{
+  "browser": "safari",
+  "mechanism": "safaridriver",
+  "origin": "http://127.0.0.1:8000",
+  "rows": 1000,
+  "ok": false,
+  "error": "HTTP 500 from safaridriver: {\"value\":{\"error\":\"session not created\",\"message\":\"Could not create a session: The session timed out while connecting to a Safari instance. The following asynchronous operation timed out: Finding or launching a compatible local Safari and waiting for its RWIApplication to appear and become ready.\",\"stacktrace\":\"\"}}"
+}/Users/runner/work/_temp/7024c171-9661-4c0f-80ad-d6e174e4c0d0.sh: line 22:  1213 Terminated: 15          node p01-browser-storage/serve.mjs --port 8000

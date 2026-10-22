@@ -1,0 +1,45 @@
+{
+  "generatedAt": "2026-10-22T10:31:35.074Z",
+  "artifact": "run-39699987781/benchmark-cortex-memory-ablation-report.json",
+  "dataset": "longmemeval",
+  "questions": 500,
+  "turns": 59675,
+  "shared": 310,
+  "sharedRate": 0.005194805194805195,
+  "sharedRateInterval": [
+    0.004649021237228521,
+    0.00580428924218409
+  ],
+  "emptyWindows": 318,
+  "emptyWindowRate": 0.636,
+  "halfOrMorePrivate": 500,
+  "instrument": {
+    "publishingRuleHits": 413,
+    "vetoedByPrivate": 103,
+    "vetoRate": 0.24939467312348668,
+    "exercised": true
+  },
+  "ruleCounts": {
+    "defer": 52019,
+    "money": 2726,
+    "health": 2449,
+    "family": 1153,
+    "third-party": 539,
+    "org-knowledge": 310,
+    "credential": 166,
+    "strong-pii": 164,
+    "career-status": 149
+  },
+  "byRole": {
+    "user": {
+      "turns": 54316,
+      "shared": 256,
+      "sharedRate": 0.004713160026511525
+    },
+    "assistant": {
+      "turns": 5359,
+      "shared": 54,
+      "sharedRate": 0.010076506810972196
+    }
+  }
+}

@@ -1,0 +1,114 @@
+{
+  "generatedAt": "2026-10-22T04:57:20.587Z",
+  "node": "v22.13.1",
+  "raw": {
+    "f64 384d 20k": {
+      "count": 20000,
+      "dimensions": 384,
+      "kind": "f64",
+      "storedBytes": 61440000,
+      "p50Ms": 5.697094,
+      "p95Ms": 7.296341,
+      "maxMs": 8.519176,
+      "mulAddsPerQuery": 7680000,
+      "queries": 40,
+      "k": 10
+    },
+    "f32 384d 20k": {
+      "count": 20000,
+      "dimensions": 384,
+      "kind": "f32",
+      "storedBytes": 30720000,
+      "p50Ms": 13.520313,
+      "p95Ms": 14.280218,
+      "maxMs": 14.383996,
+      "mulAddsPerQuery": 7680000,
+      "queries": 40,
+      "k": 10
+    },
+    "int8 384d 20k": {
+      "count": 20000,
+      "dimensions": 384,
+      "kind": "int8",
+      "storedBytes": 7760000,
+      "p50Ms": 14.884655,
+      "p95Ms": 15.851225,
+      "maxMs": 19.444783,
+      "mulAddsPerQuery": 7680000,
+      "queries": 40,
+      "k": 10
+    },
+    "f64 384d 60k": {
+      "count": 60000,
+      "dimensions": 384,
+      "kind": "f64",
+      "storedBytes": 184320000,
+      "p50Ms": 22.850353,
+      "p95Ms": 26.287722,
+      "maxMs": 34.339109,
+      "mulAddsPerQuery": 23040000,
+      "queries": 40,
+      "k": 10
+    },
+    "f32 384d 60k": {
+      "count": 60000,
+      "dimensions": 384,
+      "kind": "f32",
+      "storedBytes": 92160000,
+      "p50Ms": 37.525262,
+      "p95Ms": 40.778916,
+      "maxMs": 41.836345,
+      "mulAddsPerQuery": 23040000,
+      "queries": 40,
+      "k": 10
+    },
+    "int8 384d 60k": {
+      "count": 60000,
+      "dimensions": 384,
+      "kind": "int8",
+      "storedBytes": 23280000,
+      "p50Ms": 44.722336,
+      "p95Ms": 46.655556,
+      "maxMs": 50.38565,
+      "mulAddsPerQuery": 23040000,
+      "queries": 40,
+      "k": 10
+    },
+    "f64 1024d 60k": {
+      "count": 60000,
+      "dimensions": 1024,
+      "kind": "f64",
+      "storedBytes": 491520000,
+      "p50Ms": 60.630261,
+      "p95Ms": 69.481049,
+      "maxMs": 72.499038,
+      "mulAddsPerQuery": 61440000,
+      "queries": 40,
+      "k": 10
+    },
+    "f32 1024d 60k": {
+      "count": 60000,
+      "dimensions": 1024,
+      "kind": "f32",
+      "storedBytes": 245760000,
+      "p50Ms": 99.095284,
+      "p95Ms": 106.579631,
+      "maxMs": 106.895295,
+      "mulAddsPerQuery": 61440000,
+      "queries": 40,
+      "k": 10
+    },
+    "int8 1024d 60k": {
+      "count": 60000,
+      "dimensions": 1024,
+      "kind": "int8",
+      "storedBytes": 61680000,
+      "p50Ms": 117.957408,
+      "p95Ms": 122.853758,
+      "maxMs": 123.008255,
+      "mulAddsPerQuery": 61440000,
+      "queries": 40,
+      "k": 10
+    }
+  }
+}
