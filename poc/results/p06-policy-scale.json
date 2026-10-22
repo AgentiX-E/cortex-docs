@@ -1,0 +1,125 @@
+{
+  "generatedAt": "2026-10-22T10:03:56.412Z",
+  "source": "facebookresearch/CIMemories data/data_openai_gpt-oss-120b.json",
+  "corpus": {
+    "personas": 10,
+    "statements": 1467,
+    "domains": {
+      "finance": 152,
+      "relationships": 152,
+      "mental_health": 151,
+      "education": 151,
+      "health": 151,
+      "housing": 151,
+      "legal": 151,
+      "employment": 151,
+      "schedule": 150,
+      "general": 107
+    }
+  },
+  "instrument": {
+    "publishingRuleHits": 0,
+    "vetoedByPrivate": 0,
+    "exercised": false,
+    "note": "the publishing rule never fired on this corpus: the leak count is a structural zero and is NOT a bound"
+  },
+  "pooled": {
+    "n": 1467,
+    "leak": 0,
+    "leakUpper": 0.002611742276950888,
+    "coverage": 0.283571915473756,
+    "coverageInterval": [
+      0.26109550846685076,
+      0.3071788312372146
+    ]
+  },
+  "forced": {
+    "n": 1059,
+    "leak": 0,
+    "leakUpper": 0.003614329106954978,
+    "coverage": 0.34560906515580736
+  },
+  "byDomain": [
+    {
+      "domain": "education",
+      "n": 151,
+      "leak": 0,
+      "leak upper": "2.5%",
+      "coverage": "5.3%",
+      "top rule": "defer: 143"
+    },
+    {
+      "domain": "employment",
+      "n": 151,
+      "leak": 0,
+      "leak upper": "2.5%",
+      "coverage": "19.2%",
+      "top rule": "defer: 122"
+    },
+    {
+      "domain": "finance",
+      "n": 152,
+      "leak": 0,
+      "leak upper": "2.5%",
+      "coverage": "91.4%",
+      "top rule": "money: 136"
+    },
+    {
+      "domain": "general",
+      "n": 107,
+      "leak": 0,
+      "leak upper": "3.5%",
+      "coverage": "11.2%",
+      "top rule": "defer: 95"
+    },
+    {
+      "domain": "health",
+      "n": 151,
+      "leak": 0,
+      "leak upper": "2.5%",
+      "coverage": "29.1%",
+      "top rule": "defer: 107"
+    },
+    {
+      "domain": "housing",
+      "n": 151,
+      "leak": 0,
+      "leak upper": "2.5%",
+      "coverage": "31.1%",
+      "top rule": "defer: 104"
+    },
+    {
+      "domain": "legal",
+      "n": 151,
+      "leak": 0,
+      "leak upper": "2.5%",
+      "coverage": "15.2%",
+      "top rule": "defer: 128"
+    },
+    {
+      "domain": "mental_health",
+      "n": 151,
+      "leak": 0,
+      "leak upper": "2.5%",
+      "coverage": "43.0%",
+      "top rule": "defer: 86"
+    },
+    {
+      "domain": "relationships",
+      "n": 152,
+      "leak": 0,
+      "leak upper": "2.5%",
+      "coverage": "12.5%",
+      "top rule": "defer: 133"
+    },
+    {
+      "domain": "schedule",
+      "n": 150,
+      "leak": 0,
+      "leak upper": "2.5%",
+      "coverage": "20.0%",
+      "top rule": "defer: 120"
+    }
+  ],
+  "leakExamples": []
+}

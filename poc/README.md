@@ -12,6 +12,8 @@ npm run p02                    # vector scan cost (Node)
 npm run p03                    # federation semantics (Node)
 npm run p04                    # disclosure rules on 60 labelled real utterances
 npm run p05                    # write/read boundary end to end, plus the A1/A4/A5 ablations
+npm run p06                    # the rule layer on 1,467 candidate facts (coverage at scale)
+python3 p06-policy-scale/fetch.py p06-policy-scale/statements.json   # regenerate the corpus
 npm run p01                    # SQLite-WASM on OPFS in Chromium, across a browser restart
 ```
 
@@ -56,6 +58,7 @@ labelled rows are the input, the corpus is only how they were sampled.
 | `p03-federation` | Does a router over two stores hold the privacy boundary, and what must it refuse? | Speed, and real cross-store durability. Cross-store atomicity is refused by design. |
 | `p04-triage-rules` | Does a deterministic rule layer keep private facts out of the shared store, and how much of the traffic does it decide? | Anything about the LLM proposer, which needs a provider. The rule layer is measured alone, on purpose. |
 | `p05-read-side` | Does the boundary hold once the rules, two stores and the read-side assembler are wired together, and what does holding it cost in reachable evidence? | Retrieval quality (60 rows are the whole corpus), the proposer, real users, non-English text. |
+| `p06-policy-scale` | Does the coverage number survive two orders of magnitude more rows, and does the rule layer hold on facts that are already atomic? | False-share: the publishing rule never fires on persona attributes, so the leak column is deliberately reported as *not measured*. |
 
 ## The method rules these POCs follow
 
@@ -72,7 +75,11 @@ labelled rows are the input, the corpus is only how they were sampled.
 5. **Never tune a rule to the label you just measured, except to fix a word-sense bug.** The one
    change made after seeing the gold set (`raise` firing on "raise funds") is recorded in
    `p04-triage-rules/rules.mjs` and it moved no metric.
-6. **A guard that never fires in a clean run has not been tested.** `p05`'s scope guard is
+6. **A zero is only a measurement if the mechanism that produces ones ran.** `p06` counts how
+   often the *publishing* rule matched before it reports any leak figure; when that count is 0 the
+   leak bound is printed as `NOT MEASURED` rather than as a Wilson interval over nothing. The
+   same discipline as `p04`'s upper bound, applied one level down.
+7. **A guard that never fires in a clean run has not been tested.** `p05`'s scope guard is
    redundant while the writer is correct, so it is exercised by injecting a private row into the
    shared store on purpose. With the guard on the run refuses to assemble a prompt; with it off
    the same row reaches the window. A guard only shown to pass is indistinguishable from one that

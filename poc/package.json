@@ -8,8 +8,9 @@
     "p02": "node p02-vector-scan/run.mjs",
     "p03": "node p03-federation/run.mjs",
     "p04": "node p04-triage-rules/run.mjs",
-    "all": "npm run p02 && npm run p03 && npm run p04 && npm run p05 && npm run p01",
-    "p05": "node p05-read-side/run.mjs"
+    "all": "npm run p02 && npm run p03 && npm run p04 && npm run p05 && npm run p06 && npm run p01",
+    "p05": "node p05-read-side/run.mjs",
+    "p06": "node p06-policy-scale/run.mjs"
   },
   "devDependencies": {
     "playwright-core": "^1.56.0",

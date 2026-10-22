@@ -289,6 +289,26 @@ with my colleagues … to **raise** funds for a local food bank"，把一次团�
 修法是加词义约束（`pay raise` / `pay rise`），**指标未变**（该行仍因提到同事而私有），但审计
 理由变对了。这类 bug 只有跑真实语料才会出现。
 
+### 5.4.1 在 1,467 条候选事实上复核（`[POC-6]`）
+
+60 条标注集能回答"策略对不对"，回答不了"覆盖率是不是小样本的偶然"。CIMemories 的 10 个 persona
+提供了 **1,467 条已经是原子事实的语句**（每条带 `information_domain`），且其数据文件就在仓库里，
+可用 api.github.com 取得 —— 不需要 Hub，也不需要新标注。
+
+| 量 | 值 | 读法 |
+|---|---|---|
+| coverage | **28.4%**（95% CI 26.1–30.7） | 与 60 条上的 26.7% 一致：四分之一是真的 |
+| 按领域 | finance 90.8%、mental_health 37.7%、housing 29.8%、employment 19.2%、health 11.3%（修补前） | `money` 规则在财务事实上一击即中；`health` 最弱 |
+| leak | **NOT MEASURED** | 发布规则 `org-knowledge` **0/1,467 命中** —— 结构性零 |
+
+**这一轮抓到的真实缺陷**：健康规则对**生理测量**完全沉默 —— "blood pressure 138 over 86"、
+"liver function test showed ALT 28 and AST 22"、"I average 7.5 hours of sleep"。它们不泄漏
+（`defer` 落私有），代价是用户多卡片，所以此前的 false-share 审计看不见它们。补上 vitals 词族后
+coverage 24.9% → **28.4%**，而 p04 三项指标一位未动 —— 修补由政策辩护，不由语料调参。
+
+**这一轮否掉的诱惑**：不要把 0/1,467 写成"上界 0.26%"。被测机制一次没触发，零就是空白。
+因此 `p06` 在报告 leak 之前**先报发布规则的命中次数**，为 0 就把 leak 打成 `NOT MEASURED`。
+
 ### 5.5 知识卡片
 
 ```ts
@@ -534,6 +554,25 @@ WebGPU、拿不到 q4、拿不到 v4 的 ModelRegistry 缓存**。这是 P0 级�
 
 ---
 
+### 12.1 测量宿主是设计的一部分
+
+两条曾记为"本环境无法测量"的缺口，其实是宿主问题：Safari 需要 macOS，Hub 语料需要网络。
+两者都可以交给 CI —— 但**不能想当然**：
+
+| 事实 | 证据 |
+|---|---|
+| 本仓 private，Actions 作业**不启动**（3 秒失败、`runner_name` 为空、零 steps） | `ci-smoke` 的一次 echo 作业同样失败 `[实测]` |
+| 同 org 的 public 仓库运行正常 | `cortex` 同日运行 success `[实测]` |
+| 因此阻塞是**可见性/分钟数**，不是"CI 跑不了 Safari" | 三者相互独立地排除了"MACOS runner 不存在"这一解释 |
+
+设计含义：浏览器矩阵与语料获取都写成**可派发的工作流**（`.github/workflows/poc-platform-probes.yml`），
+结果提交到 `ci-results` 分支而不是 artifact —— 因为本沙箱只能到达 api.github.com，
+一个 git 文件是唯一不需要代理技巧的取回路径。
+
+**一条必须保持的区分**：Playwright 的 WebKit 与 Safari 是两个东西（前者自带网络与存储管线）。
+两者都在工作流里跑，结果**分开报告**；把 WebKit 的通过写成"Safari 可用"正是本项目一直在抓的
+那类替换。
+
 ## 13. 已知债务与实现启动顺序
 
 | 债务 | 严重度 | 影响 |
@@ -544,6 +583,8 @@ WebGPU、拿不到 q4、拿不到 v4 的 ModelRegistry 缓存**。这是 P0 级�
 | 默认配置下 `consolidate` 的遗忘时钟量纲错误 | **P0** | 会**删除全部记忆**（已定位） |
 | `cortex-memory` 不消费 `Storage` | — | 不是缺陷，是设计事实；影响工作量估计 |
 | 浏览器/联邦/分诊三块**只有设计与 POC** | — | 见 03 §2 的启动顺序 |
+| Safari 探针**无法在本沙箱执行**：无 macOS | **P0（阻塞 iOS 承诺）** | 工作流已就绪；阻塞在仓库可见性（§12.1） |
+| 规则层 leak 的比率仍只有 n=60 | P1 | 需要**同类语料**（职场发言），不是任意语料（§5.4.1） |
 
 实现阶段的启动顺序（每步都有 POC 或单测可依据，不含"边做边定"的决定）：
 
