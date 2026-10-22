@@ -1,0 +1,19 @@
+name: ci-smoke
+
+# One job, one echo. Its only purpose is to separate two explanations for a run whose jobs fail
+# before any step starts: "the hosted runners cannot be reached" versus "the workflow file asks
+# for something the runner will not accept". A smoke test that cannot fail is not a check, but a
+# smoke test whose failure is *informative* is worth the minute.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  echo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Say something
+        run: |
+          echo "runner: $RUNNER_OS $RUNNER_ARCH"
+          uname -a
+          node --version || true
