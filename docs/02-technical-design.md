@@ -561,7 +561,8 @@ WebGPU、拿不到 q4、拿不到 v4 的 ModelRegistry 缓存**。这是 P0 级�
 
 | 事实 | 证据 |
 |---|---|
-| 本仓 private，Actions 作业**不启动**（3 秒失败、`runner_name` 为空、零 steps） | `ci-smoke` 的一次 echo 作业同样失败 `[实测]` |
+| 本仓 private，Actions 作业**不启动**（3 秒失败、`runner_name` 为空、零 steps）；macOS 作业则长期 `queued` 且无 runner | `ci-smoke` 的一次 echo 作业同样失败；`39761665647` 复现两种形态 `[实测]` |
+| 改可见性需要 **Administration** 写权限，普通 `repo` 权限的 PAT 会收到 403 | `PATCH /repos/…` 返回 `Resource not accessible by personal access token` `[实测]` |
 | 同 org 的 public 仓库运行正常 | `cortex` 同日运行 success `[实测]` |
 | 因此阻塞是**可见性/分钟数**，不是"CI 跑不了 Safari" | 三者相互独立地排除了"MACOS runner 不存在"这一解释 |
 

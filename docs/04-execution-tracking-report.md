@@ -247,7 +247,7 @@ LongMemEval 的成绩由 `cortex-eval` 自己实现的独立系统产生。
 
 | # | 缺口 | 缺的到底是什么 | 关掉它的动作 | 状态 |
 |---|---|---|---|---|
-| **G1** | Safari 上的 OPFS-AHP | 一台有 Safari 的机器 —— **已解决**（macOS runner 有 Safari）；真正的阻塞是**本仓 private，Actions 作业不启动** | ①把仓库设为 public，或购买 Actions 分钟数；②派发 `poc-platform-probes.yml`；③读 `ci-results` 分支 | 🔶 工作流已建、已派发、失败于作业未启动 |
+| **G1** | Safari 上的 OPFS-AHP | 一台有 Safari 的机器 —— **已解决**（macOS runner 有 Safari）；真正的阻塞是**本仓 private，Actions 作业不启动** | ①把仓库设为 public（**需在 Settings → General → Danger Zone 里点**：本 PAT 的 PATCH 返回 403，缺 Administration 写权限），或购买 Actions 分钟数；②派发 `poc-platform-probes.yml`；③读 `ci-results` 分支 | 🔶 工作流已建、已派发两次；最近一次 `39761665647`：macOS 作业 **queued 且无 runner**、Linux 作业 **0 steps 即失败** |
 | **G2** | 规则层 leak 的**比率** | 与 60 条**同类**的语料：必须出现"组织语言 + 私人事实"的行。1,467 条 persona 属性**永远不触发**发布规则（0 次命中），因此那里的 0 是结构性零 | 两条路：①再标 600 条职场发言（人工）；②找一个带作用域标签的职场语料（如内部邮件 + 隐私标注） | 🔶 **coverage 那一半已关闭**（28.4%，n=1,467）；leak 仍只有 n=60 |
 | **G3** | 真实题库端到端双库 | 一份基准产物的 6,000 条用户轮 —— **已经在本地**，只差脚本 | 用它跑规则层，统计每题的 gold 证据被分到哪一侧；得到"共享任务在真实题库上丢多少证据" | 🔶 设计侧由 `[POC-5]` 关闭；测量侧未做 |
 
