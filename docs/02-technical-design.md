@@ -45,9 +45,13 @@ packages/
                     "."         空入口（零导出；见 §1.2）
                     "./sqlite"  better-sqlite3（optional peer）   [现状]
                     "./pg"      pg（optional peer）              [现状]
-                    "./opfs"    SQLite-WASM + SAH pool            [待实现]
-                    "./idb"     IndexedDB 降级层                  [待实现]
+                    "./opfs"    SQLite-WASM + SAH pool            [现状]
+                    "./idb"     IndexedDB 降级层（无事务，见 §3.4）[现状]
                     "./analytics" DuckDB-WASM 侧车                [待实现]
+
+  一条结构性事实：**四个后端共用一个 `SqlStorage`**（`src/storage/sql-storage.ts`），
+  它只依赖 `SqlSession`（exec/run/all/close）。后端的差异归结为"谁来跑 SQL"：
+  `better-sqlite3` 在进程内、`EngineRpcSession` 在 Worker 另一侧、`node:sqlite` 在测试里。
 ```
 
 依赖方向（严格单向，无环）：
@@ -230,6 +234,82 @@ interface MemoryGraph {
 **一个实现层面的坑值得留档**：`oo1.OpfsDb` 在 3.54.1-build1 里**不是构造器** —— 该 bundler
 构建未注册 `opfs` VFS。改用 `installOpfsSAHPoolVfs` 后可用；同时 `sqlite3-*` 的路径要挂到
 origin 根，否则 async proxy worker 以文档相对路径解析会 404。
+
+### 3.4 产品化的浏览器层（实现第 3 步，已落地）
+
+`./opfs` 与 `./idb` 不再是设计稿。这一节记的是**移植过程中被测量逼出来的东西**，因为那些
+才是下次改这段代码时会踩到的部分。
+
+#### 3.4.1 一个 `Storage`，三种执行体
+
+| 层 | 位置 | 职责 |
+|---|---|---|
+| `sql.ts` | 双端同构 | schema（含 `kv_expiry` 索引）、四条语句、`kvQuery`/`selectPage` |
+| `sql-storage.ts` | 双端同构 | `SqlStorage implements Storage`：懒过期、事务门、关闭语义 |
+| `EngineRpcSession` | 主线程 | 把 `SqlSession` 的四条语句变成 Worker 往返 |
+| `opfs-worker.ts` | Worker | 装 SAH 池、开库、把 `SqlEngine` 接到协议处理器 |
+| `idb.ts` | 主线程 | 降级层：同一批 helper，换成 IndexedDB |
+
+**为什么只写一份 `Storage`**：浏览器与服务端跑的是同一句 SQL、同一张表。写两遍就给了两次
+"对懒过期、对事务回滚、对 tag 过滤与分页的先后顺序产生分歧"的机会，而分歧不可见 —— 各有一份
+测试，各自都过。`src/__tests__/parity.test.ts` 用 200 条生成操作跑三条臂（`better-sqlite3` /
+`node:sqlite` 直连 / `node:sqlite` 过 RPC），逐条比对返回值与最终表状态。**这个测试被验证过
+会红**：在通道臂里丢掉一行，它报 `operation 24 (query) diverged at arm channel`。
+
+#### 3.4.2 移植时抓到的七个缺陷
+
+| # | 缺陷 | 为什么之前看不见 | 现在 |
+|---|---|---|---|
+| 1 | `SqliteStorage.transaction` **从未发过 `BEGIN`** | 所有事务测试都成功；失败路径只断言"错误传播" | 真 `BEGIN`/`COMMIT`/`ROLLBACK`；拒绝嵌套；拒绝事务外的写；排队串行化；回滚也失败时抛 `AggregateError` |
+| 2 | 前缀过滤用 `LIKE`：`_`/`%` 当通配符、ASCII 大小写折叠 | 只有 key 里恰好含这些字符或大小写不同才暴露 | `substr(key, 1, ?) = ?`，两个引擎都断言 |
+| 3 | `(table_name, expires_at)` **无索引**，而清理在每次读写都跑 | 单条读写看不出；批量写才显形（2,000 行 **161 行/秒**） | 加 `kv_expiry`；测试断言 `EXPLAIN QUERY PLAN` 用该索引（不是断言耗时） |
+| 4 | 关闭 storage **不终止 Worker**，池仍装着 → 同页第二次打开装不上第二个池，**静默降级到 IDB** | 只有"打开-关闭-再打开"才触发 | 会话拥有 endpoint 生命周期，`onClose` 里 `terminate()` |
+| 5 | Worker 模块加载失败时**谁都不回消息** → 页面永久挂起 | 在浏览器里表现为"卡住"，无控制台线索 | 就绪前排队、失败逐个回错误码、`error` 事件 abort、启动与超时赛跑 |
+| 6 | `?sqlite=` 被当作 URL **base**，相对路径抛 `Invalid base URL` | 只在用相对路径时炸，且报错位置在 `locateFile` | 在 Worker 里先按 `location.href` 解析成绝对 URL |
+| 7 | 浏览器套件在 OPFS 失败时**把 IDB 的结果贴上 opfs 标签** | 套件自己的标签逻辑 | tier 成为运行该矩阵的**前置条件**，不匹配就单列一条失败 |
+
+第 3 条尤其值得记：**它是一个"只在批量时才出现"的性能缺陷，而正确性测试永远看不见它。**
+
+#### 3.4.3 实测读数（Chromium 145，2,000 行，发货代码）
+
+| 量 | 值 | 说明 |
+|---|---|---|
+| VFS / 引擎 | `opfs-sahpool` / sqlite-wasm 3.54.1 | `journal_mode = delete`（实测读出，非设定） |
+| 逐条 `put` | 11.2 s（**178 行/秒**，5.6 ms/笔） | 每笔一次完整提交 |
+| 同一批走 `transaction` | **157 ms（12,763 行/秒）** | 差 **54×** |
+| 全表读回 | 15.7 ms | |
+| 跨浏览器重启摘要 | `4000247205` = `4000247205` | 两次启动，同一 profile |
+
+**一个被否掉的"优化"**：先怀疑是 `journal_mode` 不是 WAL，于是加了 `PRAGMA journal_mode=WAL`
+—— **吞吐没变**（201 行/秒）；再加 `synchronous=NORMAL` 也只到 249。所以瓶颈不是同步策略，
+而是该 VFS 本来就走回滚日志、每笔都必须完整提交。代码因此**不设 pragma**，改为把
+`journal_mode` 写进 `describe()` 的返回值，让那句"为什么单条写这么慢"在读数里自解释。
+
+**结论写进 API 契约**：批量写必须走事务。这不是调优建议 —— 54 倍是数量级差异。
+
+#### 3.4.4 降级层的诚实边界
+
+| 项 | `./opfs` | `./idb` |
+|---|---|---|
+| 事务 | 真事务 | **拒绝**（`TransactionUnsupportedError`），因为 IDB 事务跨越 `await` 会提前自动提交 |
+| 查询 | SQL（tag 在 JS 过滤后分页） | 同一套 `selectPage`，索引 `by_table` 取表、`by_expiry` 取过期行 |
+| 前缀语义 | `substr` 字面比较 | `startsWith` 字面比较（刻意一致） |
+| 何时用 | 默认 | OPFS 不可用（隐私模式、旧浏览器、配额） |
+
+**`openBrowserStorage` 的契约**：返回 `{ storage, tier, engine, refused }` —— 落到哪一层、
+为什么没落到更想要的那层，都要能被调用方拿去展示。**配置错误不算不可用**：请求 `opfs` 却没给
+`sqliteModuleUrl` 时立刻 `TypeError`，**不**降级 —— 否则每个开发环境都在跑生产不会跑的那条路。
+
+#### 3.4.5 只在那台机器上才能测的部分，怎么测的
+
+三个文件（`opfs.ts` / `opfs-worker.ts` / `idb.ts`）需要 `Worker`、OPFS、IndexedDB，Node 里都没有，
+jsdom 式的 shim 只会断言 shim。所以它们**不计入 Node 覆盖率**，而由
+`packages/cortex-storage/test/browser/probe.mjs` 覆盖：把**构建产物**加载进真 Chromium，
+**同一个 profile 启动两次**，断言 **24 条命名检查**（API 矩阵 ×2 层、降级路径、配置错误、
+关闭后拒绝使用、跨重启摘要）。
+
+判定标准只有一条：**这条检查在真实平台上跑过，且能失败**。第 7 条缺陷正是这套检查第一次跑红
+时抓到的 —— 它当时"通过"了 23 条，而标签是错的。
 
 ---
 
@@ -668,6 +748,9 @@ WebGPU、拿不到 q4、拿不到 v4 的 ModelRegistry 缓存**。这是 P0 级�
 | `cortex-memory` 不消费 `Storage` | — | 不是缺陷，是设计事实；影响工作量估计 |
 | 浏览器/联邦/分诊三块**只有设计与 POC** | — | 见 03 §2 的启动顺序 |
 | Safari 已测但**无跨重启**读数 | P1（影响 iOS 承诺的强度） | WebDriver 会话不是持久 profile；实现阶段用真机补 |
+| 端侧**逐条写 5.6 ms**（`journal_mode=delete` 决定的） | P1（影响 API 文档而非架构） | 已在 §3.4.3 量化；写路径必须批量或走事务 |
+| `./idb` **无事务** | P2（降级层的能力边界） | 已设计为显式拒绝（§3.4.4），不做假原子 |
+| `./analytics`（DuckDB 侧车）未实现 | P2 | 按需 `import()`，与记忆主路径无关 |
 | 规则层 leak 的比率仍只有 n=60 | P1 | 需要**同类语料**（职场发言），不是任意语料（§5.4.1） |
 
 实现阶段的启动顺序（每步都有 POC 或单测可依据，不含"边做边定"的决定）：
