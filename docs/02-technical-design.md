@@ -36,11 +36,13 @@ packages/
                     + TriageRules（确定性规则，纯函数）      [待实现]
                     + KnowledgeCard / ScopePolicy 类型      [待实现]
   cortex-memory/    组合层：把 core 的能力组合成 MemorySystem（不消费 Storage）  [现状]
-  cortex-ai/        ← cortex-llm 更名                        [待实现]
-                    ".":        远程 provider 契约
-                    "./local":  transformers.js v4（本地 embedding / rerank）
-                    "./web":    webllm / chrome-ai（离线演示档）
-                    + TriageProposer（产出卡片，不落库）+ PiiDetector
+  cortex-ai/        ← cortex-llm 更名（已完成）
+                    "."          远程 provider + 重排 + retry（只需 fetch）   [现状]
+                    "./local"    transformers.js 4.x（本地 embedding / rerank，
+                                 optional peer @huggingface/transformers）  [现状]
+                    "./web"      浏览器内置模型（globalThis.LanguageModel，
+                                 零依赖）                                  [现状]
+                    + TriageProposer（产出卡片，不落库）+ PiiDetector       [待实现]
   cortex-storage/   ← cortex-node 更名（已完成）
                     "."         空入口（零导出；见 §1.2）
                     "./sqlite"  better-sqlite3（optional peer）   [现状]
@@ -52,6 +54,11 @@ packages/
   一条结构性事实：**四个后端共用一个 `SqlStorage`**（`src/storage/sql-storage.ts`），
   它只依赖 `SqlSession`（exec/run/all/close）。后端的差异归结为"谁来跑 SQL"：
   `better-sqlite3` 在进程内、`EngineRpcSession` 在 Worker 另一侧、`node:sqlite` 在测试里。
+
+  另一条同形的结构事实：**`cortex-ai` 是一个库、三份依赖画像**。入口守卫按画像逐个走 import
+  闭包：`.` 与 `./web` **禁止**触达 `@huggingface/transformers`，而 `./local` 是**正对照**
+  （它本来就该触达）。把三者合成一个入口的后果不是"包大了一点"，而是每个只调 HTTP 的服务都被
+  迫带上 ONNX runtime 与 90 MB 权重。
 ```
 
 依赖方向（严格单向，无环）：
@@ -350,6 +357,54 @@ jsdom 式的 shim 只会断言 shim。所以它们**不计入 Node 覆盖率**�
 失效需重建"的结构。**留作 P3**：`sqlite-vec` 的 `vec0` 虚表（含向量类型与元数据列），前提是
 先解决浏览器加载路径。
 
+### 4.4 升级不动数学，动的是默认值（实现第 4 步，已实测）
+
+把 `@xenova/transformers` 2.17.2 换成 `@huggingface/transformers` 4.3.1，是第一件必须量化的事：
+**已存的向量还能不能用**。
+
+`test/parity/run.mjs` 在**同一批权重、同一批 15 条文本**上比对三条臂（`Xenova/all-MiniLM-L6-v2`，
+384 维，权重经 `hf-mirror.com` 取得）：
+
+| 对比 | min cos | 中位 | < 0.999 的条数 |
+|---|---|---|---|
+| **发货适配器（fp32） vs v2（`quantized: false`）** | **1.000000** | 1.000000 | **0 / 15** |
+| 发货适配器（fp32） vs v2 **默认**（量化） | 0.988242 | 0.990055 | **15 / 15** |
+
+**读法**：库的升级本身是**逐位等价**的（1.000000，不是"约等于"）。真正会动的是**默认值**——
+v2 默认量化权重，v4 默认 fp32。一个"照默认升级"的调用方会得到维度正确、单位长度、**与已存向量
+不可比**的结果，而任何下游指标都只会表现为"检索变差了"。
+
+因此本设计把三件事**显式钉住**，而不是依赖默认值：
+
+| 钉住的项 | 值 | 不钉会发生什么 |
+|---|---|---|
+| `dtype` | `fp32` | 见上表；跨版本不可比 |
+| `pooling` | `mean` | 未池化时输出 `[n, seq, dim]`，下游按 n 行读会错位 |
+| `normalize` | `true` | 余弦退化成点积，长度进入排序 |
+
+**推论（产品层）**：v2 时代产生的任何向量**必须重嵌**，因为它们是量化权重下的结果。这不是"建议
+重建索引"，是**同一个模型名、不同权重**——0.988 的余弦意味着检索排序会真的改变。
+
+### 4.4.1 同一轮里抓到的更严重的一个：重排曾经是空转
+
+`text-classification` 管线会对模型的 logits 做**按标签的 softmax**。重排用的交叉编码器只有
+**一个标签**，于是 softmax 恒等于 1.0 —— 所有候选并列，重排"成功"且什么都不做。
+
+| 输入（query = "what is the capital of France"） | 原始 logit | 管线给的 score |
+|---|---|---|
+| "Paris is the capital of France." | **1.954** | 1.0 |
+| "Berlin is in Germany." | −4.028 | 1.0 |
+| "The weather is nice today." | −5.625 | 1.0 |
+
+**为什么之前没被发现**：v2 的管线把结果**按输入嵌套**返回（`[[{...}], [{...}]]`），我们的适配器
+长度检查通过、但 `entry.score` 是 `undefined`，于是抛错并回退到下一 provider —— 一个**响亮的失败**。
+v4 改成扁平数组，形状正好对上契约，失败就变成了**沉默**。**同一个缺陷，换版本后从可诊断变成不可
+诊断。**
+
+**修法**：不经过管线，直接 `AutoTokenizer` + `AutoModelForSequenceClassification` 读原始 logits。
+`CrossEncoderReranker` 仍然负责"要不要 sigmoid"这一层语义。验收不是"跑通"，而是**分数互不相同且
+顺序正确**：1.954 > −4.028 > −5.625（相关 > 同主题干扰 > 无关）。
+
 ---
 
 ## 5. 披露分诊
@@ -565,7 +620,7 @@ C 与 D 的区别只有一处：C 是"已经知道哪些是共享的"，D 是"�
 
 **未覆盖**：改写式泄漏、跨会话记忆残留（模型在上一轮见过私有行）。
 
-### 6.4 拒绝而非降级
+### 6.5 拒绝而非降级
 
 | 场景 | 行为 |
 |---|---|
