@@ -9,7 +9,7 @@ The rules decide the first pass; the card queue is simulated by the policy colum
 | --- | --- | --- | --- | --- | --- | --- |
 | rules-only | 0 / 12 | 24.2% | 4 / 8 | 12 / 12 | 0 / 40 | 4 |
 | oracle | 0 / 12 | 24.2% | 8 / 8 | 12 / 12 | 0 / 40 | 8 |
-| defer-shared | 3 / 12 | 53.2% | 7 / 8 | 12 / 12 | 38 / 40 | 48 |
+| defer-shared | 0 / 12 | 24.2% | 7 / 8 | 12 / 12 | 38 / 40 | 45 |
 | no-triage | 12 / 12 | 100.0% | 8 / 8 | 12 / 12 | 40 / 40 | 60 |
 
 **Reading it.** `rules-only` is the shipped default: the boundary holds at zero leakage, but a
@@ -43,7 +43,7 @@ broken.
 | every assembled row says where it came from | PASS | origin label survives the two-store merge |
 | the guard fires on a private row injected into the shared store | PASS | ScopeViolation raised, no prompt launched |
 | without the guard the same injection reaches the window | PASS | guard off: leak 1/1 -- this is what the guard buys |
-| defer-shared leaks, so the defer default is load-bearing | PASS | leak 3/12 (A4 ablation: one line moved) |
+| defer-shared leaks, so the defer default is load-bearing | FAIL | leak 0/12 (A4 ablation: one line moved) |
 | no-triage leaks everything, so the rule layer is load-bearing | PASS | leak 12/12 (A1 ablation) |
 | a perfect confirmation buys completeness the rules cannot | PASS | reach 4/8 -> 8/8 |
 | the perfect-confirmation path still leaks nothing | PASS | confirming the right cards is sound at both ends |

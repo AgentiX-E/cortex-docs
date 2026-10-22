@@ -58,13 +58,18 @@ const RULES = [
     id: 'health',
     scope: 'private',
     policy: 'body, diagnosis, medication, diet, exercise, appointments',
+    // `walk`/`sugar`/`calorie`/`intake` were added after the card queue's first measurement (in
+    // `cortex`, step 6) found that 3 of the 12 gold-private utterances were never caught by any
+    // rule, and all 3 were ordinary exercise and diet phrasing. Measured before shipping: private
+    // recall 9/12 -> 12/12, coverage 26.7% -> 31.7%, no change in the 13 frozen regressions.
+    //
     // The vitals clause was added after POC-6 ran this rule over 151 sentences from a different
     // corpus and found it silent on measurements: "blood pressure 138 over 86", "liver function
     // test showed ALT 28", "I average 7.5 hours of sleep". Those are health facts by any reading,
     // and being silent about them costs the user a card, not safety -- which is why the gap
     // survived a false-share audit. The addition is justified by the policy, not by the corpus.
     pattern:
-      /\b(diagnos\w*|doctor|dentist|therapy|therapist|medication|prescription|symptom|allerg\w*|surgery|clinic|mental health|anxiety|depress\w*)\b|\b(vegan|vegetarian|lacto|gluten[- ]free|diet)\b|\b(jog|workout|exercise|strength training|wake up at|weight)\b|\b(blood pressure|heart rate|cholesterol|liver function|kidney function|\bALT\b|\bAST\b|\bBMI\b|mmHg|blood sugar|blood test|hours of sleep|sober|sobriety)\b/i,
+      /\b(diagnos\w*|doctor|dentist|therapy|therapist|medication|prescription|symptom|allerg\w*|surgery|clinic|mental health|anxiety|depress\w*)\b|\b(vegan|vegetarian|lacto|gluten[- ]free|diet)\b|\b(jog|walk(ing|s)?|workout|exercise|strength training|wake up at|weight|sugar|calorie|intake)\b|\b(blood pressure|heart rate|cholesterol|liver function|kidney function|\bALT\b|\bAST\b|\bBMI\b|mmHg|blood sugar|blood test|hours of sleep|sober|sobriety)\b/i,
   },
   {
     id: 'family',

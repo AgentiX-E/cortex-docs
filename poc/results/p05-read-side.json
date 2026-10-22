@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-22T10:31:34.139Z",
+  "generatedAt": "2026-10-22T15:38:09.696Z",
   "corpus": {
     "rows": 60,
     "goldPrivate": 12,
@@ -33,12 +33,12 @@
     },
     {
       "policy": "defer-shared",
-      "leak": 3,
-      "leakUpper": 0.5323053349335657,
+      "leak": 0,
+      "leakUpper": 0.24249400665524087,
       "reachShared": 7,
       "reachPrivate": 12,
       "noise": 38,
-      "sharedRows": 48,
+      "sharedRows": 45,
       "privateRows": 60,
       "originLabelled": true,
       "deduped": true
@@ -97,8 +97,8 @@
     },
     {
       "check": "defer-shared leaks, so the defer default is load-bearing",
-      "result": "PASS",
-      "detail": "leak 3/12 (A4 ablation: one line moved)"
+      "result": "FAIL",
+      "detail": "leak 0/12 (A4 ablation: one line moved)"
     },
     {
       "check": "no-triage leaks everything, so the rule layer is load-bearing",
