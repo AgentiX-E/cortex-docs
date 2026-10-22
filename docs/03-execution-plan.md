@@ -45,7 +45,7 @@
 | # | 步骤 | 验收判据 | 依赖 | 失败时 |
 |---|---|---|---|---|
 | 1 | `cortex-node` → `cortex-storage`：根入口去导出、每个 backend 一个 subpath（已落地 `./sqlite` `./pg`；`./opfs` `./idb` `./analytics` 随第 3/5 步与实现进度落地），native 依赖改 optional peer | ✅ **已完成**：① 全仓引用改完，`pnpm check` 全绿（2,860 个测试）；② **入口闭包守卫** `tools/entry-guard.mjs`（禁 native/`node:` 可达，带对照项与自测）；③ 见 02 §1.2 的语义更正——自定义错误做不到，承诺改为"错误落在正确 subpath 上" | — | 说明 subpath 设计有漏，先修设计再动代码 |
-| 2 | `FederatedStorage` 进 `cortex-core` | `[POC-3]` 的 9 条断言变单测，**其中两条是拒绝**（跨库事务、未知 scope）；两个真实 `Storage` 实现，无 mock | 1 | 断言失败即设计错，不改断言 |
+| 2 | `FederatedStorage` + `ReadSideAssembler` 进 `cortex-core` | ✅ **已完成**：`[POC-3]` 的 9 条 + `[POC-5]` 的读侧不变量，共 **26 条**单测，含两条**拒绝**（跨库事务、事务内跨作用域表）与一条**故障注入**（guard off 时同一行进窗口）；两个真实 `Storage` 实现（tags/ttl/前缀/分页/回滚），无 mock；core 覆盖回到 **100/100/100/100** | 1 | 断言失败即设计错，不改断言 |
 | 3 | `./opfs` 实现 | `[POC-1]` 的 Worker + SAH-pool 形状复用；跨**浏览器进程重启**摘要一致的单测（Chromium 两次启动）；不可用时降级 IDB 并**报告实际层级**；Safari 上补一个持久 profile 的重启测试 | 1 | Safari 只测到"句柄池可用"，重启持久性未测，故 iOS 承诺要带这一句 |
 | 4 | `cortex-llm` → `cortex-ai` + `@huggingface/transformers` v4 | 三入口可解析（`.` / `./local` / `./web`）；同一 embedding 在旧/新版本上的向量余弦 ≥0.999 或明确记录不兼容并重嵌 | — | v4 的行为差异必须被测量，不能"应该更快" |
 | 5 | 分诊规则层 + 读侧组装器进 `cortex-core` | `[POC-4]` 规则表 + 60 条标注变夹具；`[POC-5]` 的 11 条断言变单测（含**故障注入**那两条：guard 必须在注入时抛错、在关闭时必须漏） | 2 | 规则是可审计的纯函数，不接受"调参到过" |

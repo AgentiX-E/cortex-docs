@@ -19,7 +19,8 @@
 | **端到端双库（G3）** | ✅ `[POC-7]`：59,675 条真实轮次里可共享 **0.52%**，**63.6%** 的问题共享窗口为空 |
 | **规则修补** | 报告两轮共补 vitals / CVV+钱包 / 账号+门牌；12/12 冻结行恢复私有，p04 三项一位未动 |
 | **设计门槛** | **9/9 ✅**（03 §10.1）；剩余五条是设计边界，不是缺口（03 §10.1.1） |
-| **实现第 1 步** | ✅ `cortex-storage` 落地：根入口零导出、两个 backend subpath、optional peer、入口闭包守卫；`pnpm check` 全绿（2,860 测试，5 包中 4 个 100/100/100/100） |
+| **实现第 1 步** | ✅ `cortex-storage` 落地：根入口零导出、两个 backend subpath、optional peer、入口闭包守卫（2,886 测试，5 包中 4 个 100/100/100/100） |
+| **实现第 2 步** | ✅ `FederatedStorage` + `ReadSideAssembler` 进 `cortex-core`：26 条单测含两条拒绝与一条故障注入；core 覆盖 100/100/100/100 |
 | **SOTA 读数** | 名单均值 **405.0 / 500**（397–412）；MR 落后参考管线 **20 题**，"超越竞品"仍不成立 |
 
 **本期最重要的两个读数，都不是"分数"**：
@@ -302,13 +303,13 @@ LongMemEval 的成绩由 `cortex-eval` 自己实现的独立系统产生。
 
 ---
 
-## 9. 实现阶段第 1 步（2026-10-22）：`cortex-storage` 与入口守卫
+## 9. 实现阶段（2026-10-22）：第 1–2 步
 
 设计阶段结束后进入实现阶段，第 1 步是改名与入口拆分。**它不是搬运**：改名的理由是原来的根入口
 把 `better-sqlite3`（native addon）和 `pg`（socket 客户端）一起导出，于是任何
 `import '@agentix-e/cortex-node'` 都会把两者拉进构建——包括根本不想要它们的浏览器构建。
 
-### 9.1 交付
+### 9.1 第 1 步：交付
 
 | 项 | 结果 |
 |---|---|
@@ -319,7 +320,7 @@ LongMemEval 的成绩由 `cortex-eval` 自己实现的独立系统产生。
 | 守卫的门禁 | 接进根 `check`（`pnpm guard:entry`），排在 build 之后、lint 之前；配套 5 个 pytest |
 | 测试 | `cortex-storage` 27 个（原 19 个行为测试 + 8 个入口/清单断言） |
 
-### 9.2 读数
+### 9.2 第 1 步：读数
 
 `pnpm check` 全绿（exit 0）：test:tools（含新增 5 个）→ build → guard:entry → lint → typecheck →
 census:check（"no new orphans beyond the recorded baseline"）→ test → format。
@@ -337,7 +338,7 @@ census:check（"no new orphans beyond the recorded baseline"）→ test → form
 下轮的候选是把它做成显式 `try/catch` + 无 `finally` 的等价写法再测，若仍是幽灵分支，
 就按既有先例记成 v8 产物，而不是加注解。
 
-### 9.3 这一步里发现的四个缺陷（都不是"改名"本身）
+### 9.3 第 1 步：发现的四个缺陷（都不是"改名"本身）
 
 | # | 缺陷 | 怎么发现 | 修法 |
 |---|---|---|---|
@@ -346,14 +347,36 @@ census:check（"no new orphans beyond the recorded baseline"）→ test → form
 | 3 | **旧测试钉的是旧契约**：`storage.test.ts` 里"exports storage backends"断言根入口导出两个 backend，与本次目标正好相反 | 拆分后立刻红 | 改写为"根入口不导出任何东西"+"每个 subpath 导出自己的类" |
 | 4 | **设计稿承诺了一件做不到的事**："没装 peer 时给 `this subpath needs X`"。ESM 静态 import 在链接期就失败，早于我们的代码 | 实现第 1 步时撞到 | 02 §1.2 改写：不承诺自定义错误，只承诺**错误落在正确 subpath 上**，并写明代价（换 `require` 会丢类型与 tree-shaking） |
 
-### 9.4 还没做
+### 9.4 第 1 步之后还没做
 
 | 项 | 归属 |
 |---|---|
 | `./opfs`（SQLite-WASM + SAH pool，浏览器） | 第 3 步；`[POC-1]` 的 Worker 形状直接复用 |
 | `./idb`（OPFS 不可用时的降级层） | 第 3 步的失败路径 |
 | `./analytics`（DuckDB-WASM 侧车） | P2，按需 `import()` |
-| `cortex-core` 里的 `FederatedStorage` / `TriageRules` | 第 2 / 5 步 |
+| `cortex-core` 里的 `TriageRules` | 第 5 步（`FederatedStorage` 已在第 2 步落地） |
+
+### 9.5 第 2 步：联邦与读侧进 `cortex-core`
+
+`[POC-3]` 与 `[POC-5]` 的断言从原型搬进了产品代码，**26 条**，两个真实 `Storage` 实现，无 mock。
+
+| 项 | 结果 |
+|---|---|
+| `FederatedStorage` | 按前缀路由；`queryAcross` 带 `origin`；跨库事务**抛错**并给出 `transactionIn` 替代；`transactionIn` 拒绝路由到另一侧的表 |
+| `ReadSideAssembler` | 共享任务只读共享库；共享窗口出现非 shared 行**抛错**（故障注入在测试里原样保留） |
+| 测试 | `cortex-core` 252 → **278**；覆盖 100/100/100/100（新增两文件均满） |
+| 台账 | federation 的 6 个导出暂时无调用者，**按既定机制**登记进基线并写明路线引用（第 3 / 6 步接入），而不是删除或加注解 |
+
+**写测试时被逼出的两个设计**（第 1 版都错）：
+
+1. **行身份不能用位置兜底**。第一版给没有 id 的行发 `#0`、`#1`，而两个库的"第 0 行"是两行不同事实
+   ——合并会把不相干的事实静默并掉。现在只有 `id` 是字符串才有 key，其余保持 `undefined` 且**两行都留**。
+2. **合并偏好要写成顺序，不要写成循环里的比较**。原写法里 `seen.origin === 'shared' && row.origin === 'private'`
+   只有 `queryAcross` 反转输出才走得到：今天不可达，明天一旦可达就是错的。现在先把两库结果按
+   `private < shared` 排序、再"先到先得"，规则只说一次，且分支全部可达。
+
+`pnpm check` 全绿：278 + 27 + 149 + 1,992 + 440 = **2,886** 个测试；五个包中四个 100/100/100/100，
+storage 的分支列 98.64（`finally` 的那 1.36 点仍待处理）。
 
 ---
 
