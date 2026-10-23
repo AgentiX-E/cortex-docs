@@ -343,6 +343,9 @@ LongMemEval 的成绩由 `cortex-eval` 自己实现的独立系统产生。
 | 110 | 端到端：页面点完 40 次 → 导出 JSONL → `a3-review.mjs score` → `20 pair(s), 0 discordant, p=1.0000, NO-DIFFERENCE` | E1 | 本机运行（**受试者是脚本，不是数据**） | 证明形状被 `scoreA3` 收下，不证明任何偏好 |
 | 111 | `--out` 绝对路径的回归已被钉住：写入指定位置，且**包里不产生副本** | E1 | `test_a3_review_page.py` | 上一轮 `join` 缺陷的同类 |
 | 112 | 台账：`renderA3ReviewPage` 有调用方；`planReview`/`resumeKey` 为测试缝；`trialLine` 写了又删（唯一调用者是测试，一行包装不值一个导出） | E1 | `export-census-baseline.json`（+6 / −0） | —
+| 113 | `push-via-api.py` 以 `encoding: "utf-8"` 上传每一个 blob，**损坏所有二进制文件**：64 KB 的 PNG 到远端成为 118 KB | E1 | `test_push_blobs.py`（6 条，夹具是非 UTF-8 字节）+ 远端字节比对 | 此前全是文本，故数周未暴露 |
+| 114 | 校验**在分支移动之后**才执行：不匹配会留下损坏的提交再报告。现在校验前移，并在推送后再复核 | E1 | 同上（源码顺序断言） | 闸门必须在发布前跑 |
+| 115 | 修复后远端三个文件与本地**逐字节相同**（64,012 / 58,715 / 23,728） | E1 | contents API 比对 | 修复方式是"再推一次"，不是 force-push 掩盖 |
 
 ---
 
@@ -1465,6 +1468,20 @@ NO-DIFFERENCE: atoms won 0 and lost 0 of 20 pair(s) ...
 | `test_a3_review_page.py`（tools，pytest） | **6** | **绝对 `--out` 写在你说的地方**（并断言包里没有多出一份——上一轮那个 `join` 缺陷的回归）；零网络；每卡两次且顺序交替；缺 `promptVersion`/缺 `profile`/混配置各自被拒且**不写文件**；空卡片被拒；缺参数打印 usage |
 
 覆盖率：`cortex-eval` 仍是 **100 / 100 / 100 / 100**（`review-page.ts` 单独同）。
+
+#### 顺带修掉的一个交付缺陷：推送工具损坏每一个二进制文件
+
+第一次把图片提交进 `cortex-docs` 时，远端拿到的是**损坏的 PNG**：本地 64 KB，远端 118 KB。
+原因是 `tools/push-via-api.py` 把每个 blob 都以 `encoding: "utf-8"` 上传、内容用
+`surrogateescape` 解码——对源码无损，对 PNG 不是（那些字节本来就不是合法 UTF-8，编码回去就被改写）。
+此前每一次提交都是文本，所以这个工具被用了几个星期都没暴露。
+
+更糟的是顺序：校验在**分支已经被移动之后**才跑，于是不匹配只留下一条损坏的提交并事后报告——
+**一次披着闸门外衣的验尸**。现在校验在 `PATCH` 之前对提交的树做一次，之后再做一次（多一个请求）。
+
+测试用**任何 UTF-8 解码器都不接受的字节**作为夹具：只测文本的话，错误实现会通过。另外两条断言的是
+无法在没有远端的情况下演练的形状——`report_mismatch` 出现在 `PATCH` 之前，且没有任何 blob 上传声明
+`encoding: "utf-8"`。
 
 #### 这一步没做的
 
