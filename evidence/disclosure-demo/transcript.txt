@@ -1,0 +1,72 @@
+Disclosure chain, end to end, one process per command
+=====================================================
+
+Date      2026-10-23
+Host      Linux x64, Node 22.13.1
+Store     two SQLite files (better-sqlite3): private.db, shared.db
+Model     onnx-community/Qwen2.5-0.5B-Instruct, dtype q4, greedy, 192-token cap
+Weights   https://hf-mirror.com (the public Hub is unreachable from this host)
+Prompt    triage-proposer/v2
+
+Reproduce:
+
+    pnpm -r build
+    bash evidence/disclosure-demo/replay.sh          # in the cortex repository
+
+The script below is the exact sequence that produced this file. Nine invocations,
+each its own process, so the state has to be on disk for the next one to see it.
+The only step that loads a model is `propose`.
+
+-------------------------------------------------------------------------------
+
+$ node tools/triage-demo.mjs say I moved to Berlin in March and now I work at Acme on the payments team. --id c1
+c1  stored private  (rule: none, deferred)
+c1  proposed  No rule recognised this sentence, so it is stored privately. Publishing it is your decision.
+    text: I moved to Berlin in March and now I work at Acme on the payments team.
+
+$ node tools/triage-demo.mjs say My password is hunter2, and the wifi code is on the fridge. --id c2
+withheld by credential: credentials are never stored, not even as a card
+not stored anywhere, and no card exists for it.
+
+$ node tools/triage-demo.mjs say The project plan moves to Thursday, and the client gets the roadmap on Friday. --id c3
+c3  stored shared  (rule: org-knowledge)
+no question: the rules already answered it.
+
+$ node tools/triage-demo.mjs say By the way, I've been really enjoying editing my photos in Lightroom - the online communities I've joined have been super helpful in learning new techniques and getting feedback on my work. --id c4
+c4  stored private  (rule: none, deferred)
+c4  proposed  No rule recognised this sentence, so it is stored privately. Publishing it is your decision.
+    text: By the way, I've been really enjoying editing my photos in Lightroom - the online communities I've joined have been super helpful in learning new techniques and getting feedback on my work.
+
+$ node tools/triage-demo.mjs propose c4 --llm local
+c4  proposed  No rule recognised this sentence, so it is stored privately. Publishing it is your decision.
+    text: By the way, I've been really enjoying editing my photos in Lightroom - the online communities I've joined have been super helpful in learning new techniques and getting feedback on my work.
+    offered (triage-proposer/v2, onnx-community/Qwen2.5-0.5B-Instruct):
+      [0] I've been really enjoying editing my photos in Lightroom
+      [1] the online communities I've joined have been super helpful
+      [2] learning new techniques and getting feedback on my work.
+
+$ node tools/triage-demo.mjs accept c4 --atom 0
+c4  edited  published: I've been really enjoying editing my photos in Lightroom
+
+$ node tools/triage-demo.mjs ask shared
+2 row(s) visible to a shared task
+  c3  [shared]  The project plan moves to Thursday, and the client gets the roadmap on Friday.
+  c4  [shared]  I've been really enjoying editing my photos in Lightroom
+
+$ node tools/triage-demo.mjs ask private
+3 row(s) visible to a private task
+  c1  [private]  I moved to Berlin in March and now I work at Acme on the payments team.
+  c3  [shared]  The project plan moves to Thursday, and the client gets the roadmap on Friday.
+  c4  [shared]  I've been really enjoying editing my photos in Lightroom
+
+$ node tools/triage-demo.mjs export
+# Knowledge cards
+
+2 card(s): 1 proposed, 1 edited.
+
+| id | state | reason | text | source | proposed |
+|---|---|---|---|---|---|
+| `c1` | proposed | No rule recognised this sentence, so it is stored privately. Publishing it is your decision. | I moved to Berlin in March and now I work at Acme on the payments team. |  |  |
+| `c4` | edited | No rule recognised this sentence, so it is stored privately. Publishing it is your decision. | I've been really enjoying editing my photos in Lightroom | By the way, I've been really enjoying editing my photos in Lightroom - the online communities I've joined have been super helpful in learning new techniques and getting feedback on my work. | I've been really enjoying editing my photos in Lightroom; the online communities I've joined have been super helpful; learning new techniques and getting feedback on my work. (0 withheld) |
+
+

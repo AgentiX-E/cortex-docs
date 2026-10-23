@@ -708,6 +708,73 @@ Acme" 是两条）和一个句子形态的模板占位符；0.5B 模型把**例�
 
 ---
 
+### 5.7 实现（第 10 步）：接线 —— 三个缺陷只在整条链跑起来时出现
+
+前三层（写侧、卡片、提议）各有测试，各自都是对的。把它们按真实顺序接起来之后，一次运行就暴露
+了三件事，**没有一件能被任何单层的测试看见**：
+
+| # | 缺陷 | 怎么暴露的 | 修法 |
+|---|---|---|---|
+| 1 | **一个引擎装不下两个库** | 会话最初只收一个 `Storage`，指望表前缀把两半分住。`FederatedStorage` 把前缀当**路由标记**剥掉，于是两半都写进同一张 `facts` 表；第一次共享查询就把私有行带了出来，`ReadSideAssembler` 当场抛 `ScopeViolation` 并点名 key | `DisclosureSession` 要求**两个** `Storage`（两个文件）；`03` 的"物理分离"由此从设计句变成类型约束 |
+| 2 | **`./local` 没有生成能力** | 想用真模型跑通链路时才发现：离线入口能嵌入、能重排、能回答，**唯独不能提议**。第 9 步引入了一个只吃模型的组件，而"离线"那条入口产不出模型 | 新增 `createLocalLLM`（`./local`），与嵌入路径共用 `preparePipeline`，同一个 `dtype` 钉法 |
+| 3 | **审计面丢掉了原句** | 发布原子之后，卡片 `text` 被改写、私有行被 `promote` 删掉，**没有任何地方记录"他原本说了什么"**。而导出正是本产品唯一的审计面 | `KnowledgeCard.sourceText`：开卡时写入、永不改写；导出在措辞变化时多一列 `source` |
+
+第 3 条值得多说一句：它是**跑出来的**，不是读出来的。代码每一行都对——`edit()` 改用词、
+`promote()` 搬行、`toMarkdown()` 打印卡片——三处合起来才产生"原句不存在了"。
+
+#### 会话：顺序是一个属性，不是一处约定
+
+```ts
+const session = new DisclosureSession({ private: privateDb, shared: sharedDb, proposer });
+const { admission, card } = await session.say('I moved to Berlin in March and now I work at Acme.');
+const proposed = await session.propose(card.id);        // 只挂到卡片上，不发布
+const published = await session.accept(card.id, { atom: 0 });   // 走 edit()，规则再判一次
+const rows = await session.evidence('shared');          // 一个共享任务能读到什么
+```
+
+五条被这个对象固定下来的规则：先存再问；提议是内容不是同意；发布原子走 `edit`（因此点击那一刻
+规则复判）；失败**返回**而不是吞掉；共享窗口只读共享库。
+
+#### 一次真实运行（`tools/triage-demo.mjs`，每次命令一个进程）
+
+```
+$ say 'My password is hunter2, and the wifi code is on the fridge.'
+withheld by credential: credentials are never stored, not even as a card
+not stored anywhere, and no card exists for it.
+
+$ say 'The project plan moves to Thursday, and the client gets the roadmap on Friday.'
+c3  stored shared  (rule: org-knowledge)
+no question: the rules already answered it.
+
+$ propose c4 --llm local
+    offered (triage-proposer/v2, onnx-community/Qwen2.5-0.5B-Instruct):
+      [0] I've been really enjoying editing my photos in Lightroom
+      [1] the online communities I've joined have been super helpful
+      [2] learning new techniques and getting feedback on my work.
+
+$ accept c4 --atom 0
+c4  edited  published: I've been really enjoying editing my photos in Lightroom
+
+$ ask shared
+2 row(s) visible to a shared task
+  c3  [shared]  The project plan moves to Thursday, and the client gets the roadmap on Friday.
+  c4  [shared]  I've been really enjoying editing my photos in Lightroom
+```
+
+**这四行合起来就是产品承诺**：凭证不存在于任何库；规则已裁决的句子不问人；模型拆出的三条里
+只有被点的那一条过去；而共享任务看到的正是那一条，不是整段。
+
+#### 它买不到什么
+
+| 边界 | 现状 |
+|---|---|
+| 图形界面 | 没有。`tools/triage-demo.mjs` 是**演示**，不是产品面；它自己也没有单测（覆盖的是它调用的会话） |
+| 提议质量 | 仍是模型的事，且 0.5B 在这句话上只拆了一条（c1）——同一模型在另一句上拆了三条，**不稳定本身就是读数** |
+| `--llm openai` 路径 | 需要 key，本机未跑；只验证了"缺环境变量时报错并说明"这条 |
+| 共享侧的可达性 | 4/8（`[POC-5]`）没有变；接线不改变可达率，只让它可被操作 |
+
+---
+
 ## 6. 读写边界
 
 ### 6.1 四种拓扑

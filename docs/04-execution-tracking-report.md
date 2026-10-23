@@ -28,6 +28,7 @@
 | **实现第 7 步** | ✅ `OutputGuard` 落地：写侧同一张表扫草稿（O1）+ 引用必须落在窗口内（O2）；60 条上 **12/12 私有被拦、已发布事实零误拦**；豁免机制让"引用一条共享事实"不被误判；3,150 测试全绿，core **100/100/100/100** |
 | **实现第 6 步** | ✅ `CardQueue` 落地（四条状态迁移 + 导出）；五条设计规则各有实现与测试；**抓到一个规则缺陷并修补**：凭证"永不存"此前并未被执行，且 3 条健康类私有句从未被任何规则命中；修补后私有召回 **9/12 → 12/12**、coverage **26.7% → 31.7%**；3,123 测试全绿，core **100/100/100/100** |
 | **实现第 9 步** | ✅ 提议层：四道闸 + 真模型读数。0.5B 端侧模型在 60 条上 **45/60** 出提议、48 个原子、**0 条进入共享库**（该链路根本不写库）；12 条 gold-private 里 9 条被规则当场拦下。**v1 提示词里的例句被原样返回 44/60 次**（单变量复测后升到 45/60）；顺带修掉一个真实缺陷：`completeStructured` 从未发送过 `response_format` |
+| **实现第 10 步** | ✅ 接线：`DisclosureSession` + `./local` 生成能力。**第一次跑通全链就抓到三个缺陷**（一个引擎装不下两个库、`./local` 发不出生成、发布原子后审计面丢失原句）；`tools/triage-demo.mjs` 九次进程调用跑通真 0.5B 模型；core 458 / memory 462 / ai 231 全绿 |
 | **SOTA 读数** | 名单均值 **405.0 / 500**（397–412）；MR 落后参考管线 **20 题**，"超越竞品"仍不成立 |
 
 **本期最重要的三个读数，都不是"分数"**：
@@ -291,6 +292,13 @@ LongMemEval 的成绩由 `cortex-eval` 自己实现的独立系统产生。
 | 65 | 分层：`defer` **37/40**、`shared` **6/8**、`private` **2/12**（9 条被规则拦下 = 健康 7 原子 + 金额 3 原子，1 条被接地拒） | E1 | 同上 | 原子不是句子，故 gold 的句子级标注不能逐条对齐 |
 | 66 | 提议层的成本：**4.68 s（v1）/ 5.88 s（v2）** 每句，CPU、0.5B q4、192 token 上限 | E1 | 同上 | 端侧 CPU；浏览器 WebGPU 未测 |
 | 67 | 提示词里不含任何句子形态的可复制物，且**用户那句话只出现一次** | E1 | `proposer.test.ts`（`buildProposerPrompt` 用例） | 断言的是 v2 的形状，不保证任何模型都会遵守 |
+| 68 | **一个引擎当两个库不成立**：`FederatedStorage` 把表前缀当路由标记剥掉，两半写进同一张 `facts` 表；第一次共享查询就带出私有行，`ReadSideAssembler` 抛 `ScopeViolation` 并点名 key | E1 | `disclosure-session.test.ts`（"both halves point at one engine"） | 结论：会话要求两个 `Storage`；一条测试守着这个失败 |
+| 69 | `./local` 此前**没有生成能力**：离线部署能嵌入、能重排、能回答，唯独不能提议 | E1 | 第 9 步的调用方清单为空 + 本步新增 `createLocalLLM` | 与嵌入共用 `preparePipeline`，`dtype` 钉 fp32 |
+| 70 | 发布原子后**原句无处可寻**（卡片 `text` 被改写、私有行被删）；修法 `sourceText` 开卡写入、永不改写，导出仅在措辞变化时多一列 `source` | E1 | `card.test.ts`（3 条）+ `disclosure-session.test.ts`（1 条） | 由演示发现，不是由任何按函数写的测试 |
+| 71 | 会话 22 条测试跑在**两个真实 SQLite 文件**上，含"关闭后重开仍能回答""同一引擎时拒绝装配" | E1 | `disclosure-session.test.ts` | 不是 `MemoryStorage`；引擎行为是被测对象的一部分 |
+| 72 | 九次独立进程跑通全链：0.5B 把一句拆成 **3 条**、只发布第 0 条；凭证在两个库里都不存在；共享任务看到 2 行、私有任务 3 行 | E1 | `evidence/disclosure-demo/transcript.txt` | 单机、单 checkpoint、greedy |
+| 73 | 台账第一次量化"接线"：**5 个导出移出孤儿表**（`CardQueue`/`ReadSideAssembler`/`KnowledgeCard`/`ProposalResult`/`SqliteStorage`），6 个类型导出新增 | E1 | `tools/export-census-baseline.json` 前后对比 | 净数 +1，掩盖了 11 条变动 |
+| 74 | 四次注入：提议失败照挂 **2 红**、发布整段 **1 红**、恒开采样 **1 红**、只认字符串形态 **1 红**；第一次第 1 条注入**存活**，因为它夹带了一个 `.catch` | E1 | 各自测试文件 | 注入必须单变量，否则测的是别的东西 |
 
 ---
 
@@ -794,6 +802,123 @@ v2 只改了一件事：**提示词里不再有任何句子形态的可复制物
 
 ---
 
+### 9.13 第 10 步：接线，以及三个只有跑起来才出现的缺陷
+
+第 9 步结束时，`TriageProposer` **没有任何调用方**。第 10 步把它接进一条真实路径：写侧 → 卡片 →
+提议 → 发布 → 读侧，由 `DisclosureSession` 固定顺序，由 `tools/triage-demo.mjs` 用九次独立的
+进程调用跑出来。
+
+#### 三个缺陷，没有一个是单层测试能看见的
+
+| # | 缺陷 | 症状 | 修法 |
+|---|---|---|---|
+| 1 | **一个引擎装不下两个库** | 会话最初只收一个 `Storage`，指望表前缀分住两半。`FederatedStorage` 把前缀当路由标记**剥掉**，两半写进同一张 `facts` 表；第一次共享查询把私有行带出来，`ReadSideAssembler` 当场抛 `ScopeViolation` 并点名 key | 会话要求两个 `Storage`（两个文件）。这条失败现在有一条测试守着 |
+| 2 | **`./local` 没有生成能力** | 想用真模型跑链路时才发现：离线入口能嵌入、能重排、能回答，**唯独不能提议**。第 9 步引入了一个只吃模型的组件，而"离线"那条入口产不出模型 | 新增 `createLocalLLM`，与嵌入共用 `preparePipeline`（同一个 `dtype` 钉法，同一处 `env` 写入） |
+| 3 | **审计面丢掉原句** | 发布原子后：卡片 `text` 被改写、私有行被 `promote` 删掉，**没有任何地方记录"他原本说了什么"**。而导出是本产品唯一的审计面 | `KnowledgeCard.sourceText`（开卡写入、永不改写）+ 导出在措辞变化时多一列 `source` |
+
+第 3 条是这三个里最有价值的：**代码每一行都对**，`edit()` 改用词、`promote()` 搬行、
+`toMarkdown()` 打印卡片，三处合起来才产生"原句不存在了"。任何按函数写的测试都不可能发现它。
+
+#### 一次真实运行（每次命令一个进程，两个 SQLite 文件）
+
+```
+$ node tools/triage-demo.mjs say 'My password is hunter2, and the wifi code is on the fridge.' --id c2
+withheld by credential: credentials are never stored, not even as a card
+not stored anywhere, and no card exists for it.
+
+$ node tools/triage-demo.mjs say 'The project plan moves to Thursday, and the client gets the roadmap on Friday.' --id c3
+c3  stored shared  (rule: org-knowledge)
+no question: the rules already answered it.
+
+$ node tools/triage-demo.mjs propose c4 --llm local
+    offered (triage-proposer/v2, onnx-community/Qwen2.5-0.5B-Instruct):
+      [0] I've been really enjoying editing my photos in Lightroom
+      [1] the online communities I've joined have been super helpful
+      [2] learning new techniques and getting feedback on my work.
+
+$ node tools/triage-demo.mjs accept c4 --atom 0
+c4  edited  published: I've been really enjoying editing my photos in Lightroom
+
+$ node tools/triage-demo.mjs ask shared
+2 row(s) visible to a shared task
+  c3  [shared]  The project plan moves to Thursday, and the client gets the roadmap on Friday.
+  c4  [shared]  I've been really enjoying editing my photos in Lightroom
+
+$ node tools/triage-demo.mjs ask private
+3 row(s) visible to a private task
+  c1  [private]  I moved to Berlin in March and now I work at Acme on the payments team.
+  c3  [shared]  The project plan moves to Thursday, and the client gets the roadmap on Friday.
+  c4  [shared]  I've been really enjoying editing my photos in Lightroom
+```
+
+导出（同一份数据的第三视角，`source` 与 `proposed` 两列因为只有 `c4` 有内容而出现）：
+
+```
+| id | state | reason | text | source | proposed |
+| `c4` | edited | ... | I've been really enjoying editing my photos in Lightroom | By the way, I've been really enjoying editing my photos in Lightroom - the online communities ... | ...(3 atoms) (0 withheld) |
+```
+
+完整记录与重跑方式见 `evidence/disclosure-demo/`。
+
+**四行读数的含义**：凭证不存在于任何库；规则已裁决的句子不问人；模型拆出的三条里只有被点的那一条
+过去；共享任务看到的正是那一条，不是整段。
+
+#### 提议稳定性：同一模型，同一提示词，两种行为
+
+| 句子 | 模型产出 |
+|---|---|
+| c1「I moved to Berlin in March and now I work at Acme on the payments team.」 | **1 条原子**，与原句相同（没有拆） |
+| c4「By the way, I've been really enjoying editing my photos in Lightroom - the online communities …」 | **3 条原子** |
+
+两次都是 `triage-proposer/v2`、同一 checkpoint、greedy。**"拆不拆"不是稳定的**，而这不影响边界
+（三条闸对两种输出同样有效），只影响卡片的信息量——所以它被记成读数，不记成缺陷。
+
+#### 测试与覆盖率
+
+| 包 | 测试数 | 语句 / 分支 / 函数 / 行 |
+|---|---|---|
+| `cortex-core` | **458** | 100 / 100 / 100 / 100 |
+| `cortex-memory` | **462** | 100 / 100 / 100 / 100（`disclosure/session.ts` 同） |
+| `cortex-ai` | **231** | 100 / 100 / 100 / 100（`local/llm.ts` 同） |
+
+会话的 22 条测试跑在**两个真实 SQLite 文件**上：含"关闭后重开同一个文件仍能回答"、
+"两个半边指向同一引擎时拒绝装配"、"发布原子后原句仍在导出里"。
+
+#### 四次注入
+
+| 注入 | 结果 |
+|---|---|
+| 提议失败也照挂（`attach` 不看 `ok`） | **2 红** |
+| 发布整段而不是被点的原子 | **1 红** |
+| 温度 0 也开采样 | **1 红** |
+| 只认字符串形态的模型回复 | **1 红** |
+
+第一次做第 1 条注入时它**存活**了——因为我顺手加了个 `.catch`，把 `attach(undefined)` 的报错吞了，
+那是"改了别的东西"而不是"去掉守卫"。忠实重做（只去掉 `if (result.ok)`）之后红 2 条。**注入也是
+一次测量，而测量要单变量**。
+
+#### 台账：五个导出第一次有了调用方
+
+`node tools/export-census.mjs` 的孤儿数从 285 变为 **286**，但变化不是加了一条，而是**换了七条**：
+
+| 方向 | 条目 |
+|---|---|
+| **移出孤儿表**（有了真实调用方） | `cortex-core: CardQueue`、`KnowledgeCard`、`ProposalResult`、`ReadSideAssembler`、`cortex-storage: SqliteStorage` |
+| 新增 | `cortex-ai: ChatMessage`、`LocalLLMOptions`、`TextGenerationOutput`、`TextGenerationPipeline`、`cortex-memory: DisclosureSessionOptions`、`SayResult` |
+
+前五个正是"接线前没人用、接线后有人用"的清单——这是本仓库第一次能量化"接线"本身。
+
+#### 这一步没做的
+
+| 项 | 归属 |
+|---|---|
+| 图形界面 | 没有；`tools/triage-demo.mjs` 是演示，不是产品面，也没有自己的单测 |
+| `--llm openai` 真调用 | 需要 key；只验证了"缺环境变量时报错并说明" |
+| A3 接受率 | 需要真人；判据已预注册（≥10pp） |
+| 共享侧可达率 | 仍是 4/8（`[POC-5]`）；接线不改变可达率 |
+
+---
+
 ## 10. 本期变更与下轮计划
 
 ### 10.1 本期变更（本仓库）
@@ -832,26 +957,30 @@ v2 只改了一件事：**提示词里不再有任何句子形态的可复制物
 | 真模型链 | `cortex-ai/test/proposer/run.mjs`（`--from` 可只重算不重跑）+ `live-result.json`；权重经 `hf-mirror.com` |
 | 适配器缺陷 | `OpenAICompatibleLLM.completeStructured` 现在把 schema 转发下去，请求体因此带 `response_format` |
 | 台账 | 新增 12 条 `core-llm-node-surface` 条目（提议层导出面），基线由脚本重建 |
+| 会话（第 10 步） | `memory/src/disclosure/session.ts`：`DisclosureSession`（say / propose / accept(atom) / dismiss / edit / refresh / expire / cards / evidence / export），要求两个 `Storage` |
+| 本地生成 | `cortex-ai/src/local/llm.ts`：`createLocalLLM`；`pipelines.ts` 抽出 `preparePipeline` 供两条路径共用 |
+| 审计面 | `KnowledgeCard.sourceText` + 导出条件列 `source`（措辞变化时才出现） |
+| 演示 | `tools/triage-demo.mjs`：九次进程调用跑通全链；`--llm local\|openai`，key 只从环境变量来 |
+| 测试依赖 | `cortex-memory` 新增 devDependency `@agentix-e/cortex-storage`（只在测试里用真引擎） |
 
 ### 10.2 下轮计划（按依赖排序）
 
-第 1–9 步完成。**写、说、提议三层都已有代码与读数**，剩下的第一件事不再是加能力，而是**接线**：
+第 1–10 步完成。**四个层已经接成一条可运行的路径**，下一个动作是把它变成一次测量：
 
 | # | 动作 | 为什么是这个顺序 | 验收判据 |
 |---|---|---|---|
-| 1 | **把提议层接进真实回路**（最小 CLI/UI：卡片 → 提议 → 选一条原子 → `edit`） | `TriageProposer` 目前**没有任何调用方**。它有三层测试、有真模型读数，却没有一个产品路径；而"谁在什么时候调 `propose`、失败时界面上是什么"正是接线才会暴露的东西 | 一次真实操作产生：1 张卡、1 条提议、1 条共享事实，且全程可导出、可复盘 |
-| 2 | **A3 消融**（卡片有原子 vs 只有原句，接受率差） | 需要 1 的界面与真人；判据在 03 §7.1 已预注册（≥10pp） | n≥20、配对、报告编辑距离 |
-| 3 | **O3 持久指纹索引** | 5,000 私有行时 67.5 ms 已经不可用（形状不对，不是常数大） | 万行级 p95、召回不变 |
-| 4 | **一条"主动分享被规则判为私有的记忆"的路径** | 第 6 步发现的真空白：`g42` 永远不会有卡，用户无从分享 | 显式授权 + 更强警告 + 与卡片分开的审计记录 |
+| 1 | **A3 消融**（卡片有原子 vs 只有原句，接受率差） | 接线之后这条判据第一次**可执行**：演示里已经能选原子，只差把"有/无提议"两臂跑在同一个真人身上。它是 03 §7.1 里唯一已预注册却还没读数的机制 | n≥20、配对、接受率差 ≥10pp、报告编辑距离 |
+| 2 | **O3 持久指纹索引** | 5,000 私有行 67.5 ms 是形状不对，不是常数大 | 万行级 p95、召回不变 |
+| 3 | **"主动分享被规则判为私有的记忆"的路径** | 第 6 步的空白：`g42` 永远不会有卡；演示里 `c2` 那条凭证正是这一类（连卡都没有） | 显式授权 + 更强警告 + 与卡片分开的审计记录 |
+| 4 | **把整条链跑一次真实基准**（LongMemEval-S） | 现在链路可跑了：`say → 卡 → 提议 → 发布 → 读侧` 可以喂真实题库的 59,675 条轮次。原先是"没有调用方"，现在是"没有真人" | 一次真实运行报告：卡片数、接受率、O1 拦截数、共享可达比例 |
 | 5 | `./analytics`、Safari 持久 profile、`./web` 真机 | 与主路径无关 / 需真机 | 见 03 §10.1.1 |
-| 6 | **把这一整条链跑一次真实基准** | 所有读数仍在 60 条 + 1,467 条 + 3,000 条语料上；端到端只有 `[POC-7]` 的 59,675 条轮次 | 一次真实运行上报告：卡片数、接受率、O1 拦截数、共享可达比例 |
 
-**为什么第 1 步是接线，而不是继续加能力**：第 9 步已经证明提议层**能**在 0.5B 上工作，也证明了
-它的闸**拦得住**（v1 的 44 次复制一条都没漏出去）。但没有调用方时，这些数字回答不了一个问题：
-**产品里谁触发它、用户看到什么、失败时长什么样**。继续加能力的边际价值低于让已有的三层
-（写 / 说 / 提议）在同一条路径上跑一次。
+**为什么第 1 步是 A3**：第 10 步已经让"选一条原子"成为一个可执行的动作，而 A3 的判据早在 03
+就写好了（≥10pp、n≥20）。在此之前它被"没有界面"挡着；现在挡着的只有"没有真人"。把已有的判据
+执行掉，比再加一层能力更能回答"这套东西值不值得做"。
 
-**SOTA 侧仍无新读数**：名单均值 **405.0 / 500**，MR 落后参考管线 **20 题**。九步全是结构性前置。
+**SOTA 侧仍无新读数**：名单均值 **405.0 / 500**，MR 落后参考管线 **20 题**。十步全是结构性前置，
+没有一步声称改变过分数。
 
 **关于"设计阶段是否完美"**：9 条门槛 **9/9 ✅**，缺口清单为空。剩下的五条限制写在
 03 §10.1.1，判断标准是"测出来与预期相反时，架构要不要改"——五条都不需要改架构，只影响阈值、
