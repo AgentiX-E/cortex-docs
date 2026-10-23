@@ -34,6 +34,7 @@
 | **实现第 13 步** | 🔶 A3 的仪器：`scoreA3`（精确 McNemar + Wilson + 五值判定，17 条测试对着手算值）与 `tools/a3-review.mjs`（prepare / review / score）就绪；**点击未做**，因为**预检发现处理强度不足**——20 张卡里 14 张两臂是同一段文字、5 张只差开场白、**1 张真被拆开** |
 | **实现第 14 步** | ✅ 配置即记录：`resolveLlmProfile` 两个具名 backend、**无静默回退**、profile 进入 transcript / `cards.json` / `proposal.provider`。实测本地推理 **0 次网络请求**（load 0 / infer 0）；守卫加文件级禁令后**两次**点名离线入口藏着的 HTTP 客户端（`parseJson`、`CrossEncoderReranker`），均已修；单变量实验证明 0.5B 不切分是**容量**不是措辞（v2 = v3 = 5.0% 剂量，但内部三处反向移动） |
 | **实现第 15 步** | ✅ 远端档从「未测」变成实测：`measure-models.yml` 在 CI 上带 org secret 跑，**A3 剂量 5.0% → 75.0%（门 50%，首次通过）**；60 条语料 45/60 → 52/60（配对 p=0.065），`ungrounded` 3 → **0**；embedding 到厂商并断言 provenance；密钥卫生作业全绿 |
+| **实现第 16 步** | ✅ A3 变成一个人能做完的事：单文件零网络页面（`evidence/a3-review/review-remote.html`），20 对、顺序交替、断点续做、**每判断一次就写导出**；在浏览器里真点一遍抓到 **3 个缺陷**（中途无导出、隐藏按钮的点击静默抛错、模板字符串里的反引号）；端到端 40 次自动点击 → JSONL → `score` 通过（管道测试）；eval 14 + tools 6 条测试，覆盖率仍 100/100/100/100 |
 | **SOTA 读数** | 名单均值 **405.0 / 500**（397–412）；MR 落后参考管线 **20 题**，"超越竞品"仍不成立 |
 
 **本期最重要的三个读数，都不是"分数"**：
@@ -337,6 +338,11 @@ LongMemEval 的成绩由 `cortex-eval` 自己实现的独立系统产生。
 | 105 | 原子数 48 → **89**，候选 51 → 98，每句耗时 5.88 s → **0.91 s** | E1 | 同上 | 本地是 CPU、远端是网络；耗时不可直接外推 |
 | 106 | embedding 到达厂商并记录 provenance：`openai-compatible` / `embedding-3` / **1024 维** / 相关 0.917 vs 无关 0.549 / 1.49 s | E1 | `evidence/remote-reading/embedding-smoke.json` | hash 回退是 256 维，除非有 provenance 否则不可见 |
 | 107 | `hygiene` 作业用两个 secret 的值 `grep -rqF` 全部产物，**均未命中** | E1 | run 39986122582 `No credential in any artifact` | `-q` 使值不会经由匹配行进日志 |
+| 108 | A3 的采集界面：单文件 HTML，**零网络**（无 `src=http`/`fetch`/`XHR`/`@import`）、20 对、按索引交替、断点续做 | E1 | `review-page.test.ts`（14）+ `test_a3_review_page.py`（6）+ 截图 | 页面是仪器，不是产品面 |
+| 109 | **浏览器里真点一遍**发现三处：① 中途 `#a3-json` 为空（只在末屏写导出）；② 隐藏按钮仍可点，监听器里抛 `TypeError` 且无人知晓（200 次点击记录到 40 条）；③ 客户端脚本注释里的反引号截断 `String.raw` 模板，构建报 3 个 `TS1005` | E1 | 本机 Chromium + agent-browser 驱动 | 三处都只有"用完整个流程之后继续操作"才会出现 |
+| 110 | 端到端：页面点完 40 次 → 导出 JSONL → `a3-review.mjs score` → `20 pair(s), 0 discordant, p=1.0000, NO-DIFFERENCE` | E1 | 本机运行（**受试者是脚本，不是数据**） | 证明形状被 `scoreA3` 收下，不证明任何偏好 |
+| 111 | `--out` 绝对路径的回归已被钉住：写入指定位置，且**包里不产生副本** | E1 | `test_a3_review_page.py` | 上一轮 `join` 缺陷的同类 |
+| 112 | 台账：`renderA3ReviewPage` 有调用方；`planReview`/`resumeKey` 为测试缝；`trialLine` 写了又删（唯一调用者是测试，一行包装不值一个导出） | E1 | `export-census-baseline.json`（+6 / −0） | —
 
 ---
 
@@ -1402,6 +1408,75 @@ provenance）。工作流里有一条断言：`provider` 必须等于 `openai-co
 
 ---
 
+### 9.19 第 16 步：把 A3 变成一个人能做完的事，然后靠"真点一遍"抓到三个缺陷
+
+#### 为什么是界面
+
+A3 的判据、算术、顺序平衡、剂量门从第 13 步起就都就绪了，第 15 步连剂量都推到 75%。而**一次读数都没有**。
+原因是 `a3-review.mjs review` 是一个终端交互循环：要守着 shell、打错一个键就可能丢掉二十次判断、关掉窗口
+就什么都不剩。**当"摩擦"和"决定不做"无法区分时，它就已经是后者了。**
+
+所以这一步做的是**一个自包含的 HTML 文件**：没有服务器、没有构建、没有外部请求，打开、按 a/d/e/s 四十次、
+下载 JSONL、跑 `score`。
+
+#### 页面做了什么，以及刻意不做什么
+
+| 决定 | 理由 |
+|---|---|
+| **一个文件，零网络** | 需要旁边放一个 CSS 的文件就是一个目录，一个目录就是一个理由。测试断言页面里不出现 `src="http`、`fetch(`、`XMLHttpRequest`、`@import` |
+| **顺序按索引交替** | 与 CLI 同一条规则：偶数张先原句、奇数张先原子。否则疲劳效应会被算到"第二个呈现"头上 |
+| **每判断一次就写导出** | 第一版只在最后填 textarea，于是中途停下的人只有 localStorage 里那份看不见的副本。现在第 14 张停下也有 14 条可交付的判断 |
+| **不评分** | `scoreA3` 是这套算术唯一的实现，页面里的第二份会在样本小到恰好要紧时分歧。最后一屏打印的是要跑的命令 |
+| **金标签只在显式要求时进入 payload** | 带着它再在客户端藏起来，等于把答案留在文件里——一次"查看源代码"就能看到 |
+| **不隐藏哪一臂是哪一臂** | 编辑者知道自己改的是句子还是原子。这是测量的限制，写在文档里而不是藏在开关后面 |
+
+#### 三个缺陷，都是"点一遍"才发现的
+
+| # | 缺陷 | 怎么发现的 |
+|---|---|---|
+| 1 | **不在最后也能导出**（第一版只在末屏写 textarea） | 在浏览器里点两下就发现：中途 `#a3-json` 是空的，而它是唯一的交付物 |
+| 2 | **隐藏的按钮仍能被点到，异常被吞掉** | 自动点击 200 次：只记录到 40 条，剩下 160 次在监听器里抛 `TypeError`，而页面不会把异常告诉点它的人。修法是 `render()` 清空 body，处理器里 `if (!step) return` |
+| 3 | **模板字符串里的反引号** | 在客户端脚本（`String.raw`）的注释里写 `` `record` ``，直接把模板字面量截断，构建后是 `SyntaxError: Missing initializer`。TS 编译器报了三个 `TS1005`，位置精确 |
+
+第 2 条值得单独记：**它只在"用完整个流程之后继续点"时出现**，而正常使用者不会那么做——但一个卡住的
+用户会。异常发生在事件监听器里，控制台之外没有任何东西会说"这一下没记上"。
+
+#### 端到端：页面 → JSONL → `score`
+
+用浏览器脚本把 40 次判断点完（**这是管道测试，受试者是脚本，不是数据**），导出的 JSONL 直接喂给 CLI：
+
+```
+20 pair(s), 0 discordant
+  source  20/20 accepted (100.0%, 95% CI 83.9-100.0%), 0 edited, median 0 ms
+  atoms   20/20 accepted (100.0%, 95% CI 83.9-100.0%), 0 edited, median 0 ms
+  delta 0.0pp, exact McNemar p=1.0000
+
+NO-DIFFERENCE: atoms won 0 and lost 0 of 20 pair(s) ...
+```
+
+**这次运行证明的是管道，不是结论**：全部接受是我用脚本灌的。它证明的是"页面写出的形状 `scoreA3`
+收得下"——这也是 `review-page.test.ts` 里那条断言在做的事（把导出行交给 `scoreA3`，而不是逐字段比对）。
+
+#### 测试
+
+| 层 | 数量 | 断言的是什么 |
+|---|---|---|
+| `review-page.test.ts`（eval，vitest） | **13** | `planReview` 交替与跳过；`resumeKey` 随 prompt 变、随卡片变、不随 profile 变；payload 里每张卡两臂且顺序正确；`</script>` 注入后 payload 仍能解析且只多出 0 个 script 元素；渲染文本被转义；**零网络**；金标签默认不进 payload；空原子拒绝渲染；**导出行能被 `scoreA3` 直接打分**（20 对 → `no-difference`；编辑算接受） |
+| `test_a3_review_page.py`（tools，pytest） | **6** | **绝对 `--out` 写在你说的地方**（并断言包里没有多出一份——上一轮那个 `join` 缺陷的回归）；零网络；每卡两次且顺序交替；缺 `promptVersion`/缺 `profile`/混配置各自被拒且**不写文件**；空卡片被拒；缺参数打印 usage |
+
+覆盖率：`cortex-eval` 仍是 **100 / 100 / 100 / 100**（`review-page.ts` 单独同）。
+
+#### 这一步没做的
+
+| 项 | 归属 |
+|---|---|
+| **真人的 40 次点击** | 页面已经生成为 `evidence/a3-review/review-remote.html`，打开即可；**读数仍然没有** |
+| 页面里的评分 | 明确不做，见上 |
+| 移动端布局 | 只用过桌面视口；小屏未测 |
+| 把 A3 接进产品 UI | 这一页是**测量仪器**，不是产品面 |
+
+---
+
 ## 10. 本期变更与下轮计划
 
 ### 10.1 本期变更（本仓库）
@@ -1461,6 +1536,8 @@ provenance）。工作流里有一条断言：`provider` 必须等于 `openai-co
 | 读数归档 | 每次 dispatch 把 `readings/` 提交到 `readings/<run id>` 分支（产物 90 天会过期，读数不该）；本次读数的副本在 `cortex-docs/evidence/remote-reading/` |
 | 双 backend 脚本 | `ai/test/proposer/run.mjs` 支持 `--llm local|remote`、`--model`、`--dtype`、`--out`；改用包内 `createLocalLLM` 而不是自己包一层 pipeline |
 | embedding 冒烟 | `eval/test/embedding-smoke.mjs`：3 句、2 个余弦、断言「相关 > 无关」，并把 provenance 写进产物 |
+| 采集页面（第 16 步） | `eval/src/review-page.ts`：`renderA3ReviewPage` / `planReview` / `resumeKey`；`tools/a3-review-page.mjs` 是 CLI（参数、配置校验、绝对 `--out`） |
+| 证据 | `evidence/a3-review/review-remote.html`（20 对，打开即可点）+ 两张截图 |
 
 ### 10.2 下轮计划（按依赖排序）
 
@@ -1468,7 +1545,7 @@ provenance）。工作流里有一条断言：`provider` 必须等于 `openai-co
 
 | # | 动作 | 为什么是这个顺序 | 验收判据 |
 |---|---|---|---|
-| 1 | **A3 的点击**（20 对，有原子 vs 只有原句） | 三件材料终于齐了：剂量 75% ≥ 50%、`scoreA3` 会给出五值之一、协议预注册在 03 §7.1.1。剩下的只有一个人 40 次判断 | n≥20、配对、`atoms-better` / `no-difference` / `source-better` 之一 |
+| 1 | **A3 的点击**（20 对，有原子 vs 只有原句） | 材料齐了：剂量 75%、`scoreA3`、预注册协议，以及第 16 步的采集页面 `evidence/a3-review/review-remote.html`——**打开即可点，中途关闭能接着点**。剩下的是一个人 40 次判断 | n≥20、配对、`atoms-better` / `no-difference` / `source-better` 之一 |
 | 2 | **A3 在 60 条语料上重跑一次**（配对 p=0.065 → 更大样本） | 0.065 是方向不是结论；同一台仪器、同一份语料、再 dispatch 一次即可，第二次也能验证供应商侧的不确定性 | 配对检验 p 与第二次与第一次的一致性 |
 | 3 | **"主动分享被规则判为私有"的路径** | 第 6 步的空缺，与 A3 无关，可并行 | 显式授权 + 更强警告 + 独立审计记录 |
 | 4 | **整条链跑一次真实基准**（`say → 卡片 → 提议 → 发布 → 读侧 → check`） | 四层接好、远端可跑；缺真实题库上的拦截率 | 卡片数、接受率、O1/O2/O3 各自拦截数、可达比例 |
