@@ -1,0 +1,10 @@
+20 card(s), 20 with a proposal
+     1  two or more atoms (the treatment)
+     5  one atom, reworded or trimmed
+    14  one atom, the same text as the sentence
+     0  no proposal at all
+  treatment share: 5.0% of 20 (gate: 50%)
+  profile: local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none
+  prompt: triage-proposer/v2
+
+GATE FAIL: 1/20 cards carry two or more atoms. Collecting clicks now would measure the model, not the presentation.

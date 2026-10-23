@@ -1,6 +1,6 @@
 # The disclosure chain, recorded
 
-One file: `transcript.txt`, the output of thirteen separate process invocations of
+One file: `transcript.txt`, the output of fourteen separate process invocations of
 `tools/triage-demo.mjs` against two real SQLite files and a real 0.5B on-device model.
 `replay.sh` is the exact sequence, so the file can be regenerated rather than trusted.
 
@@ -12,7 +12,9 @@ One file: `transcript.txt`, the output of thirteen separate process invocations 
    publishes **one** of them, and the shared store holds that one, not the paragraph.
 4. The export carries `text` (what was published), `source` (what was said) and
    `proposed` (what the model offered) — the three things an auditor asks in order.
-5. A draft for a shared task that copies a private sentence is **blocked** (an echo), and
+5. Asking for the remote backend with no key **fails** with the names of the three variables, and
+   does not fall back to the checkpoint.
+6. A draft for a shared task that copies a private sentence is **blocked** (an echo), and
    the same draft for a private task is **clear** — the owner may hear their own memory.
    A shared draft that cites a published fact is clear; one that cites nothing is not.
 
@@ -22,8 +24,9 @@ One file: `transcript.txt`, the output of thirteen separate process invocations 
   grounded, clean of withheld categories, and that publishing one publishes exactly one.
 - One model, one checkpoint, one machine, greedy decoding. The same model split one
   sentence into three atoms and left another whole, and the transcript records both.
-- `--llm openai` was not exercised: it needs a key, and this repository stores none.
-  The recorded run used the local checkpoint.
+- The remote backend was **not exercised with a key**: there is none on this host, and this
+  repository stores none. What the transcript records is its failure path. `CORTEX_LLM_BACKEND=remote`
+  with the three variables set runs the same commands against an API model.
 
 The readings that matter are in `docs/04` §9.13; this directory holds the raw output the
 section quotes.

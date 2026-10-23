@@ -5,79 +5,92 @@ Date      2026-10-23
 Host      Linux x64, Node 22.13.1
 Store     two SQLite files (better-sqlite3): private.db, shared.db
 Model     onnx-community/Qwen2.5-0.5B-Instruct, dtype q4, greedy, 192-token cap
-Weights   https://hf-mirror.com (the public Hub is unreachable from this host)
-Prompt    triage-proposer/v2
+Weights   https://hf-mirror.com (the public Hub is unreachable from this host; already cached, so no
+          request is made during inference -- see evidence/a3-dosage/network-nocall.json)
+Prompt    triage-proposer/v3
+Profile   local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 inference-network=none
 
 Reproduce:
 
     pnpm -r build
     bash evidence/disclosure-demo/replay.sh          # in the cortex repository
 
-The script below is the exact sequence that produced this file. Thirteen invocations,
-each its own process, so the state has to be on disk for the next one to see it.
-The only step that loads a model is `propose`.
+The script below is the exact sequence that produced this file. Fourteen invocations, each its own
+process, so the state has to be on disk for the next one to see it. The only step that loads a model
+is `propose`.
 
-The last four are the output side: `check <task> "<draft>"` runs O1 (the rule table),
-O2 (citations) and O3 (verbatim echo) over a draft, using the same stores that wrote it.
+The last three are the output side and the configuration failure:
+
+  * `check <task> "<draft>"` runs O1 (the rule table), O2 (citations) and O3 (verbatim echo) over a
+    draft, using the same stores that wrote it;
+  * `propose c4 --llm remote` with no key **fails** -- it does not fall back to the checkpoint. That
+    is the assertion the replay script makes, because a silent downgrade would let a transcript claim
+    an API model while a 0.5B model produced every atom.
+
+One thing to notice while reading: under prompt v3 this sentence yields **one atom**, where v2
+yielded three (`docs/04` section 9.17 has both runs). The gates are indifferent -- all three are
+grounded, one is too -- which is the boundary of what a gate can promise.
 
 -------------------------------------------------------------------------------
 
-$ node tools/triage-demo.mjs say I moved to Berlin in March and now I work at Acme on the payments team. --id c1
+$ node tools/triage-demo.mjs --home /tmp/cortex-demo say I moved to Berlin in March and now I work at Acme on the payments team. --id c1
 c1  stored private  (rule: none, deferred)
 c1  proposed  No rule recognised this sentence, so it is stored privately. Publishing it is your decision.
     text: I moved to Berlin in March and now I work at Acme on the payments team.
 
-$ node tools/triage-demo.mjs say My password is hunter2, and the wifi code is on the fridge. --id c2
+$ node tools/triage-demo.mjs --home /tmp/cortex-demo say My password is hunter2, and the wifi code is on the fridge. --id c2
 withheld by credential: credentials are never stored, not even as a card
 not stored anywhere, and no card exists for it.
 
-$ node tools/triage-demo.mjs say The project plan moves to Thursday, and the client gets the roadmap on Friday. --id c3
+$ node tools/triage-demo.mjs --home /tmp/cortex-demo say The project plan moves to Thursday, and the client gets the roadmap on Friday. --id c3
 c3  stored shared  (rule: org-knowledge)
 no question: the rules already answered it.
 
-$ node tools/triage-demo.mjs say By the way, I've been really enjoying editing my photos in Lightroom - the online communities I've joined have been super helpful in learning new techniques and getting feedback on my work. --id c4
+$ node tools/triage-demo.mjs --home /tmp/cortex-demo say By the way, I've been really enjoying editing my photos in Lightroom - the online communities I've joined have been super helpful in learning new techniques and getting feedback on my work. --id c4
 c4  stored private  (rule: none, deferred)
 c4  proposed  No rule recognised this sentence, so it is stored privately. Publishing it is your decision.
     text: By the way, I've been really enjoying editing my photos in Lightroom - the online communities I've joined have been super helpful in learning new techniques and getting feedback on my work.
 
-$ node tools/triage-demo.mjs propose c4 --llm local
+$ node tools/triage-demo.mjs --home /tmp/cortex-demo propose c4 --llm local
+profile: local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none
 c4  proposed  No rule recognised this sentence, so it is stored privately. Publishing it is your decision.
     text: By the way, I've been really enjoying editing my photos in Lightroom - the online communities I've joined have been super helpful in learning new techniques and getting feedback on my work.
-    offered (triage-proposer/v2, onnx-community/Qwen2.5-0.5B-Instruct):
+    offered (triage-proposer/v3, onnx-community/Qwen2.5-0.5B-Instruct):
       [0] I've been really enjoying editing my photos in Lightroom
-      [1] the online communities I've joined have been super helpful
-      [2] learning new techniques and getting feedback on my work.
 
-$ node tools/triage-demo.mjs accept c4 --atom 0
+$ node tools/triage-demo.mjs --home /tmp/cortex-demo accept c4 --atom 0
 c4  edited  published: I've been really enjoying editing my photos in Lightroom
 
-$ node tools/triage-demo.mjs ask shared
+$ node tools/triage-demo.mjs --home /tmp/cortex-demo ask shared
 2 row(s) visible to a shared task
   c3  [shared]  The project plan moves to Thursday, and the client gets the roadmap on Friday.
   c4  [shared]  I've been really enjoying editing my photos in Lightroom
 
-$ node tools/triage-demo.mjs ask private
+$ node tools/triage-demo.mjs --home /tmp/cortex-demo ask private
 3 row(s) visible to a private task
   c1  [private]  I moved to Berlin in March and now I work at Acme on the payments team.
   c3  [shared]  The project plan moves to Thursday, and the client gets the roadmap on Friday.
   c4  [shared]  I've been really enjoying editing my photos in Lightroom
 
-$ node tools/triage-demo.mjs check shared Here is what I remember: I moved to Berlin in March and now I work at Acme on the payments team.
+$ node tools/triage-demo.mjs --home /tmp/cortex-demo check shared Here is what I remember: I moved to Berlin in March and now I work at Acme on the payments team.
 blocked  (2 finding(s)) for a shared task
   echo: I moved to Berlin in March and now I work at Acme on the payments team
   unattributed: 
 
-$ node tools/triage-demo.mjs check private You told me: I moved to Berlin in March and now I work at Acme on the payments team.
+$ node tools/triage-demo.mjs --home /tmp/cortex-demo check private You told me: I moved to Berlin in March and now I work at Acme on the payments team.
 clear  (0 finding(s)) for a private task
 
-$ node tools/triage-demo.mjs check shared The project plan moves to Thursday [[c3]].
+$ node tools/triage-demo.mjs --home /tmp/cortex-demo check shared The project plan moves to Thursday [[c3]].
 clear  (0 finding(s)) for a shared task
 
-$ node tools/triage-demo.mjs check shared The project plan moves to Thursday.
+$ node tools/triage-demo.mjs --home /tmp/cortex-demo check shared The project plan moves to Thursday.
 blocked  (1 finding(s)) for a shared task
   unattributed: 
 
-$ node tools/triage-demo.mjs export
+$ node tools/triage-demo.mjs --home /tmp/cortex-demo propose c4 --llm remote
+configuration: the remote backend needs CORTEX_LLM_MODEL, CORTEX_LLM_BASE_URL, CORTEX_LLM_API_KEY: this repository never stores a key, so it can only come from the environment. Use backend "local" for a run that makes no API call.
+
+$ node tools/triage-demo.mjs --home /tmp/cortex-demo export
 # Knowledge cards
 
 2 card(s): 1 proposed, 1 edited.
@@ -85,6 +98,6 @@ $ node tools/triage-demo.mjs export
 | id | state | reason | text | source | proposed |
 |---|---|---|---|---|---|
 | `c1` | proposed | No rule recognised this sentence, so it is stored privately. Publishing it is your decision. | I moved to Berlin in March and now I work at Acme on the payments team. |  |  |
-| `c4` | edited | No rule recognised this sentence, so it is stored privately. Publishing it is your decision. | I've been really enjoying editing my photos in Lightroom | By the way, I've been really enjoying editing my photos in Lightroom - the online communities I've joined have been super helpful in learning new techniques and getting feedback on my work. | I've been really enjoying editing my photos in Lightroom; the online communities I've joined have been super helpful; learning new techniques and getting feedback on my work. (0 withheld) |
+| `c4` | edited | No rule recognised this sentence, so it is stored privately. Publishing it is your decision. | I've been really enjoying editing my photos in Lightroom | By the way, I've been really enjoying editing my photos in Lightroom - the online communities I've joined have been super helpful in learning new techniques and getting feedback on my work. | I've been really enjoying editing my photos in Lightroom (0 withheld) |
 
 

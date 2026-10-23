@@ -5,6 +5,10 @@
 set -euo pipefail
 
 HOME_DIR=${CORTEX_DEMO_HOME:-/tmp/cortex-demo}
+# Where a cold start would fetch the weights. On this host the public Hub is unreachable, and the
+# checkpoint is already cached, so no request is made either way; naming it keeps the recorded
+# profile line truthful about the machine the run happened on.
+export CORTEX_HF_ENDPOINT=${CORTEX_HF_ENDPOINT:-https://hf-mirror.com}
 RUN="node tools/triage-demo.mjs --home $HOME_DIR"
 
 rm -rf "$HOME_DIR"
@@ -20,4 +24,12 @@ $RUN check shared "Here is what I remember: I moved to Berlin in March and now I
 $RUN check private "You told me: I moved to Berlin in March and now I work at Acme on the payments team."
 $RUN check shared 'The project plan moves to Thursday [[c3]].'
 $RUN check shared 'The project plan moves to Thursday.'
+# The remote backend with no key: an error, not a downgrade to the local model. Asserted rather than
+# tolerated, so the transcript cannot show a run that quietly used the checkpoint while claiming a
+# provider.
+if $RUN propose c4 --llm remote; then
+  echo 'unexpected: the remote backend ran without a key' >&2
+  exit 1
+fi
+
 $RUN export
