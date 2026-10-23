@@ -927,6 +927,53 @@ O3 不需要意见，只需要**行**。机制刻意笨：**字符 n-gram 重叠
 时 O1 看不见。所以它的承诺是**"减少了部分泄漏"**，不是"不泄漏"。§6.3 的 0/12 是**存储**的读数，
 把它当成输出侧的读数，正是本报告反复在防的那类替换。
 
+#### 6.4.3 实现（第 12 步）：把三层接成一次检查，然后发现它们对"私有任务"意见不一致
+
+`DisclosureSession.check(draft, task)` 是这一步唯一新增的公开方法，它做三件事：从读侧取**窗口**、
+从私有库取**语料**、把草稿交给 `OutputGuard` 跑 O1+O2+O3。窗口与语料都来自写出这些行的同一个会话，
+所以检查问的从来不是另一个问题。
+
+接起来的第一天，两个缺陷同时出现，而它们都不是任何一层的测试能看见的：
+
+| # | 缺陷 | 怎么出现 | 修法 |
+|---|---|---|---|
+| 1 | **O3 不看任务作用域** | O1 一直对私有任务跳过 scope findings（"回答用户自己的记忆正是产品在工作"），O3 没有跳过。两层接起来之后，**每一条引用了用户自己记忆的私有回答都被拦** —— 私有路径整体不可用，而测试全绿 | `echoes()` 对 `task === 'private'` 直接返回空；`never-retained` 不受影响（凭证从不落库，也从不回显给任何人） |
+| 2 | **同一句话被报两次** | 演示里一条 80 字符的私有句在共享草稿里产生**两条一模一样的 `echo`**。注释写的是"一句话一个 finding"，代码做的是"一个窗口一个" —— 上一个窗口之后跳到下一个空格，而那个空格仍在同一句里 | 跳过的位置改成"这句话的结尾"（用已有的 `map` 反查），一句话一个 finding |
+
+第 2 条的发现方式值得记：它是**看输出**发现的，不是看断言。当时所有测试都通过，包括一条测
+"56/56 私有行被拦下"的 —— 那条数的是**被拦下的行**，不是 finding 的条数，所以重复项从来不在
+它的视野里。
+
+#### 一次真实运行（第 13 次调用起是输出侧）
+
+```
+$ check shared 'Here is what I remember: I moved to Berlin in March and now I work at Acme …'
+blocked  (2 finding(s)) for a shared task
+  echo: I moved to Berlin in March and now I work at Acme on the payments team
+  unattributed:
+
+$ check private 'You told me: I moved to Berlin in March and now I work at Acme …'
+clear  (0 finding(s)) for a private task
+
+$ check shared 'The project plan moves to Thursday [[c3]].'
+clear  (0 finding(s)) for a shared task
+
+$ check shared 'The project plan moves to Thursday.'
+blocked  (1 finding(s)) for a shared task
+  unattributed:
+```
+
+四行的含义：**同一句话，对共享任务是泄漏，对私有任务是产品在工作**；有引用就放行，无引用就拦。
+第一行与第二行只差一个参数，而那个参数是这一层最关键的一个决定。
+
+#### 这一次没做的
+
+| 项 | 归属 |
+|---|---|
+| 改写式泄漏 | 与"不误拦"冲突，第 8 步已断言 |
+| 草稿生成（谁来写这段文字） | 编排层；这一层只检查，不生成 |
+| 真实题库上的拦截率 | 需要一次真实运行把 `check` 接在答题之后 |
+
 ### 6.5 拒绝而非降级
 
 | 场景 | 行为 |

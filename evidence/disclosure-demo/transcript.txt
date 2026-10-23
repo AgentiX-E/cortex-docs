@@ -13,9 +13,12 @@ Reproduce:
     pnpm -r build
     bash evidence/disclosure-demo/replay.sh          # in the cortex repository
 
-The script below is the exact sequence that produced this file. Nine invocations,
+The script below is the exact sequence that produced this file. Thirteen invocations,
 each its own process, so the state has to be on disk for the next one to see it.
 The only step that loads a model is `propose`.
+
+The last four are the output side: `check <task> "<draft>"` runs O1 (the rule table),
+O2 (citations) and O3 (verbatim echo) over a draft, using the same stores that wrote it.
 
 -------------------------------------------------------------------------------
 
@@ -58,6 +61,21 @@ $ node tools/triage-demo.mjs ask private
   c1  [private]  I moved to Berlin in March and now I work at Acme on the payments team.
   c3  [shared]  The project plan moves to Thursday, and the client gets the roadmap on Friday.
   c4  [shared]  I've been really enjoying editing my photos in Lightroom
+
+$ node tools/triage-demo.mjs check shared Here is what I remember: I moved to Berlin in March and now I work at Acme on the payments team.
+blocked  (2 finding(s)) for a shared task
+  echo: I moved to Berlin in March and now I work at Acme on the payments team
+  unattributed: 
+
+$ node tools/triage-demo.mjs check private You told me: I moved to Berlin in March and now I work at Acme on the payments team.
+clear  (0 finding(s)) for a private task
+
+$ node tools/triage-demo.mjs check shared The project plan moves to Thursday [[c3]].
+clear  (0 finding(s)) for a shared task
+
+$ node tools/triage-demo.mjs check shared The project plan moves to Thursday.
+blocked  (1 finding(s)) for a shared task
+  unattributed: 
 
 $ node tools/triage-demo.mjs export
 # Knowledge cards

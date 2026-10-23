@@ -16,4 +16,8 @@ $RUN propose c4 --llm local
 $RUN accept c4 --atom 0
 $RUN ask shared
 $RUN ask private
+$RUN check shared "Here is what I remember: I moved to Berlin in March and now I work at Acme on the payments team."
+$RUN check private "You told me: I moved to Berlin in March and now I work at Acme on the payments team."
+$RUN check shared 'The project plan moves to Thursday [[c3]].'
+$RUN check shared 'The project plan moves to Thursday.'
 $RUN export

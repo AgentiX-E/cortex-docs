@@ -1,6 +1,6 @@
 # The disclosure chain, recorded
 
-One file: `transcript.txt`, the output of nine separate process invocations of
+One file: `transcript.txt`, the output of thirteen separate process invocations of
 `tools/triage-demo.mjs` against two real SQLite files and a real 0.5B on-device model.
 `replay.sh` is the exact sequence, so the file can be regenerated rather than trusted.
 
@@ -12,6 +12,9 @@ One file: `transcript.txt`, the output of nine separate process invocations of
    publishes **one** of them, and the shared store holds that one, not the paragraph.
 4. The export carries `text` (what was published), `source` (what was said) and
    `proposed` (what the model offered) — the three things an auditor asks in order.
+5. A draft for a shared task that copies a private sentence is **blocked** (an echo), and
+   the same draft for a private task is **clear** — the owner may hear their own memory.
+   A shared draft that cites a published fact is clear; one that cites nothing is not.
 
 ## What it does not show
 
