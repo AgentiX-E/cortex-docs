@@ -346,6 +346,8 @@ LongMemEval 的成绩由 `cortex-eval` 自己实现的独立系统产生。
 | 113 | `push-via-api.py` 以 `encoding: "utf-8"` 上传每一个 blob，**损坏所有二进制文件**：64 KB 的 PNG 到远端成为 118 KB | E1 | `test_push_blobs.py`（6 条，夹具是非 UTF-8 字节）+ 远端字节比对 | 此前全是文本，故数周未暴露 |
 | 114 | 校验**在分支移动之后**才执行：不匹配会留下损坏的提交再报告。现在校验前移，并在推送后再复核 | E1 | 同上（源码顺序断言） | 闸门必须在发布前跑 |
 | 115 | 修复后远端三个文件与本地**逐字节相同**（64,012 / 58,715 / 23,728） | E1 | contents API 比对 | 修复方式是"再推一次"，不是 force-push 掩盖 |
+| 116 | CI 在页面那次提交上**红了、本地绿**：CLI 的 pytest 在 `pnpm test:tools`（`build` 之前）运行，而它导入 `dist`；本地通过是因为陈旧的 `dist` 还在 | E1 | 把 `dist` 挪开后复现 6 条失败 → 修复后 `549 passed` | "本地全绿"不是证据 |
+| 117 | 修法：逻辑搬进 `cortex-eval`（`parseReviewPageArgs` / `readReviewCards` / `resolveOutPath`，vitest 覆盖），工具只剩读—调—写；`resolveOutPath` 把"绝对路径替换基准"变成有名字的函数 | E1 | `review-page.test.ts` 24 条；`pnpm check` 与 CI 均绿 | 工具不能由早于其依赖的步骤来测 |
 
 ---
 
@@ -1464,10 +1466,24 @@ NO-DIFFERENCE: atoms won 0 and lost 0 of 20 pair(s) ...
 
 | 层 | 数量 | 断言的是什么 |
 |---|---|---|
-| `review-page.test.ts`（eval，vitest） | **13** | `planReview` 交替与跳过；`resumeKey` 随 prompt 变、随卡片变、不随 profile 变；payload 里每张卡两臂且顺序正确；`</script>` 注入后 payload 仍能解析且只多出 0 个 script 元素；渲染文本被转义；**零网络**；金标签默认不进 payload；空原子拒绝渲染；**导出行能被 `scoreA3` 直接打分**（20 对 → `no-difference`；编辑算接受） |
-| `test_a3_review_page.py`（tools，pytest） | **6** | **绝对 `--out` 写在你说的地方**（并断言包里没有多出一份——上一轮那个 `join` 缺陷的回归）；零网络；每卡两次且顺序交替；缺 `promptVersion`/缺 `profile`/混配置各自被拒且**不写文件**；空卡片被拒；缺参数打印 usage |
+| `review-page.test.ts`（eval，vitest） | **24** | `planReview` 交替与跳过；`resumeKey` 随 prompt 变、随卡片变、不随 profile 变；payload 里每张卡两臂且顺序正确；`</script>` 注入后 payload 仍能解析且只多出 0 个 script 元素；渲染文本被转义；**零网络**；金标签默认不进 payload；空原子拒绝渲染；**导出行能被 `scoreA3` 直接打分**（20 对 → `no-difference`；编辑算接受）；命令行三件套（参数、卡片校验、`--out` 解析） |
+| `tools/a3-review-page.mjs` | **0** | 它是 shim：读文件、调一个函数、写文件。**没有自己的测试**，因为第一次它带着逻辑时，测它的那一步在 `pnpm build` 之前跑 |
 
 覆盖率：`cortex-eval` 仍是 **100 / 100 / 100 / 100**（`review-page.ts` 单独同）。
+
+#### CI 红了一次，而它是对的
+
+页面那次提交在 CI 上红了，本地全绿。原因不是环境差异，是**顺序**：CLI 的测试放在
+`pnpm test:tools` 里，而 `pnpm check` 的顺序是 `test:tools → build → …`；CLI 导入 `dist`，一个干净的
+检出**没有** `dist`。本地之所以通过，是因为同一天下午留下的 `dist` 还在。把 `dist` 挪开再跑一遍就复现了。
+
+修法是第 10/12 步学到的同一条：**逻辑进包，工具只做胶水**。参数解析、卡片校验、`--out` 解析都搬到
+`cortex-eval` 并由 vitest 覆盖（100/100/100/100）；`tools/a3-review-page.mjs` 只剩"读—调—写"。
+`resolveOutPath` 顺手把上一轮那类缺陷升格成一个有名字的函数：绝对路径替换基准，相对路径拼接，
+`join` 不再出现在它附近。
+
+这条也说明为什么"本地全绿"不能当作证据：**一个陈旧的 `dist` 就能让一整类缺陷消失**。验证方式是
+把 `dist` 挪开——这也是唯一能知道的方法。
 
 #### 顺带修掉的一个交付缺陷：推送工具损坏每一个二进制文件
 
