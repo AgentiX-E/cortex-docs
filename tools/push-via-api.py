@@ -17,6 +17,7 @@ matters, so content is what is compared.
 
 Usage: python3 tools/push-via-api.py
 """
+import base64
 import json
 import subprocess
 import sys
@@ -82,6 +83,19 @@ def req(method: str, path: str, payload=None):
                 time.sleep(2 * (attempt + 1))
                 continue
             sys.exit(f"{method} {path} -> {error}")
+
+
+def blob_payload(path: str) -> dict:
+    """The JSON body for `POST /git/blobs`, for a file of any kind.
+
+    Every blob used to be read as UTF-8 with `surrogateescape` and sent as `encoding: "utf-8"`. That
+    is lossless for text and corrupting for anything else: the first push carrying binaries -- two
+    screenshots -- produced remote blobs of 118 KB from files of 64 KB. base64 is exact for both, so
+    there is no branch here to get wrong.
+    """
+    with open(path, "rb") as handle:
+        raw = handle.read()
+    return {"content": base64.b64encode(raw).decode("ascii"), "encoding": "base64"}
 
 
 def git(*args: str) -> str:
@@ -162,13 +176,7 @@ def main() -> int:
             entries.append({"path": path, "mode": "100644", "type": "blob", "sha": None})
             print(f"  {path} -> deleted")
             continue
-        with open(path, "rb") as handle:
-            content = handle.read()
-        result = req(
-            "POST",
-            f"/repos/{REPO}/git/blobs",
-            {"content": content.decode("utf-8", errors="surrogateescape"), "encoding": "utf-8"},
-        )
+        result = req("POST", f"/repos/{REPO}/git/blobs", blob_payload(path))
         entries.append({"path": path, "mode": "100644", "type": "blob", "sha": result["sha"]})
         print(f"  {path} -> {result['sha'][:8]}")
 

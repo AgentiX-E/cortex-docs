@@ -30,6 +30,15 @@ does not lose anything and a different prompt does not resume this run.
 | `screen-card.png` | first card, sentence arm, 0 / 40 |
 | `screen-progress.png` | after six judgements: progress bar, and card 4 in the **atoms** arm — the alternation, visible |
 
+## A note on the two screenshots
+
+The first commit carrying them published **corrupted copies**: the push tool sent every blob as
+`encoding: "utf-8"` after reading it with `surrogateescape`, which is lossless for source code and
+lossy for a PNG (118 KB on the remote for a 64 KB file). Its verification caught the mismatch after
+the branch had moved, so the repair is this commit rather than an edit to that one. The tool now
+uploads base64 and verifies before publishing; the bug and the ordering flaw are recorded in
+`cortex/docs/04` and pinned by `tools/__tests__/test_push_blobs.py` in that repository.
+
 ## What this page is not
 
 - **It is not scored by the page.** `scoreA3` is the only implementation of the arithmetic, and the
