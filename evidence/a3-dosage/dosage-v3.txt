@@ -5,6 +5,6 @@
      0  no proposal at all
   treatment share: 5.0% of 20 (gate: 50%)
   profile: local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none
-  prompt: (unrecorded)
+  prompt: triage-proposer/v3
 
 GATE FAIL: 1/20 cards carry two or more atoms. Collecting clicks now would measure the model, not the presentation.

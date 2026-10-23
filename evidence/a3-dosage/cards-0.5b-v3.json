@@ -1,5 +1,5 @@
 {
-  "prepared": "2026-10-23T15:11:11.005Z",
+  "prepared": "2026-10-23T16:09:44.407Z",
   "cards": [
     {
       "cardId": "g00",
@@ -9,7 +9,8 @@
         "I just finished an online course on data analysis using Python",
         "So I'm interested in applying my new skills to improve my SEO strategies."
       ],
-      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none"
+      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none",
+      "promptVersion": "triage-proposer/v3"
     },
     {
       "cardId": "g02",
@@ -18,7 +19,8 @@
       "atoms": [
         "I have a few meetings scheduled at work, and I need to finish a report that's due by the end of the week."
       ],
-      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none"
+      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none",
+      "promptVersion": "triage-proposer/v3"
     },
     {
       "cardId": "g04",
@@ -27,7 +29,8 @@
       "atoms": [
         "I've been really enjoying editing my photos in Lightroom"
       ],
-      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none"
+      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none",
+      "promptVersion": "triage-proposer/v3"
     },
     {
       "cardId": "g05",
@@ -36,7 +39,8 @@
       "atoms": [
         "I think my favorite was the Fairmont Orchid."
       ],
-      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none"
+      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none",
+      "promptVersion": "triage-proposer/v3"
     },
     {
       "cardId": "g06",
@@ -45,7 +49,8 @@
       "atoms": [
         "I think I'll check out Joe's Tackle Shop's website before heading over to see what kind of fishing nets they have in stock."
       ],
-      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none"
+      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none",
+      "promptVersion": "triage-proposer/v3"
     },
     {
       "cardId": "g08",
@@ -54,7 +59,8 @@
       "atoms": [
         "I have a production facility on Poland that can produce high end climbing walls, climbing wooden volumes and all special interior a climbing or bouldering gym needs."
       ],
-      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none"
+      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none",
+      "promptVersion": "triage-proposer/v3"
     },
     {
       "cardId": "g09",
@@ -63,7 +69,8 @@
       "atoms": [
         "I must have gotten the festival name mixed up."
       ],
-      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none"
+      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none",
+      "promptVersion": "triage-proposer/v3"
     },
     {
       "cardId": "g10",
@@ -72,7 +79,8 @@
       "atoms": [
         "I've been tracking my social media analytics for a while now, and I've noticed that my Instagram account has been performing really well, with an average engagement rate of 5%"
       ],
-      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none"
+      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none",
+      "promptVersion": "triage-proposer/v3"
     },
     {
       "cardId": "g12",
@@ -81,7 +89,8 @@
       "atoms": [
         "I'll definitely keep an eye on the weather if I plan a trip during hurricane season."
       ],
-      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none"
+      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none",
+      "promptVersion": "triage-proposer/v3"
     },
     {
       "cardId": "g13",
@@ -90,7 +99,8 @@
       "atoms": [
         "I am planning a project in Nigeria that connects 100 rural villages to running water."
       ],
-      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none"
+      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none",
+      "promptVersion": "triage-proposer/v3"
     },
     {
       "cardId": "g17",
@@ -99,7 +109,8 @@
       "atoms": [
         "I did notice that my internet speed has been really good lately, especially when I'm streaming movies on Netflix."
       ],
-      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none"
+      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none",
+      "promptVersion": "triage-proposer/v3"
     },
     {
       "cardId": "g18",
@@ -108,7 +119,8 @@
       "atoms": [
         "By the way, speaking of TV shows, I also watch Brooklyn Nine-Nine during my lunch break at work."
       ],
-      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none"
+      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none",
+      "promptVersion": "triage-proposer/v3"
     },
     {
       "cardId": "g19",
@@ -117,7 +129,8 @@
       "atoms": [
         "I think I'd feel more confident hearing personal experiences from someone who has actually been to these restaurants."
       ],
-      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none"
+      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none",
+      "promptVersion": "triage-proposer/v3"
     },
     {
       "cardId": "g21",
@@ -126,7 +139,8 @@
       "atoms": [
         "I've enjoyed seeing the different interpretations of the character and the ways in which the films have addressed changing times and attitudes."
       ],
-      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none"
+      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none",
+      "promptVersion": "triage-proposer/v3"
     },
     {
       "cardId": "g22",
@@ -135,7 +149,8 @@
       "atoms": [
         "I'm thinking of setting up a dance club at work and I was wondering if you could help me come up with some ideas for a playlist to get us started."
       ],
-      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none"
+      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none",
+      "promptVersion": "triage-proposer/v3"
     },
     {
       "cardId": "g23",
@@ -144,7 +159,8 @@
       "atoms": [
         "I've been trying to get into a consistent morning routine, but it's tough when I have a lot on my plate at work."
       ],
-      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none"
+      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none",
+      "promptVersion": "triage-proposer/v3"
     },
     {
       "cardId": "g25",
@@ -153,7 +169,8 @@
       "atoms": [
         "I think personal interests and work-life balance are the most important factors for me."
       ],
-      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none"
+      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none",
+      "promptVersion": "triage-proposer/v3"
     },
     {
       "cardId": "g29",
@@ -162,7 +179,8 @@
       "atoms": [
         "I'm definitely going to have to visit all those spots."
       ],
-      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none"
+      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none",
+      "promptVersion": "triage-proposer/v3"
     },
     {
       "cardId": "g30",
@@ -171,7 +189,8 @@
       "atoms": [
         "I'm actually planning to make a classic California roll with crab and avocado, and then try out a new recipe with grilled eel and cucumber."
       ],
-      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none"
+      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none",
+      "promptVersion": "triage-proposer/v3"
     },
     {
       "cardId": "g32",
@@ -180,7 +199,8 @@
       "atoms": [
         "Since I've been listening to a lot of Billie Eilish lately, I was wondering if you could recommend some other artists or bands that have a similar sound or style."
       ],
-      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none"
+      "profile": "local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none",
+      "promptVersion": "triage-proposer/v3"
     }
   ]
 }

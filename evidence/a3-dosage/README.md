@@ -11,7 +11,7 @@ difference is one line of the prompt that says how to split a sentence.
 | file | what it is |
 |---|---|
 | `cards-0.5b-v2.json` | 20 cards, prompt `triage-proposer/v2` |
-| `cards-0.5b-v3.json` | the same 20 cards, prompt `triage-proposer/v3` (split rule only) |
+| `cards-0.5b-v3.json` | the same 20 cards, prompt `triage-proposer/v3` (split rule only; reverted) |
 | `dosage-v2.txt` | `dosage` output for the first |
 | `dosage-v3.txt` | `dosage` output for the second |
 | `network-nocall.json` | the `fetch` count during a real local proposal (load 0, infer 0) |
@@ -30,6 +30,12 @@ Both fail the gate, at exactly the same rate: **1 of 20 cards carries two or mor
 threshold 50%)**. Inside that tie, three cards moved in three different directions — one gained a
 split, one lost a split it used to have, one kept a leading clause it used to trim. Net zero is not
 "no change"; it is three changes that cancel.
+
+A second, larger sample agreed with the tie and then broke it on the aggregate: over the sixty
+labelled sentences, usable proposals went from **45/60 (v2)** to **41/60 (v3)**, paired at 5 versus 1
+discordant cards (exact McNemar p = 0.22 — not significant, and not in v3's favour). v3 was
+**reverted**, and both readings stay here: an experiment that failed is a result, and deleting the
+file would leave the claim untraceable.
 
 The conclusion the numbers support: at this size, under-splitting is **capacity**, not instruction.
 Writing the rule more forcefully does not buy the treatment. That is why the next step is a larger

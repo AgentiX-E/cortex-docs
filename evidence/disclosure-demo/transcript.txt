@@ -7,7 +7,7 @@ Store     two SQLite files (better-sqlite3): private.db, shared.db
 Model     onnx-community/Qwen2.5-0.5B-Instruct, dtype q4, greedy, 192-token cap
 Weights   https://hf-mirror.com (the public Hub is unreachable from this host; already cached, so no
           request is made during inference -- see evidence/a3-dosage/network-nocall.json)
-Prompt    triage-proposer/v3
+Prompt    triage-proposer/v2
 Profile   local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 inference-network=none
 
 Reproduce:
@@ -27,9 +27,10 @@ The last three are the output side and the configuration failure:
     is the assertion the replay script makes, because a silent downgrade would let a transcript claim
     an API model while a 0.5B model produced every atom.
 
-One thing to notice while reading: under prompt v3 this sentence yields **one atom**, where v2
-yielded three (`docs/04` section 9.17 has both runs). The gates are indifferent -- all three are
-grounded, one is too -- which is the boundary of what a gate can promise.
+Two things to notice while reading. The profile line is printed before the proposal, because a
+transcript that does not name its configuration cannot be compared with another one. And this
+sentence yields **three** atoms: prompt v3 was tried here and produced one (docs/04 section 9.17
+records both runs and why v3 was reverted).
 
 -------------------------------------------------------------------------------
 
@@ -55,8 +56,10 @@ $ node tools/triage-demo.mjs --home /tmp/cortex-demo propose c4 --llm local
 profile: local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 weights=https://hf-mirror.com inference-network=none
 c4  proposed  No rule recognised this sentence, so it is stored privately. Publishing it is your decision.
     text: By the way, I've been really enjoying editing my photos in Lightroom - the online communities I've joined have been super helpful in learning new techniques and getting feedback on my work.
-    offered (triage-proposer/v3, onnx-community/Qwen2.5-0.5B-Instruct):
+    offered (triage-proposer/v2, onnx-community/Qwen2.5-0.5B-Instruct):
       [0] I've been really enjoying editing my photos in Lightroom
+      [1] the online communities I've joined have been super helpful
+      [2] in learning new techniques and getting feedback on my work.
 
 $ node tools/triage-demo.mjs --home /tmp/cortex-demo accept c4 --atom 0
 c4  edited  published: I've been really enjoying editing my photos in Lightroom
@@ -98,6 +101,6 @@ $ node tools/triage-demo.mjs --home /tmp/cortex-demo export
 | id | state | reason | text | source | proposed |
 |---|---|---|---|---|---|
 | `c1` | proposed | No rule recognised this sentence, so it is stored privately. Publishing it is your decision. | I moved to Berlin in March and now I work at Acme on the payments team. |  |  |
-| `c4` | edited | No rule recognised this sentence, so it is stored privately. Publishing it is your decision. | I've been really enjoying editing my photos in Lightroom | By the way, I've been really enjoying editing my photos in Lightroom - the online communities I've joined have been super helpful in learning new techniques and getting feedback on my work. | I've been really enjoying editing my photos in Lightroom (0 withheld) |
+| `c4` | edited | No rule recognised this sentence, so it is stored privately. Publishing it is your decision. | I've been really enjoying editing my photos in Lightroom | By the way, I've been really enjoying editing my photos in Lightroom - the online communities I've joined have been super helpful in learning new techniques and getting feedback on my work. | I've been really enjoying editing my photos in Lightroom; the online communities I've joined have been super helpful; in learning new techniques and getting feedback on my work. (0 withheld) |
 
 
