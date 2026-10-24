@@ -933,6 +933,97 @@ v4  I edit my photos in Lightroom.
 它分不清"把句子自己的主张剥离出来"和"把句子切一半"。要压到 0% 就得允许同义替换，而那正是这道闸
 存在的理由。这个上限写在文档里，而不是留给下一次读数去发现。
 
+### 5.5.6 实现（第 28 步）：关系必须被表示 —— 类型化事实、许可边，与三行块
+
+§5.5.5 解决的是"原子是不是提炼出来的事实"。它没解决另一半，而另一半是评审人在同一句话里说的：
+
+> "将一句话拆成 2 个原子前端导致它们之间的（因果）关系丢失了……其实两者都不理想不是吗？"
+
+**这不是提示词问题，是结构问题。** 关系由连接词承担，而连接词不属于任何一半，所以句子一拆，
+它就没有地方可去——按构造丢失，不是模型失误。
+
+#### 数据模型：四层，每层对应一类失真
+
+```
+Frame   原句，逐字保留，永不改写          ← 价值层（读者判断的依据、审计的对照物）
+  └ Fact   类型化、自包含的断言 + 槽位      ← 决策层（卡片显示与发布的对象）
+      └ Edge   类型化、有向、可定位 span    ← 关系层（拆开后唯一能救回关系的东西）
+```
+
+| 层 | 字段要点 | 它关掉的失真 |
+|---|---|---|
+| `KnowledgeFrame` | `text`（逐字）、`speaker?`、`at?`、`sessionId?` | 原子替换原句后，"他们真的这么说过吗"无法回答（`g05` 丢掉"每家都有可取之处"）|
+| `KnowledgeFact` | `type`（九种）、`polarity`、`modality`、`sourceSpan`（**由词算，不由模型报**）、`references`（借词回执）、`subject?`/`predicate?`/`at?` | 事实被当成无类型字符串：计划被当成已发生、偏好被当成事件、新值无法取代旧值 |
+| `KnowledgeEdge` | `type`（十一种）、`origin`（`extracted`/`derived`）、`marker?`、`evidenceSpan?` | 关系无处安放（`g00` 的 so、`g30` 的 then、`g23` 的 but）|
+
+`origin` 是审计的铰链：`extracted` 边读自句子、可对 span 复核；`derived` 边由结构化字段算出、
+可重算。**没有第三种来源**——"模型觉得它们相关"就是相似边，而相似边在唯一的对照实验里
+（arXiv 2601.01280）**比扁平索引更差**。
+
+#### 许可表：因果幻觉闸门
+
+| 标记类别 | 允许创建的边 | 明确禁止 |
+|---|---|---|
+| causal（so/because/due to…） | `causes` / `enables` / `prevents` | — |
+| temporal（then/after/before…） | `before` / `after` / `during` | **`causes`** |
+| conditional（if/unless/in case…） | `condition` | 因果 |
+| contrast（but/although/instead…） | `contrast` | 因果 |
+
+**`temporal` 不许可 `causes`** 是这张表存在的主要理由：事件因果识别综述（ACM CSUR 2026）把
+"把 A 然后 B 读成 A 导致 B"命名为**因果幻觉**，并指为当前模型的主导失败。无显式标记则不建边——
+放弃的召回是我们无法审计的召回。
+
+#### 闸门：每个标记要么被边许可，要么被它所在的事实限定，要么这一刀不切
+
+`buildKnowledgeUnit(input)` 返回 `{ok, unit}` 或 `{ok:false, problem}`，**fail-closed**：
+
+1. 每条事实过 `checkFact`：文本非空、`frameId` 一致、span 是帧内的合法区间、三个封闭词表运行时校验
+   （`type`/`polarity`/`modality`——从 JSON 反序列化来的东西 TypeScript 拦不住）。
+2. 每条事实过 `contentGroundedIn(text, [frame, ...context])`：可删除、可改写、可用词形变化；
+   可**借用**上文声明过的实体，但每个借来的词必须写进 `references`，且 **否定只能取自 frame**
+   （借别人的 not 会把断言反过来）。
+3. 每条边过 `checkEdge`：类型合法、非自环、端点存在、`extracted` 必须带许可的 marker 且 span
+   **覆盖**该 marker、`derived` 只能是三种派生类型。
+4. 帧里的每个连接词必须被认领：被某条边用过，或被某条事实的文本包含，或被一条 `relation` 类型
+   的事实"兑现"（`g04` 形态，每条事实只能兑现一个）。剩余即 `unresolved`；`strict` 下拒绝，
+   `record` 下只记录（迁移用）。
+
+#### 交付形态：三行块
+
+```
+frame:    "…I just finished an online course …, so I'm interested in …"
+fact:     I just finished an online course on data analysis using Python.  [event]
+relation: -> causes -> g00#1  (marker: "so")
+fact:     I am interested in applying my new skills to improve my SEO strategies.  [event]
+relation: <- causes <- g00#0  (marker: "so")
+```
+
+原句一次、关系用 id 指另一端。`g00` 实测 **107 token**，相同内容做成两个自包含块是 **180**（−40.6%）。
+这正是对"两者都不理想"的回答：读者拿到原子的精度、拆开时丢掉的关系、以及判断所需的原句。
+
+#### 检索：四路 + RRF + 预算，且不建相似边
+
+`dense(原子+上下文头) ⊕ BM25(原子+上下文头) ⊕ 类型化 1 跳 ⊕ 时间过滤` → RRF(k=60) → 可选 rerank →
+**token 预算**（而非 top-K）。三条硬约束：不建相似边（负结果）；**不沿 `supersedes` 扩展**（走进被取代的
+事实正是"读到旧值"的成因），被取代的事实可召回但**就地标注** `status: superseded by …`；上下文头只用于
+索引，不进正文。
+
+#### 读数（20 对，无模型）
+
+| 量 | 值 |
+|---|---|
+| `strict` 接受 | **15 / 20** |
+| 拒绝（未认领标记） | **5**：`g00` so、`g05` but、`g23` but、`g30` then、`g32` since |
+| 关系命题 | 全 20 对里 **1** 条（`g04`）|
+| 600 token 预算 | 15 个单元放 **8** 个（591 token）|
+
+**闸门拒绝的五张，与普查标出的五张逐一对应。** 诚实边界：`g06` 通过，但它的 `before` 只限定第一个
+原子、两原子间的顺序仍未被说出——普查把同一件事记成假阴性，**两个工具在同一方向上同时错**，
+所以这是地板，不是证明。
+
+**未做**：LongMemEval-S A/B 未跑（A7 就是为验证它）；`triage-proposer/v4` 未改（它是评审人判过的版本，
+同轮既改闸门又改提示词会让两个读数都不可归因）；`elaborates`/`same-entity` 有类型无生产者。
+
 ### 5.5.3 实现（第 16 步）：把采集做成一个文件，然后关掉它自己的三处漏洞
 
 第 13–15 步把 A3 的判据、算术、协议、剂量全部做完了，**一次读数都没有**。原因是采集界面：一个终端

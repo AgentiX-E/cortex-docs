@@ -1,0 +1,17 @@
+pairs measured            20
+frames with a marker      9
+  lost entirely           4
+  lost in part            1
+  loss share              55.6%
+relational atoms present  g04
+copied frames             none
+
+g00  n=2  LOST  markers=['causal:so']  lost=['causal:so']
+g05  n=1  LOST  markers=['contrast:but']  lost=['contrast:but']
+g06  n=2   ok   markers=['temporal:before']  lost=[]
+g12  n=1   ok   markers=['conditional:if', 'temporal:during']  lost=[]
+g17  n=2   ok   markers=['temporal:when']  lost=[]
+g18  n=1   ok   markers=['temporal:during']  lost=[]
+g23  n=2  PART  markers=['contrast:but', 'temporal:when']  lost=['contrast:but']
+g30  n=2  LOST  markers=['temporal:then']  lost=['temporal:then']
+g32  n=1  LOST  markers=['causal:since']  lost=['causal:since']

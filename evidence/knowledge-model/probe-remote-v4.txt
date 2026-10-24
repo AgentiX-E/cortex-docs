@@ -1,0 +1,27 @@
+pairs                       20
+accepted as split (strict)  15 (75%)
+unresolved markers          5
+  refused: unresolved-marker × 5
+
+where the relations were lost
+  g00: so
+  g05: but
+  g23: but
+  g30: then
+  g32: since
+
+repaired unit (g00, marker "so" → causes)
+  frame:    "By the way, I just finished an online course on data analysis using Python, so I'm interested in applying my new skills to improve my SEO strategies."
+  fact:     I just finished an online course on data analysis using Python.  [event]
+  relation: -> causes -> g00#1  (marker: "so")
+  fact:     I am interested in applying my new skills to improve my SEO strategies.  [event]
+  relation: <- causes <- g00#0  (marker: "so")
+  107 tokens grouped, 180 tokens as 2 self-contained blocks
+  relations declared by the sentence: causal
+  1-hop from g00#0: g00#1 via causes
+
+knowledge update
+  supersedes:k2>k1 (origin: derived, no marker, no span: nothing to cite)
+
+budget 600 tokens over 15 units
+  kept 8 (591 tokens), skipped 7
