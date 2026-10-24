@@ -1,6 +1,6 @@
 # The disclosure chain, recorded
 
-One file: `transcript.txt`, the output of fourteen separate process invocations of
+One file: `transcript.txt`, the output of eighteen separate process invocations of
 `tools/triage-demo.mjs` against two real SQLite files and a real 0.5B on-device model.
 `replay.sh` is the exact sequence, so the file can be regenerated rather than trusted.
 
@@ -14,7 +14,10 @@ One file: `transcript.txt`, the output of fourteen separate process invocations 
    `proposed` (what the model offered) — the three things an auditor asks in order.
 5. Asking for the remote backend with no key **fails** with the names of the three variables, and
    does not fall back to the checkpoint.
-6. A draft for a shared task that copies a private sentence is **blocked** (an echo), and
+6. A sentence a rule kept private can be **released** by its owner -- with the rule quoted at them
+   first, a token typed, and a record left in a table of its own. Without the token the release is
+   refused; the transcript shows both attempts.
+7. A draft for a shared task that copies a private sentence is **blocked** (an echo), and
    the same draft for a private task is **clear** — the owner may hear their own memory.
    A shared draft that cites a published fact is clear; one that cites nothing is not.
 

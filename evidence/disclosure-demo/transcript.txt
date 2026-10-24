@@ -1,12 +1,12 @@
 Disclosure chain, end to end, one process per command
 =====================================================
 
-Date      2026-10-23
+Date      2026-10-24
 Host      Linux x64, Node 22.13.1
 Store     two SQLite files (better-sqlite3): private.db, shared.db
 Model     onnx-community/Qwen2.5-0.5B-Instruct, dtype q4, greedy, 192-token cap
-Weights   https://hf-mirror.com (the public Hub is unreachable from this host; already cached, so no
-          request is made during inference -- see evidence/a3-dosage/network-nocall.json)
+Weights   https://hf-mirror.com (already cached: no request during inference -- see
+          evidence/a3-dosage/network-nocall.json)
 Prompt    triage-proposer/v2
 Profile   local onnx-community/Qwen2.5-0.5B-Instruct dtype=q4 inference-network=none
 
@@ -15,22 +15,25 @@ Reproduce:
     pnpm -r build
     bash evidence/disclosure-demo/replay.sh          # in the cortex repository
 
-The script below is the exact sequence that produced this file. Fourteen invocations, each its own
+The script below is the exact sequence that produced this file. Eighteen invocations, each its own
 process, so the state has to be on disk for the next one to see it. The only step that loads a model
 is `propose`.
 
-The last three are the output side and the configuration failure:
+What each group shows:
 
-  * `check <task> "<draft>"` runs O1 (the rule table), O2 (citations) and O3 (verbatim echo) over a
-    draft, using the same stores that wrote it;
-  * `propose c4 --llm remote` with no key **fails** -- it does not fall back to the checkpoint. That
-    is the assertion the replay script makes, because a silent downgrade would let a transcript claim
-    an API model while a 0.5B model produced every atom.
+  * `say` + `cards` + `propose` + `accept` -- a credential is never stored, a sentence the rules
+    already answered never becomes a question, and a deferred sentence's atoms are published one at
+    a time;
+  * `check <task> "<draft>"` -- O1, O2 and O3 over a draft, using the same stores that wrote it;
+  * `release <id>` -- the door out of the private store for a sentence a rule kept private. The first
+    attempt has no token and is refused with the rule and its policy; the second carries the token and
+    leaves a record in its own table;
+  * `propose --llm remote` without a key -- an error, not a fallback to the checkpoint.
 
 Two things to notice while reading. The profile line is printed before the proposal, because a
-transcript that does not name its configuration cannot be compared with another one. And this
-sentence yields **three** atoms: prompt v3 was tried here and produced one (docs/04 section 9.17
-records both runs and why v3 was reverted).
+transcript that does not name its configuration cannot be compared with another one. And the release
+warning names the rule and quotes the policy *before* the token is accepted: an override that is
+merely a click is not an override, it is a mis-click.
 
 -------------------------------------------------------------------------------
 
@@ -89,6 +92,29 @@ clear  (0 finding(s)) for a shared task
 $ node tools/triage-demo.mjs --home /tmp/cortex-demo check shared The project plan moves to Thursday.
 blocked  (1 finding(s)) for a shared task
   unattributed: 
+
+$ node tools/triage-demo.mjs --home /tmp/cortex-demo say My therapist moved me to a new medication last week. --id c5
+c5  stored private  (rule: health)
+no question: the rules already answered it.
+
+$ node tools/triage-demo.mjs --home /tmp/cortex-demo release c5
+releasing "c5": rule "health" would keep this private.
+  policy: body, diagnosis, medication, diet, exercise, measurements
+  the override is recorded against this row and is permanent for this wording; after it,
+  shared tasks can read the sentence below.
+  text: My therapist moved me to a new medication last week.
+to proceed, pass acknowledge: "rule-override"
+
+$ node tools/triage-demo.mjs --home /tmp/cortex-demo release c5 --acknowledge rule-override
+released c5: rule health overridden
+  policy: body, diagnosis, medication, diet, exercise, measurements
+  digest: sha-256 0d6b2338397ded02…
+  recorded at 2026-10-24T01:25:33.724Z
+
+$ node tools/triage-demo.mjs --home /tmp/cortex-demo releases
+1 override(s)
+  c5  health  complete  0d6b2338397d…
+      My therapist moved me to a new medication last week.
 
 $ node tools/triage-demo.mjs --home /tmp/cortex-demo propose c4 --llm remote
 configuration: the remote backend needs CORTEX_LLM_MODEL, CORTEX_LLM_BASE_URL, CORTEX_LLM_API_KEY: this repository never stores a key, so it can only come from the environment. Use backend "local" for a run that makes no API call.

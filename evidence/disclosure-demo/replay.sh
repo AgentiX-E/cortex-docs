@@ -24,6 +24,16 @@ $RUN check shared "Here is what I remember: I moved to Berlin in March and now I
 $RUN check private "You told me: I moved to Berlin in March and now I work at Acme on the payments team."
 $RUN check shared 'The project plan moves to Thursday [[c3]].'
 $RUN check shared 'The project plan moves to Thursday.'
+# A rule the owner disagrees with: the refusal names the rule and its policy, and the release that
+# follows is recorded in its own table rather than in the cards.
+$RUN say 'My therapist moved me to a new medication last week.' --id c5
+if $RUN release c5; then
+  echo 'unexpected: a release without the acknowledgement token was allowed' >&2
+  exit 1
+fi
+$RUN release c5 --acknowledge rule-override
+$RUN releases
+
 # The remote backend with no key: an error, not a downgrade to the local model. Asserted rather than
 # tolerated, so the transcript cannot show a run that quietly used the checkpoint while claiming a
 # provider.
