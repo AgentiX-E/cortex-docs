@@ -1769,6 +1769,7 @@ WH 词开头、至少三个词）、`claimsIn`。`CardQueue.open` 用它的结�
 | 断言闸（第 18 步） | `core/src/triage/claims.ts`：`splitSentences` / `isClaim` / `claimsIn`；`card.ts` 的 `open` 用它设定 `text`、为空则不建卡；`accept` 在文本被截短时先 `revise` 重判 |
 | 体量读数 | `core/test/card-volume/run.mjs` + `corpus.json`（十个证据窗口）+ `result.json`（全量与样本两栏）；`docs/MEASURE-CARD-VOLUME.md` 记录方法与边界 |
 | 台账 | `rebuild-export-census-baseline.py` 新增"THE CLAIMS GATE"理由段；新增 1 条孤儿、2 条获得调用方 |
+| 演示 | `tools/triage-demo.mjs`：`say` 的 `null` 现在分两种打印——规则已判（rule: family / shared）与"这一轮没有断言"；同一句提示语说两种原因是 CLI 在撒谎 |
 
 ### 10.2 下轮计划（按依赖排序）
 
