@@ -1,0 +1,9 @@
+20 pair(s), 1 discordant
+  source  17/20 accepted (85.0%, 95% CI 64.0-94.8%), 0 edited, median 6605 ms
+  atoms   16/20 accepted (80.0%, 95% CI 58.4-91.9%), 1 edited, median 10414 ms
+  delta -5.0pp, exact McNemar p=1.0000
+  position 20/20 pair(s) took longer on the first showing (median 21948 ms vs 2446 ms)
+           the arm medians above are confounded by position: reading a card is the cost,
+           so compare arms within a position, not across them
+
+NO-DIFFERENCE: atoms won 0 and lost 1 of 20 pair(s), -5.0pp, p=1.0000; the criterion wants both p<0.05 and |delta| >= 10pp

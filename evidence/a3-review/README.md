@@ -67,6 +67,63 @@ node tools/a3-review.mjs score --decisions a3-decisions.jsonl
 Progress is kept in `localStorage` under a key that includes the prompt version, so closing the tab
 does not lose anything and a different prompt does not resume this run.
 
+## The result (one reviewer, one pass, 2026-10-24)
+
+`decisions-remote.jsonl` is the export exactly as it came out of the page; `score-remote.txt` is the
+verbatim output of `node tools/a3-review.mjs score --decisions decisions-remote.jsonl`.
+
+```
+20 pair(s), 1 discordant
+  source  17/20 accepted (85.0%, 95% CI 64.0-94.8%), 0 edited
+  atoms   16/20 accepted (80.0%, 95% CI 58.4-91.9%), 1 edited
+  delta -5.0pp, exact McNemar p=1.0000
+NO-DIFFERENCE
+```
+
+The verdict is the pre-registered one: `no-difference` was the expected outcome, and it is a result,
+not a failure. With one discordant pair no exact McNemar can reach 0.05, so what this run establishes
+is an **upper bound on the effect**, not an estimate of one.
+
+### Split by whether the treatment actually fired
+
+The dosage gate says 15 of the 20 cards carry two or more atoms; the other 5 show the same text
+twice. That split is worth reporting, because the two halves answer different questions.
+
+| Cards | n | accepted: sentence | accepted: atoms |
+| --- | --- | --- | --- |
+| the arms differ (the treatment) | 15 | **15** | **14** |
+| the arms are the same text (a control nobody planned) | 5 | 2 | 2 |
+
+- **The five identical pairs produced zero disagreements.** That is not evidence about atoms, and it is
+  the most useful sanity check in the file: where the stimulus was literally the same twice, the
+  reviewer gave the same answer twice.
+- **Fifteen of fifteen split cards were accepted as a sentence; fourteen as atoms.** The single loss
+  is `g04`, and the reason is visible in the proposal: the model cut
+  *"By the way, I've been really enjoying editing my photos in Lightroom - the online communities I've
+  joined have been super helpful…"* into three pieces, the last of which is
+  *"getting feedback on my work"* — a fragment with no subject. Rejecting the atom set for containing
+  a non-sentence is the rubric working as written.
+
+### What the acceptance rate cannot see
+
+85% against 80% is close to the ceiling, so this instrument cannot discriminate on a corpus where a
+reviewer accepts almost everything. The signal that did appear is qualitative and points the other
+way from "atoms are better": **splitting can manufacture a fragment, and a fragment loses the whole
+card.** That suggests the next instrument should ask about the atoms themselves (does any atom fail to
+be a claim?) rather than about the card's fate — recorded as a gap, not implemented here.
+
+### One measurement defect the timing exposed
+
+The score output prints a per-arm median elapsed time, and on this dataset it read
+**6,605 ms (sentence) against 10,414 ms (atoms)** — which invites "atoms take longer to judge". The
+timing says something else: the **first** showing took longer in **20 of 20** pairs, at a median of
+21,948 ms against 2,446 ms. Reading a card is the cost; the second showing is a re-read.
+
+The alternating order keeps that out of the verdict (both arms occupy the first position ten times),
+but it does not make the per-arm median comparable — with ten cards per position, one slow card
+landing in the atoms-first half moves that median by seconds. `positionEffect` now computes the
+position split and the score output prints it beside the arm medians, labelled rather than suppressed.
+
 ## What the screenshots show
 
 | file | what it is |
