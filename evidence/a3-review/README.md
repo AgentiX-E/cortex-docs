@@ -11,10 +11,54 @@ model split it into. Order alternates by index, so a fatigue effect lands on bot
 ## What a reviewer does
 
 1. Open the file.
-2. For each card: **accept** if a colleague reading it would know what to do; **dismiss** if not;
-   **accept with edits** and retype anything you would change; **skip** to leave it out.
+2. For each card, answer **twice** — the same card comes back once as a paragraph and once as a list.
 3. At the end, download the JSONL (or copy it out of the textarea).
 4. Score it:
+
+## The four buttons, and what each one is for
+
+The question on every card is the same: **would a colleague be able to act on this, or could you
+answer a question from it, as written?** The buttons differ only in what is wrong.
+
+| Button | When | Example |
+| --- | --- | --- |
+| **Accept** (a) | Content is right and the wording is shippable. Complete, has a subject, sounds like you. | *"I work at Acme on the payments team, and I moved to Berlin in March."* |
+| **Accept with edits** (e) | The content is worth keeping and the **wording** is not: filler at the front, two facts welded together, a pronoun with no referent, a fragment with no verb. Type the version you would keep, press Enter. | *"By the way, I've been really enjoying editing my photos in Lightroom - the online communities have been super helpful."* -> *"I edit photos in Lightroom and I am active in online photo-editing communities."* |
+| **Dismiss** (d) | Nothing worth keeping, or nothing a colleague could use: a reaction, a pleasantry, a request you made of your assistant, a restatement of what the assistant just said, or something so vague it carries no information. | *"Thank you, that's really helpful!"* / *"Can you write the texts for the presentation ?"* (a task you gave the assistant, not a fact about you) |
+| **Skip** (s) | You genuinely cannot judge: no context, or it is the same statement as an earlier card. **A skip costs the pair** — pairs are only scored when both presentations were judged, so N shrinks and the report says so. | A fragment like *"and the same for the other one"* with nothing before it |
+
+Two rules that matter more than the labels:
+
+- **Judge each showing on its own.** Do not try to remember what you said about the first one; the
+  point of A3 is whether the presentation changes your decision, so a consistency check between the
+  two showings would erase the effect being measured.
+- **Do not try to guess which side the model wrote.** You will notice (one is a paragraph, one is a
+  list) — that is a known limit of this measurement, recorded as such. Use the same standard on both.
+
+## Redoing and resetting
+
+The bar at the top of the page holds two controls, available from the first card to the last:
+
+- **Undo last** — takes back the most recent judgement (or skip) and shows that card again.
+- **Start over** — discards every judgement **recorded in this browser** for this prompt version, after
+  a confirmation.
+
+Progress is kept under a key that includes the prompt version, so a different prompt does not resume
+this run, and closing the tab loses nothing. `Undo` and `Start over` were added after the first
+attempt: both used to live inside the finish screen, which — see below — was never displayed.
+
+## Two defects the first attempt found
+
+The finish screen carried `.done{display:none}` in its stylesheet while the script revealed it with
+`el.done.hidden = false`; an attribute cannot beat a class rule, so the fortieth click cleared the card
+body and left **a blank page**. The step-16 end-to-end test passed anyway, because it read the hidden
+textarea — reading a value is not clicking a button.
+
+Because `Start over` lived inside that section, a person who wanted to start again at card seven had
+no control at all. Both are fixed, and both are now covered by
+`packages/cortex-eval/test/review-page/probe.mjs`, which drives a real Chromium and measures
+`offsetHeight` rather than text (17 checks, with two injections confirming each check bites). The
+record is `cortex/docs/FIX-REVIEW-PAGE-REDO.md`.
 
 ```
 node tools/a3-review.mjs score --decisions a3-decisions.jsonl
