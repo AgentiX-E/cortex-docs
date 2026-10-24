@@ -1,0 +1,7 @@
+20 pair(s), 0 discordant
+  source  19/20 accepted (95.0%, 95% CI 76.4-99.1%), 9 edited, median 8276 ms
+  atoms   19/20 accepted (95.0%, 95% CI 76.4-99.1%), 0 edited, median 4554 ms
+  delta 0.0pp, exact McNemar p=1.0000
+  position 10/20 pair(s) took longer on the first showing (median 7110 ms vs 4569 ms)
+
+NO-DIFFERENCE: atoms won 0 and lost 0 of 20 pair(s), 0.0pp, p=1.0000; the criterion wants both p<0.05 and |delta| >= 10pp
