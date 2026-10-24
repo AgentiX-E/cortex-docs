@@ -5,11 +5,11 @@ wrote /home/runner/work/cortex/cortex/readings/live-result-remote.json
   "profile": "remote deepseek-chat base=https://api.deepseek.com/v1 inference-network=required",
   "promptVersion": "triage-proposer/v4",
   "sentences": 60,
-  "proposed": 45,
-  "factsKept": 73,
-  "candidates": 82,
-  "withheld": 29,
-  "secondsPerSentence": 0.91,
+  "proposed": 41,
+  "factsKept": 69,
+  "candidates": 79,
+  "withheld": 27,
+  "secondsPerSentence": 0.97,
   "outcomes": [
     [
       "failed:all-withheld",
@@ -17,11 +17,11 @@ wrote /home/runner/work/cortex/cortex/readings/live-result-remote.json
     ],
     [
       "failed:empty",
-      4
+      8
     ],
     [
       "proposed",
-      45
+      41
     ]
   ],
   "withheldReasons": [
@@ -34,16 +34,26 @@ wrote /home/runner/work/cortex/cortex/readings/live-result-remote.json
       1
     ],
     [
-      "rule:family",
-      1
-    ],
-    [
       "rule:health",
       13
     ],
     [
       "rule:money",
-      6
+      5
+    ]
+  ],
+  "inventedWords": [
+    [
+      "contains",
+      2
+    ],
+    [
+      "want",
+      2
+    ],
+    [
+      "bought",
+      1
     ]
   ]
 }

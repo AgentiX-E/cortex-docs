@@ -1,5 +1,5 @@
 {
-  "prepared": "2026-10-24T07:22:26.373Z",
+  "prepared": "2026-10-24T08:27:09.828Z",
   "cards": [
     {
       "cardId": "g00",
@@ -9,7 +9,7 @@
         "I just finished an online course on data analysis using Python.",
         "I am interested in applying my new skills to improve my SEO strategies."
       ],
-      "verbatimAtoms": 1,
+      "verbatimAtoms": 2,
       "timeKept": null,
       "profile": "remote deepseek-chat base=https://api.deepseek.com/v1 inference-network=required",
       "promptVersion": "triage-proposer/v4"
@@ -20,7 +20,7 @@
       "source": "I have a few meetings scheduled at work, and I need to finish a report that's due by the end of the week.",
       "atoms": [
         "I have a few meetings scheduled at work.",
-        "I need to finish a report that is due by the end of the week."
+        "I need to finish a report due by the end of the week."
       ],
       "verbatimAtoms": 1,
       "timeKept": true,
@@ -33,7 +33,8 @@
       "source": "By the way, I've been really enjoying editing my photos in Lightroom - the online communities I've joined have been super helpful in learning new techniques and getting feedback on my work.",
       "atoms": [
         "I edit my photos in Lightroom.",
-        "I joined online communities that help me learn new techniques."
+        "I joined online communities.",
+        "Online communities help me learn new techniques."
       ],
       "verbatimAtoms": 0,
       "timeKept": null,
@@ -45,9 +46,9 @@
       "gold": "defer",
       "source": "Each had its own unique charm, but I think my favorite was the Fairmont Orchid.",
       "atoms": [
-        "My favorite was the Fairmont Orchid."
+        "The Fairmont Orchid was my favorite."
       ],
-      "verbatimAtoms": 1,
+      "verbatimAtoms": 0,
       "timeKept": null,
       "profile": "remote deepseek-chat base=https://api.deepseek.com/v1 inference-network=required",
       "promptVersion": "triage-proposer/v4"
@@ -57,7 +58,8 @@
       "gold": "defer",
       "source": "I think I'll check out Joe's Tackle Shop's website before heading over to see what kind of fishing nets they have in stock.",
       "atoms": [
-        "I will check Joe's Tackle Shop's website before heading over to see what kind of fishing nets they have in stock."
+        "I will check Joe's Tackle Shop's website before heading over.",
+        "I will see what kind of fishing nets Joe's Tackle Shop has in stock."
       ],
       "verbatimAtoms": 0,
       "timeKept": null,
@@ -83,10 +85,8 @@
       "cardId": "g09",
       "gold": "defer",
       "source": "Yeah, I must have gotten the festival name mixed up.",
-      "atoms": [
-        "I must have gotten the festival name mixed up."
-      ],
-      "verbatimAtoms": 1,
+      "atoms": [],
+      "verbatimAtoms": 0,
       "timeKept": null,
       "profile": "remote deepseek-chat base=https://api.deepseek.com/v1 inference-network=required",
       "promptVersion": "triage-proposer/v4"
@@ -96,11 +96,10 @@
       "gold": "defer",
       "source": "I've been tracking my social media analytics for a while now, and I've noticed that my Instagram account has been performing really well, with an average engagement rate of 5%.",
       "atoms": [
-        "I have been tracking my social media analytics for a while.",
-        "My Instagram account has been performing really well.",
+        "I track my social media analytics.",
         "My Instagram account has an average engagement rate of 5%."
       ],
-      "verbatimAtoms": 1,
+      "verbatimAtoms": 0,
       "timeKept": false,
       "profile": "remote deepseek-chat base=https://api.deepseek.com/v1 inference-network=required",
       "promptVersion": "triage-proposer/v4"
@@ -162,7 +161,7 @@
       "atoms": [
         "I would feel more confident hearing personal experiences from someone who has actually been to these restaurants."
       ],
-      "verbatimAtoms": 0,
+      "verbatimAtoms": 1,
       "timeKept": null,
       "profile": "remote deepseek-chat base=https://api.deepseek.com/v1 inference-network=required",
       "promptVersion": "triage-proposer/v4"
@@ -173,9 +172,9 @@
       "source": "I've enjoyed seeing the different interpretations of the character and the ways in which the films have addressed changing times and attitudes.",
       "atoms": [
         "I have enjoyed seeing the different interpretations of the character.",
-        "I have enjoyed seeing the ways the films have addressed changing times and attitudes."
+        "I have enjoyed seeing the ways in which the films have addressed changing times and attitudes."
       ],
-      "verbatimAtoms": 0,
+      "verbatimAtoms": 1,
       "timeKept": null,
       "profile": "remote deepseek-chat base=https://api.deepseek.com/v1 inference-network=required",
       "promptVersion": "triage-proposer/v4"
@@ -187,7 +186,7 @@
       "atoms": [
         "I am thinking of setting up a dance club at work."
       ],
-      "verbatimAtoms": 0,
+      "verbatimAtoms": 1,
       "timeKept": null,
       "profile": "remote deepseek-chat base=https://api.deepseek.com/v1 inference-network=required",
       "promptVersion": "triage-proposer/v4"
@@ -198,9 +197,9 @@
       "source": "I've been trying to get into a consistent morning routine, but it's tough when I have a lot on my plate at work.",
       "atoms": [
         "I have been trying to get into a consistent morning routine.",
-        "A consistent morning routine is tough when I have a lot on my plate at work."
+        "Getting into a consistent morning routine is tough when I have a lot on my plate at work."
       ],
-      "verbatimAtoms": 0,
+      "verbatimAtoms": 1,
       "timeKept": true,
       "profile": "remote deepseek-chat base=https://api.deepseek.com/v1 inference-network=required",
       "promptVersion": "triage-proposer/v4"
@@ -223,9 +222,9 @@
       "gold": "defer",
       "source": "I'm definitely going to have to visit all those spots.",
       "atoms": [
-        "I am going to visit all those spots."
+        "I am definitely going to have to visit all those spots."
       ],
-      "verbatimAtoms": 0,
+      "verbatimAtoms": 1,
       "timeKept": null,
       "profile": "remote deepseek-chat base=https://api.deepseek.com/v1 inference-network=required",
       "promptVersion": "triage-proposer/v4"
@@ -250,8 +249,21 @@
       "atoms": [
         "I have been listening to a lot of Billie Eilish lately."
       ],
-      "verbatimAtoms": 0,
+      "verbatimAtoms": 1,
       "timeKept": true,
+      "profile": "remote deepseek-chat base=https://api.deepseek.com/v1 inference-network=required",
+      "promptVersion": "triage-proposer/v4"
+    },
+    {
+      "cardId": "g33",
+      "gold": "defer",
+      "source": "I'm planning to start at the Steep Ravine Trailhead and take the Dipsea Trail to the summit of Mount Tamalpais.",
+      "atoms": [
+        "I am planning to start at the Steep Ravine Trailhead.",
+        "I am planning to take the Dipsea Trail to the summit of Mount Tamalpais."
+      ],
+      "verbatimAtoms": 1,
+      "timeKept": null,
       "profile": "remote deepseek-chat base=https://api.deepseek.com/v1 inference-network=required",
       "promptVersion": "triage-proposer/v4"
     }
