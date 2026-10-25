@@ -2715,6 +2715,15 @@ fulfil         100.0%      0.0pp   plan
 `fulfil` 根本没被问到。两者属于**状态正确性**而非本集上的答案正确性——`describePlan` 与 `planFactor`
 会读它们，永久 `pending` 的计划会被反复端出来。**表里明说这个集测不出它们的价格，就不假装测出来了。**
 
+#### 五点五、一处被这轮接线证明的事
+
+写 `tools/competitor-harness.mjs` 的时候，导出普查里**五个身份自动消失了**：`LexicalProvider`、
+`MemoryProvider`、`MemorySession`、`comparability`、`generateSyntheticBenchmark`——它们不再是孤儿，
+因为工具在调它们。
+
+这说明孤儿台账的正确读法：**一条记录不是债务的证明；接线之后那一条消失，才是接线真的发生了的证明。**
+上一轮我登记 `comparability` 时写"等 H1 有 runner 才有真实调用者"，这一轮工具就是那个调用者。
+
 #### 五、没做的与不能说的
 
 - `fulfils` / `abandons` 是**声明**的（与 `invalidates` 同一条边界）。"我四月跑了马拉松"兑现"我春天要跑
@@ -2918,7 +2927,7 @@ reset(): Promise<void>
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
-| **H0** | `LexicalProvider` + `toSessions` + `comparability`，25 条测试，无模型无 key | ✅ 本步 |
+| **H0** | `LexicalProvider` + `toSessions` + `comparability` + `measureRetrieval` + `NullProvider`，68 条测试，无模型无 key | ✅ 第 34–35 步 |
 | **H1** | Hindsight 100 题，DeepSeek reader，官方 judge | ⏳ 待 CI runner |
 | **H2** | + Mem0 OSS + Graphiti | ⏳ |
 | **H3** | 全 500 题 × 2 跑 × 4 系统 | ⏳ |
@@ -2934,6 +2943,65 @@ reset(): Promise<void>
 4. **我们自己的 adapter 是我们写的。** 防御只有一条：小、被 review、能无模型测通。
 
 一句话：**C 级从"永久判决"变成了"带理由的待办"**，H1 是把它变成 A 级的最小一步。
+
+### 9.36 第 35 步：从契约到读数 —— H0 跑通，并且它的 100% 不是结果
+
+上一轮交付的是**契约**（`MemoryProvider`）与**规则**（`comparability`），没有一行读数。这一轮补上
+**循环**：`measureRetrieval(dataset, providers, options)`，以及一个下限provider。
+
+#### 一、为什么只测检索
+
+答案生成与裁判都需要模型，而 H0 的定义就是"在没有任何模型的机器上跑通"。更重要的是：
+**检索是记忆比较里唯一诚实的一半**。reader 可以掩盖糟糕的检索，judge 可以与 reader 意见相左，
+但"证据在不在 top-k 里"只关于存储，确定性，且不能靠调提示词改善。
+
+指标：`recall@k`、`all-gold`（全部 gold 都覆盖，更严）、`MRR`、分能力桶，以及四个让"只跑了一半"
+可见的计数：**不可测题数**、**空检索数**、**ingest 跳过数**、存储规模。
+
+#### 二、三条设计决定，每条堵一种自欺
+
+1. **gold 由调用方给（`goldOf`），不在 harness 里猜。** `Question.goldTurns` 由 LongMemEval loader
+   产生，是诚实的字段；但一个 provider 若在中途规范化了文本，字符串相等就失效。所以默认读字段，
+   允许覆盖。**没有 gold 的题被排除并单独计数**，绝不记成"错"——把不可测题折进分母，会让每个系统
+   都显得比实际差，而差的幅度取决于数据集。
+2. **`hitsContainGold` 属于配置。** provider 返回整段 session 时用包含判定，返回单条 turn 时用相等。
+   两种模式对同一个 provider 给出不同数字，所以它是配置项而不是实现细节。
+3. **`NullProvider` 是必需品，不是稻草人。** 它的存在让"下限是不是零"成为可测命题。
+   如果这一行不是 0，harness 坏了——这比在排行榜上发现错误便宜得多。
+
+#### 三、首张表
+
+```
+$ node tools/competitor-harness.mjs
+retrieval-only comparison — synthetic/40
+gold: derived from the expected answer, which is exact for a generated dataset and not for a real one
+
+provider            build      recall@k  all-gold  mrr     found     empty  unmeasurable
+lexical-reference   none       100.0%    100.0%    0.630   24/24     0      16
+null-floor          none       0.0%      0.0%      0.000   0/24      24     16
+```
+
+四条读法，第四条最重要：
+
+- **下限检查**：`null-floor` 精确为 0。这一行一旦动了，坏的是 harness。
+- **排除检查**：16 题没有可推出的 gold（合成集的 ABS 题，`expected` 为 null），被单独计数而不是记成错。
+- **管道检查**：`lexical-reference` 100% 说明**生成器把答案放在一条明显的 turn 里**。它不说明检索质量。
+  把这一行当成结果，正是本项目在别人表格里反复找到的那种错。
+- **它不是对比**：两行共享同一份配置，`comparability` 返回 `A`；而"词法索引 vs 空存储"的 `A`
+  是对两个都没用的东西的真实陈述。
+
+#### 四、H0 完成后，H1 的形状已经确定
+
+把 `LexicalProvider` 换成 Hindsight adapter、把 gold 换成 loader 给的 `goldTurns`，同一张表就能回答
+真问题。这正是 H1 要做的，而它需要的三样东西现在都有了：**契约**（上一轮）、**规则**（上一轮）、
+**循环**（这一轮）。
+
+#### 五、没做的
+
+1. **没有 Cortex adapter。** 白皮书说"Cortex 也要实现同一契约"，但它的检索在 `cortex-memory` 里，
+   接口是 turn 列表而不是 `SearchHit`。这一步要单独做，而且要小心不要改变既有基准行为。
+2. **没有 answer/judge 阶段。** 它们需要模型，属于 H1 的 runner。
+3. **合成集的 gold 是推出来的，不是标注的。** 只对生成器成立；真实数据集必须用 `goldTurns`。
 
 ---
 
