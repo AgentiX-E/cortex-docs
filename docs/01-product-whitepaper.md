@@ -355,7 +355,9 @@ M-1 最值得抄的是第三阶段：**用重要性 / 时序链解析 / 跨记�
 | D7 | **人机协同与卡片** | Hyperagent"接受前什么都不生效"、三档归属、`Dismiss` 终态；AideAI 敏感度分级 + `Used from memory` + 过期复核；memory card 五原则（可见/可编辑/有作用域/可过期/可导出）`[厂商]`/`[二手]` | 提案队列 + 三档归属 + 终态忽略 + 过期复核 + 可导出 | 账号级列表作为唯一控制面（事后审计无法补偿事前不拦） | F6 → 02 §5.5 |
 | D8 | **检索侧重排与查询理解** | M-1 三阶段 + 一致性重排；cortex 无重排、查询扩展每查询 top-3 `[文献]`/`[实测]` | 重排实现但**默认关闭**；查询扩展**证伪** | 默认开重排（两臂 Δ ±1.33 pp，p=0.7539）；查询扩展（MR 84.75 vs 84.25，修 12 坏 12） | 03 §7 消融 |
 | D9 | **上下文组装与提示词形状** | M-1"内部一致且顺序正确"；cortex 已测四种提示词形状 | 逐字对照 + 触达表 | 结构走查 / 成员资格复查 / aggregation 形状（三次证伪） | 02 §8 |
-| D10 | **评测集与裁判** | LongMemEval-S（500 题，ICLR 2025）为主战场；LOCOMO 已近饱和；BEAM（10M）、MemoryAgentBench、MemSecBench、AMB 为二期 | LongMemEval-S 全量 × 4 重复 + 同管线参考臂 + 自建仪器 | 单次点估计；跨裁判相减 | 03 §9 |
+| D10 | **评测集与裁判** | LongMemEval-S（500 题，ICLR 2025）仍是**唯一能给出 A 级横比**的集合；LoCoMo 的答案键约 **6.4% 本身是错的**、其 judge 接受了 **63%** 的故意错答、且只有 10 段对话，同一系统在不同配方下能报出 **65.99 / 84 / 58.44 / 75.14** 四个分数 `[文献]`；BEAM（10M tokens，ICLR 2026）、MemoryAgentBench（1.44M）、MemoryArena（2602.16313）指向前沿 | LongMemEval-S 全量 × 4 重复 + 同管线参考臂 + 自建仪器；**每个数字必须带配方**（reader / judge / prompt / top-k / 子集 / 答案键版本） | 单次点估计；跨裁判相减；把 LoCoMo 单数字当作能力声明 | 03 §9、`docs/ACCEPTANCE-MATRIX.md` |
+| D15 | **事实类型与关系**（三个增量） | ISO-TimeML 把 `I-ACTION`（"does not necessarily actually happen"）与 `I-STATE` 单列，与 `OCCURRENCE` 并列；FactBank 用 CT/PR/PS/Uu 四档确定性；MEANTIME 把 `possibility (future)` 作为独立值 `[文献]`；事件因果识别综述（ACM CSUR 2026）把"把 A 然后 B 读成 A 导致 B"命名为**因果幻觉**——当前主导失败 `[文献]` | 两维（futurity × certainty）+ 类型化边（11 种）+ **许可表**：`temporal` 永不许可 `causes`；每条抽取边必须带覆盖自己 marker 的可定位 span | 单维 `modality`（TimeML 与 FactBank 都拆两维，一维装不下）；无标记建边（放弃的召回是我们无法审计的召回） | F11 → 02 §5.5.6、§5.5.8 |
+| D16 | **假设与信念修订** | ATMS 把假设做成一等节点，却自陈"**不判断假设是否成立**"，且无时间；Graphiti 的 `valid_at` 由 episode 的 `reference_time` 推出，是**字段不是命题**；PACMI 沿**声明的**派生链级联失效（0.99 vs 0.90，stale-premise 0.97 vs 0.71），自陈"不解决 provenance 抽取"；Nous（2606.22030）给出**负结果**：真实语料矛盾密度低，贝叶斯信念更新**几乎不优于 last-write-wins** `[文献]` | 六类假设成命题（time-anchor / persistence / uniqueness / attribution / entity-binding / completeness），只有 `status` + 两个可数整数，**没有 confidence**；`expired ≠ refuted`、`refuted ≠ 从未为真`；级联走**自己记下的** receipt，默认关 | 模型自报置信度（没人能重算 0.82）；按计时器删除（未被检验≠假）| F12 → 02 §5.5.7、§5.5.9 |
 | D11 | **统计与仪器** | 同配置复跑净差 MR −2 / TR −4 `[实测]`；零失败不等于零率 | Wilson 上界 + 配对检验 + 噪声底 + `--audit` | "我测过了"作为证据（必须交代用什么测） | 04 §3 |
 | D12 | **投毒与溯源** | MemSecBench 310 案例（persistence / consequence / repair）`[文献]` | provenance DAG + 不可变日志（P1，未实现） | 无溯源的可写记忆 | F-未实现 → 03 §3 |
 | D13 | **测量宿主** | 本仓曾是 private，Actions 作业在 3 秒内未启动即失败（`ci-smoke` 复现）；设为 public 后全部作业拿到 runner `[实测]` | CI runner 作为**平台与网络的延伸**（macOS 有 Safari，Linux 有 Hub） | 把"本机测不了"写成"无法测量" | 03 §10、`.github/workflows/poc-platform-probes.yml` |
@@ -482,6 +484,57 @@ CI 真实全绿（不允许 `continue-on-error` / `|| true`）。这些纪律本
 
 **当前诚实结论**：MR 仍落后参考管线约 20 题，因此**只允许**"在 X 指标上是 Y，测量方式如下"，
 **不允许**"超过 Z"。
+
+### 6.1 可比性分级：为什么"我们差多少"这句话必须先分级
+
+记忆基准的一个公开事实是：**同一个系统在同一个基准上能报出四个不同分数**（LoCoMo 上实测
+65.99 / 84 / 58.44 / 75.14），厂商自报与独立复现的差距普遍在 **18–24 点**。原因不是造假，
+而是每个数字背后都有一份没人统一的配方：reader 模型、judge 模型与 prompt、top-k、子集、
+答案键版本。
+
+所以本项目的对外数字全部带等级，**等级决定这个数字能被用来做什么**：
+
+| 等级 | 定义 | 允许的用法 |
+|---|---|---|
+| **A** | 同数据集、同 judge、同 reader、同指标 | 可以说"差多少" |
+| **B** | 同数据集同指标，但 reader/judge 不同，或用了代理指标（如 session hit rate） | 只能说方向 |
+| **C** | 不同数据集、不同子集，或厂商自报且无公开配方 | 只能作为动机，**不得**用于"我们落后 X" |
+
+**LongMemEval-S 是唯一存在 A 级横比的轴**，也是因此它成为主战场：
+
+| 系统 | 分数 | 等级 | 配方 |
+|---|---|---|---|
+| memoricai | 85.8% | A | 500 题、官方 prompt、gpt-4o-2024-08-06 兼 reader 与 judge、约 11k token 上下文 |
+| Supermemory | 81.6% | A | 同一次独立对比中的 GPT-4o-reader 配置 |
+| **Cortex** | <!-- reading:S1 -->81.0% | — | DeepSeek reader、官方 judge prompt、四次均值 |
+| Zep | 71.2% | A | Zep 自己论文中的 LongMemEval 读数，GPT-4o reader |
+| Full-context GPT-4o | 60.2% | A | 论文基线：整段历史进窗口 |
+| Hindsight（厂商） | 94.6% | C | 自报；reader/judge/预处理未以可复现形式公开 |
+| Graphonomous | 92.6% | C | 关键词召回代理指标 + oracle 划分，不是官方指标 |
+
+三条结论，第三条不舒服但必须写：
+
+1. **要追的是 85.8%，不是 94.6%。** 在有 GPT-4o 级 reader 的公开可复现前沿上，A 级最高是
+   memoricai 的 85.8%；更高的两个数字要么是厂商声明，要么换了指标。把 94.6% 写进目标，
+   等于瞄准一个没人复现过的数。
+2. **Cortex 已经在 A 级带内。** 81.0% 高于 Zep（71.2%）与全文上下文（60.2%），与
+   Supermemory 的公开读数相当。诚实的说法是"有竞争力"，不是"领先"。
+3. **赤字不是均匀分布的。** KU <!-- reading:S2 -->86.8% 已过线且在前沿之上；MR
+   <!-- reading:S3 -->69.6% 与 TR <!-- reading:S4 -->74.6% 承担了几乎全部差距。任何提高总分的
+   叙事，如果不解释这两类为什么低，都是平均数的把戏。
+
+### 6.2 每一类数字的出处
+
+| 数字类型 | 出处 | 谁能复跑 |
+|---|---|---|
+| 端到端（S1–S5） | `evidence/longmemeval/summary.json` | 需要 runner + Org secrets；命令与配方写在该文件里 |
+| 消融与受控集（K/T） | `cortex` 仓 `tools/assumption-ablation.mjs` | 任何人，无模型、无 key、逐字节可复现 |
+| 关系闸门（G1–G3） | `cortex` 仓 `tools/knowledge-probe.mjs --json` | 任何人，输入是评审用的那份页面 |
+| 验收阈值本身 | `cortex` 仓 `docs/ACCEPTANCE-MATRIX.md` | `node tools/acceptance-check.mjs` 现算阈值与当前值 |
+| 本文档引用的每个分数 | 由 `reading:<id>` 标记绑定（写法是 HTML 注释，渲染时不可见） | `node tools/docs-crosscheck.mjs`，漂移即失败 |
+
+最后一行是这一版白皮书的结构性变化：**文档里的数字不再是抄来的，而是被 CI 校验的**。文档写
+86.8%、代码算出 86.8%，两者一致才允许合并；不一致时 `docs:crosscheck` 会指名文件、行号与两个值。
 
 ---
 

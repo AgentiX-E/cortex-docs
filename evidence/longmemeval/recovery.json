@@ -1,0 +1,11 @@
+{
+  "$comment": "The abstention-recovery pass, from the run recorded in docs/MEASURE-ABSTENTION-RECOVERY.md. Ten questions were re-asked and one was answered; on the paired comparison the pass moved the total from 405 to 404. The net is -1, which is why `reviewPass: recover` stays off by default and why criterion R1 exists as an accepted miss rather than a deleted row.",
+  "recovery": {
+    "attempted": 10,
+    "answered": 1,
+    "net": -1,
+    "baselineCorrect": 405,
+    "withRecoveryCorrect": 404,
+    "abstentionUnchanged": 30
+  }
+}
