@@ -1,0 +1,550 @@
+{
+  "cases": 12,
+  "arms": [
+    {
+      "arm": "flat",
+      "n": 12,
+      "correct": 3,
+      "accuracy": 0.25,
+      "retiredServed": 6,
+      "byFamily": {
+        "type-i": {
+          "n": 3,
+          "correct": 0
+        },
+        "historical": {
+          "n": 2,
+          "correct": 1
+        },
+        "false-stale": {
+          "n": 2,
+          "correct": 2
+        },
+        "conflict": {
+          "n": 2,
+          "correct": 0
+        },
+        "type-ii": {
+          "n": 2,
+          "correct": 0
+        },
+        "cascade": {
+          "n": 1,
+          "correct": 0
+        }
+      },
+      "outcomes": [
+        {
+          "caseId": "i-city-now",
+          "family": "type-i",
+          "answer": "f1",
+          "expected": "f2",
+          "correct": false,
+          "servedRetired": 1
+        },
+        {
+          "caseId": "i-role-now",
+          "family": "type-i",
+          "answer": "f3",
+          "expected": "f4",
+          "correct": false,
+          "servedRetired": 1
+        },
+        {
+          "caseId": "i-pets-now",
+          "family": "type-i",
+          "answer": "f5",
+          "expected": "f6",
+          "correct": false,
+          "servedRetired": 1
+        },
+        {
+          "caseId": "h-city-as-of-january",
+          "family": "historical",
+          "answer": "f7",
+          "expected": "f7",
+          "correct": true,
+          "servedRetired": 1
+        },
+        {
+          "caseId": "h-role-as-of-february",
+          "family": "historical",
+          "answer": "f10",
+          "expected": "f9",
+          "correct": false,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "c-city-as-of-march",
+          "family": "false-stale",
+          "answer": "f11",
+          "expected": "f11",
+          "correct": true,
+          "servedRetired": 1
+        },
+        {
+          "caseId": "c-pets-as-of-february",
+          "family": "false-stale",
+          "answer": "f13",
+          "expected": "f13",
+          "correct": true,
+          "servedRetired": 1
+        },
+        {
+          "caseId": "k-city-two-values-one-day",
+          "family": "conflict",
+          "answer": "f15",
+          "expected": null,
+          "correct": false,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "k-birthday-two-values-one-day",
+          "family": "conflict",
+          "answer": "f17",
+          "expected": null,
+          "correct": false,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "ii-commute-after-remote",
+          "family": "type-ii",
+          "answer": "f19",
+          "expected": null,
+          "correct": false,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "ii-card-after-move",
+          "family": "type-ii",
+          "answer": "f21",
+          "expected": null,
+          "correct": false,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "g-deposit-after-moving-out",
+          "family": "cascade",
+          "answer": "f24",
+          "expected": null,
+          "correct": false,
+          "servedRetired": 0
+        }
+      ]
+    },
+    {
+      "arm": "annotated",
+      "n": 12,
+      "correct": 3,
+      "accuracy": 0.25,
+      "retiredServed": 6,
+      "byFamily": {
+        "type-i": {
+          "n": 3,
+          "correct": 0
+        },
+        "historical": {
+          "n": 2,
+          "correct": 1
+        },
+        "false-stale": {
+          "n": 2,
+          "correct": 2
+        },
+        "conflict": {
+          "n": 2,
+          "correct": 0
+        },
+        "type-ii": {
+          "n": 2,
+          "correct": 0
+        },
+        "cascade": {
+          "n": 1,
+          "correct": 0
+        }
+      },
+      "outcomes": [
+        {
+          "caseId": "i-city-now",
+          "family": "type-i",
+          "answer": "f1",
+          "expected": "f2",
+          "correct": false,
+          "servedRetired": 1
+        },
+        {
+          "caseId": "i-role-now",
+          "family": "type-i",
+          "answer": "f3",
+          "expected": "f4",
+          "correct": false,
+          "servedRetired": 1
+        },
+        {
+          "caseId": "i-pets-now",
+          "family": "type-i",
+          "answer": "f5",
+          "expected": "f6",
+          "correct": false,
+          "servedRetired": 1
+        },
+        {
+          "caseId": "h-city-as-of-january",
+          "family": "historical",
+          "answer": "f7",
+          "expected": "f7",
+          "correct": true,
+          "servedRetired": 1
+        },
+        {
+          "caseId": "h-role-as-of-february",
+          "family": "historical",
+          "answer": "f10",
+          "expected": "f9",
+          "correct": false,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "c-city-as-of-march",
+          "family": "false-stale",
+          "answer": "f11",
+          "expected": "f11",
+          "correct": true,
+          "servedRetired": 1
+        },
+        {
+          "caseId": "c-pets-as-of-february",
+          "family": "false-stale",
+          "answer": "f13",
+          "expected": "f13",
+          "correct": true,
+          "servedRetired": 1
+        },
+        {
+          "caseId": "k-city-two-values-one-day",
+          "family": "conflict",
+          "answer": "f15",
+          "expected": null,
+          "correct": false,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "k-birthday-two-values-one-day",
+          "family": "conflict",
+          "answer": "f17",
+          "expected": null,
+          "correct": false,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "ii-commute-after-remote",
+          "family": "type-ii",
+          "answer": "f19",
+          "expected": null,
+          "correct": false,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "ii-card-after-move",
+          "family": "type-ii",
+          "answer": "f21",
+          "expected": null,
+          "correct": false,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "g-deposit-after-moving-out",
+          "family": "cascade",
+          "answer": "f24",
+          "expected": null,
+          "correct": false,
+          "servedRetired": 0
+        }
+      ]
+    },
+    {
+      "arm": "gated",
+      "n": 12,
+      "correct": 12,
+      "accuracy": 1,
+      "retiredServed": 0,
+      "byFamily": {
+        "type-i": {
+          "n": 3,
+          "correct": 3
+        },
+        "historical": {
+          "n": 2,
+          "correct": 2
+        },
+        "false-stale": {
+          "n": 2,
+          "correct": 2
+        },
+        "conflict": {
+          "n": 2,
+          "correct": 2
+        },
+        "type-ii": {
+          "n": 2,
+          "correct": 2
+        },
+        "cascade": {
+          "n": 1,
+          "correct": 1
+        }
+      },
+      "outcomes": [
+        {
+          "caseId": "i-city-now",
+          "family": "type-i",
+          "answer": "f2",
+          "expected": "f2",
+          "correct": true,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "i-role-now",
+          "family": "type-i",
+          "answer": "f4",
+          "expected": "f4",
+          "correct": true,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "i-pets-now",
+          "family": "type-i",
+          "answer": "f6",
+          "expected": "f6",
+          "correct": true,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "h-city-as-of-january",
+          "family": "historical",
+          "answer": "f7",
+          "expected": "f7",
+          "correct": true,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "h-role-as-of-february",
+          "family": "historical",
+          "answer": "f9",
+          "expected": "f9",
+          "correct": true,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "c-city-as-of-march",
+          "family": "false-stale",
+          "answer": "f11",
+          "expected": "f11",
+          "correct": true,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "c-pets-as-of-february",
+          "family": "false-stale",
+          "answer": "f13",
+          "expected": "f13",
+          "correct": true,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "k-city-two-values-one-day",
+          "family": "conflict",
+          "answer": null,
+          "expected": null,
+          "correct": true,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "k-birthday-two-values-one-day",
+          "family": "conflict",
+          "answer": null,
+          "expected": null,
+          "correct": true,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "ii-commute-after-remote",
+          "family": "type-ii",
+          "answer": null,
+          "expected": null,
+          "correct": true,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "ii-card-after-move",
+          "family": "type-ii",
+          "answer": null,
+          "expected": null,
+          "correct": true,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "g-deposit-after-moving-out",
+          "family": "cascade",
+          "answer": null,
+          "expected": null,
+          "correct": true,
+          "servedRetired": 0
+        }
+      ]
+    }
+  ],
+  "ablation": [
+    {
+      "removed": "none",
+      "accuracy": 1,
+      "byFamily": {
+        "type-i": {
+          "n": 3,
+          "correct": 3
+        },
+        "historical": {
+          "n": 2,
+          "correct": 2
+        },
+        "false-stale": {
+          "n": 2,
+          "correct": 2
+        },
+        "conflict": {
+          "n": 2,
+          "correct": 2
+        },
+        "type-ii": {
+          "n": 2,
+          "correct": 2
+        },
+        "cascade": {
+          "n": 1,
+          "correct": 1
+        }
+      }
+    },
+    {
+      "removed": "persistence",
+      "accuracy": 0.75,
+      "byFamily": {
+        "type-i": {
+          "n": 3,
+          "correct": 0
+        },
+        "historical": {
+          "n": 2,
+          "correct": 2
+        },
+        "false-stale": {
+          "n": 2,
+          "correct": 2
+        },
+        "conflict": {
+          "n": 2,
+          "correct": 2
+        },
+        "type-ii": {
+          "n": 2,
+          "correct": 2
+        },
+        "cascade": {
+          "n": 1,
+          "correct": 1
+        }
+      }
+    },
+    {
+      "removed": "uniqueness",
+      "accuracy": 0.8333333333333334,
+      "byFamily": {
+        "type-i": {
+          "n": 3,
+          "correct": 3
+        },
+        "historical": {
+          "n": 2,
+          "correct": 2
+        },
+        "false-stale": {
+          "n": 2,
+          "correct": 2
+        },
+        "conflict": {
+          "n": 2,
+          "correct": 0
+        },
+        "type-ii": {
+          "n": 2,
+          "correct": 2
+        },
+        "cascade": {
+          "n": 1,
+          "correct": 1
+        }
+      }
+    },
+    {
+      "removed": "time-anchor",
+      "accuracy": 1,
+      "byFamily": {
+        "type-i": {
+          "n": 3,
+          "correct": 3
+        },
+        "historical": {
+          "n": 2,
+          "correct": 2
+        },
+        "false-stale": {
+          "n": 2,
+          "correct": 2
+        },
+        "conflict": {
+          "n": 2,
+          "correct": 2
+        },
+        "type-ii": {
+          "n": 2,
+          "correct": 2
+        },
+        "cascade": {
+          "n": 1,
+          "correct": 1
+        }
+      }
+    },
+    {
+      "removed": "cascade",
+      "accuracy": 0.9166666666666666,
+      "byFamily": {
+        "type-i": {
+          "n": 3,
+          "correct": 3
+        },
+        "historical": {
+          "n": 2,
+          "correct": 2
+        },
+        "false-stale": {
+          "n": 2,
+          "correct": 2
+        },
+        "conflict": {
+          "n": 2,
+          "correct": 2
+        },
+        "type-ii": {
+          "n": 2,
+          "correct": 2
+        },
+        "cascade": {
+          "n": 1,
+          "correct": 0
+        }
+      }
+    }
+  ]
+}

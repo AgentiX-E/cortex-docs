@@ -1,0 +1,66 @@
+controlled contradiction set: 12 cases
+
+arm         correct   accuracy  retired served
+flat        3/12      25.0%     6
+annotated   3/12      25.0%     6
+gated       12/12     100.0%    0
+
+family        flat      annotated gated
+type-i        0/3       0/3       3/3
+historical    1/2       1/2       2/2
+false-stale   2/2       2/2       2/2
+conflict      0/2       0/2       2/2
+type-ii       0/2       0/2       2/2
+cascade       0/1       0/1       1/1
+
+ablation (gated arm, one mechanism removed)
+removed         accuracy  delta    targeted families
+none            100.0%    0.0pp    —
+persistence     75.0%     -25.0pp  type-i, type-ii
+uniqueness      83.3%     -16.7pp  conflict
+time-anchor     100.0%    0.0pp    historical, false-stale
+cascade         91.7%     -8.3pp   cascade
+
+per case
+  flat
+    MISS i-city-now                         got f1 want f2
+    MISS i-role-now                         got f3 want f4
+    MISS i-pets-now                         got f5 want f6
+    ok   h-city-as-of-january               got f7 want f7
+    MISS h-role-as-of-february              got f10 want f9
+    ok   c-city-as-of-march                 got f11 want f11
+    ok   c-pets-as-of-february              got f13 want f13
+    MISS k-city-two-values-one-day          got f15 want null
+    MISS k-birthday-two-values-one-day      got f17 want null
+    MISS ii-commute-after-remote            got f19 want null
+    MISS ii-card-after-move                 got f21 want null
+    MISS g-deposit-after-moving-out         got f24 want null
+  annotated
+    MISS i-city-now                         got f1 want f2
+    MISS i-role-now                         got f3 want f4
+    MISS i-pets-now                         got f5 want f6
+    ok   h-city-as-of-january               got f7 want f7
+    MISS h-role-as-of-february              got f10 want f9
+    ok   c-city-as-of-march                 got f11 want f11
+    ok   c-pets-as-of-february              got f13 want f13
+    MISS k-city-two-values-one-day          got f15 want null
+    MISS k-birthday-two-values-one-day      got f17 want null
+    MISS ii-commute-after-remote            got f19 want null
+    MISS ii-card-after-move                 got f21 want null
+    MISS g-deposit-after-moving-out         got f24 want null
+  gated
+    ok   i-city-now                         got f2 want f2
+    ok   i-role-now                         got f4 want f4
+    ok   i-pets-now                         got f6 want f6
+    ok   h-city-as-of-january               got f7 want f7
+    ok   h-role-as-of-february              got f9 want f9
+    ok   c-city-as-of-march                 got f11 want f11
+    ok   c-pets-as-of-february              got f13 want f13
+    ok   k-city-two-values-one-day          got null want null
+    ok   k-birthday-two-values-one-day      got null want null
+    ok   ii-commute-after-remote            got null want null
+    ok   ii-card-after-move                 got null want null
+    ok   g-deposit-after-moving-out         got null want null
+
+This set measures mechanism attribution, not effect size: a 25% baseline is a property of the
+fixture, and no number here may be quoted as Cortex performance on any published benchmark.
