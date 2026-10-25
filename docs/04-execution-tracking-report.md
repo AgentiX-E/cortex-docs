@@ -3196,6 +3196,132 @@ memory 542 / ai 256 / storage 110），`pnpm check` 退出码 0。
 下一项因此没变、也没有歧义了：把 `cortex-session` 放到一个**不由本仓库生成**的语料上。
 即 `PLAN-COMPETITOR-HARNESS.md` 的 H1。
 
+
+### 9.39 第 38 步：让秤见到真实语料 —— 它第一轮就抓到两个缺陷，都不在排序里
+
+第 37 步的结论"信号接上了"是在**自己生成的**语料上得到的，而那个语料已经饱和（事实写作
+`name attribute=value`，任何词重叠都是 1.0）。这一步把工具接到 LongMemEval-S 上。
+
+#### 一、先解决 gold 的来源
+
+工具的合成路径把 gold **推导**出来——"包含答案文本的那些 context turn"。这在生成语料上按构造成立，
+在任何其它语料上都不成立。真实路径改成读 `Question.goldTurns`，它是 loader 从 `answer_session_ids`
+解析出来的，是**标注**。
+
+两者的差别在分数里看不见，所以用一个夹具钉住：`ie-001` 的答案是一条储物柜密码，**任何 turn 都没提过**。
+派生 gold 下这题是 unmeasurable，标注 gold 下它是 measurable。把 `goldOf` 改回派生形态，
+4 道夹具题里 3 道立刻变 unmeasurable，测试红——变异是跑出来的，不是声称的。
+
+抽样是**分层**的：按 capability 轮转、组内按 id 排序，所以子集只由 (文件, 题数) 决定。
+取文件前 N 行会取到"这个文件恰好开头的那一类"，而依赖文件顺序的子集让之后所有对比失去意义。
+
+#### 二、第一个缺陷：把 hit 数和 turn 数当成同一个数
+
+```
+provider            build   recall@k  all-gold  mrr
+lexical-reference   none    93.6%     81.0%     0.781
+cortex-session      none    25.4%      8.4%     0.254
+```
+
+`25.4%` 不是产品输给词法索引，是 adapter 用两个**不同单位**的数在比：
+
+```ts
+const ceiling = Math.min(this.#budget, options.limit);
+```
+
+`options.limit` 是 harness 的 **hit 条数**；`selectSessionBudget` 的第二个参数是 **turn 数量**。
+合成语料每个 session 一个 turn，两个数恰好相等，错误不可能出现。LongMemEval-S 每个 session 约 10 个 turn，
+于是 top-10 请求花掉 10 个 turn 预算，**每题只准入一个 session**。
+
+`all-gold 8.4%` 就是诊断："十次里有一次那一个 session 恰好装下了全部"。
+
+修法是让两个数各管各的：top-k 落在 hits 上，turn 预算留在 turns 上。两条新测试用 **6 个 turn 的 session**
+——一个 turn 的 session 区分不了单位，而那正是合成集从没抓到它的原因。把 `min(budget, limit)` 放回去，
+其中一条立刻红（已跑过）。
+
+#### 三、第二个读数：持平，不是领先
+
+```
+provider            build   recall@k  all-gold  mrr      found
+lexical-reference   none    93.6%     81.0%     0.781    468/500
+cortex-session      none    94.0%     82.2%     0.818    470/500
+null-floor          none     0.0%      0.0%     0.000      0/500
+```
+
+| 能力 | lexical-reference | cortex-session |
+|---|---|---|
+| ABS | 29/30 | 28/30 |
+| IE | 130/150 | 133/150 |
+| KU | 71/72 | 72/72 |
+| MR | 118/121 | 117/121 |
+| TR | 120/127 | 120/127 |
+
+**500 题里差 2 题，这不是差异。** all-gold 差 6 题，MRR 差 0.037，且分能力列双向移动
+（IE +3、ABS −1、MR −1、KU +1、TR 0）。把 `94.0 > 93.6` 读成领先，是在读噪声。
+
+它确立的东西更窄但确实有用：**Cortex 的会话选择在真实多会话数据上与词法索引同级**。
+上一轮之前它根本不是排序，这一轮之前它是用错单位在排序。两个缺陷，都是被语料找出来的，
+不是被 review 找出来的。
+
+#### 四、第三个读数，也是真正该动手的那个
+
+```
+cortex-session      none     8.0%      6.6%     0.080    （sessionBudget 8）
+```
+
+`sessionBudget` 以 **turn** 计量，而 session 是"整条准入或整条不要"。8 turn 预算下，10 turn 的会话超预算，
+`selectSessionBudget` 跳过它，而"绝不返回空"的兜底只给回一条。于是**一个 8-turn 的 prompt 预算
+吃掉 86 个百分点**。
+
+这不是 adapter 的假象，是产品设计的性质：**会话是分配单位，而真实会话比紧预算大**。两条可测的推论：
+
+1. **会话内部需要 turn 级裁剪**，而不是全有全无。要测的是"裁到会话内最好的几个 turn"是否胜过"丢掉整个会话"。
+2. **预算大概率该用 token 而不是 turn 计量。** 十个短 turn 和十个长 turn 不是一个成本，现在的规则把两者等同。
+
+两条都**没有**在这一轮实现：它们改变产品行为，都需要 A/B。这一轮做的是给现有设计的代价一个数字——
+`8.0%` 对 `94.0%`，此前这个数字不存在。
+
+#### 五、这些数不是什么
+
+1. **不是答案准确率。** 这条路没有 reader 也没有 judge，命中判据是"会话文本包含 gold turn"，
+   所以是证据召回。端到端的 `S1 81.0%` 来自另一条检索路径（memory arm 自己的
+   `NaturalLanguageMemory`），两者不能当一个系统引用。
+2. **不是竞品对比。** `lexical-reference` 是我们自己的对照，不是对手产品。H1（Hindsight）仍是第一组
+   真实竞品数字，它需要容器和 reader。
+3. **不是显著性结论。** 500 题差 2 题。
+
+#### 六、顺带修好的一处 CI 漂移，以及它为什么值得记
+
+新测试读 `dist/`，而 `check` 的顺序是 `test:tools && build && ...`——本地因为先 build 过所以绿，
+CI 上红（`ERR_MODULE_NOT_FOUND`）。修法是把 `build` 挪到 `test:tools` 前，**不是**加 skip、
+不是加 `|| true`。
+
+这一条值得记，因为它正是用户反复强调的那类漂移：**本机通过 / CI 失败**。根因不是环境差异，
+是脚本顺序隐含了一个未写下的依赖。修完之后在**清空 `dist`** 的树上重跑 `pnpm check`，退出码 0。
+
+#### 七、沙箱的限制，以及为什么它逼出了正确的架构
+
+开发沙箱只能访问 `api.github.com`，HuggingFace 不可达。所以真实语料只能在 runner 上见。
+这不是绕路：它把"工具必须能在无网络、无 key、无模型的机器上跑通"变成了一条硬约束，
+而这条约束正是合成路径和 `null-floor` 存在的理由。新增的
+`.github/workflows/competitor-retrieval.yml` 不需要任何 secret 里的模型 key，六分钟跑完 100 题和 500 题两遍。
+
+#### 八、一个仍然存在的空洞
+
+`sessionsOf` 给每个 session 盖上**问题日期**：
+
+```ts
+const at = questionDateMs(question) ?? 0;
+```
+
+所以 per-session 时间戳没有进入 provider 契约：`asOf` 无法过滤（同一题的所有 session `at` 相同，
+要么全过要么全不过），时间只能通过 loader 渲染文本里的 `[date]` 前缀进入信号——而它能不能被看到，
+取决于分词器恰好保留它。
+
+修它要往 `Question` 加 per-session 时间戳，那是**评测契约**的改动，不是一个 adapter 的改动。
+这是 TR 列接下来会告诉我们代价的第一件事：TR 上两个系统已经并列 120/127，下一次 TR 的移动
+不可能来自排序。
+
 ---
 
 ## 10. 本期变更与下轮计划

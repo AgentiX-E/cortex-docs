@@ -467,8 +467,8 @@ IE 1/150、TR 0/127，是一份"产品默认长什么样"的读数，不是治�
 | 未过线的能力 | MR <!-- reading:S3 -->69.6%、TR <!-- reading:S4 -->74.6% | 同上 |
 | 验收判据 | 18 条（13 gate / 5 aim，其中 1 条 accepted） | `cortex/docs/ACCEPTANCE-MATRIX.md` |
 | 受控集 | 17 例，8 家族，三臂 + 8 消融 | `tools/assumption-ablation.mjs` |
-| 测试 | 全仓 3,851，四维覆盖率每包 ≥95%（core / ai / memory 全 100%） | `pnpm check` |
-| 导出债 | 392 条孤儿 / 851 条导出，逐条有理由 | `tools/export-census-baseline.json` |
+| 测试 | 全仓 3,852（+ 559 条 tools 测试），四维覆盖率每包 ≥95%（core / ai / memory 全 100%） | `pnpm check` |
+| 导出债 | 392 条孤儿 / 853 条导出，逐条有理由 | `tools/export-census-baseline.json` |
 
 ### 13.2 下一步，按依赖排序
 
@@ -479,7 +479,10 @@ IE 1/150、TR 0/127，是一份"产品默认长什么样"的读数，不是治�
 | **P0** | `assemble` 接到 memory arm 的检索路径（四路召回 → 台账 → 块） | 现在 `assemble` 的调用者只有消融与测试，所以所有台账读数都是夹具读数。不接线，前三轮增量对真实分数贡献为零 | `arm` 的上下文由 `assemble` 产出，且 K0/K1 在真实语料上重测；S1 不降 |
 | **P0** | proposer v6：输出 `edges`、`subject`/`predicate`/`at`、`futurity`/`certainty` | 闸门与台账都以这些字段为前提；不给字段，闸门只会拒绝、台账大半为空 | 20 对样本上闸门接受率 ≥70%（G1）；`uniqueness`/`supersedes` 的触发次数非零 |
 | **DONE（第 37 步）** | ~~把 `buildSessionPrompt` 的相关性排序抽成纯函数~~ → 实际是给**会话预算**补信号 | **原计划猜错了模块**：`buildSessionPrompt` 早就接受 `relevanceFor` 作为注入信号，自身没有排序可抽；缺的是没有任何东西把信号供给 `selectSessionBudget`。真正的病根是排序键**恒为 0.5**（`recency = exp(0) = 1`），于是"最高价值优先"= "最先到达优先"。已修：`lexicalRelevance` + 显式相关性键 + hits 按排名返回 | 合成集 all-gold 8.3% → 100%、MRR 0.296 → 1.000；去掉该键时 5 条测试变红。**但这只是接线读数，见 §13.2 下一行** |
-| **P0** | 把 `cortex-session` 放上**不由本仓库生成**的语料（H1） | 第 37 步证明合成集已饱和：它把事实写成 `name attribute=value`，任何词重叠信号都拿 1.0，MRR 1.000 意味着语料里已没有能让 gold 排第二的地方。要区分系统，必须换语料 | `comparability()` 返回 A；与 memoricai 85.8% 可减 |
+| **DONE（第 38 步）** | ~~把 `cortex-session` 放上不由本仓库生成的语料~~ → 已接 LongMemEval-S | 真实语料第一轮就抓到两个缺陷，都不在排序里：adapter 把 hit 数当 turn 数（`recall 25.4%`），以及 session 预算以 turn 计量。gold 改成读 `answer_session_ids`（标注而非派生），抽样按 capability 分层 | 500 题读数：`93.6/81.0/0.781`（词法对照）对 `94.0/82.2/0.818`（Cortex）——**持平**；`sessionBudget 8` 掉到 `8.0%` |
+| **P0** | 让第一组**真实竞品**数字（H1：Hindsight 100 题 + DeepSeek reader + 官方 judge） | 现在表上只有我们自己的对照行。`comparability()` 只有在两行都过同一 reader/judge 时才返回 A | `comparability()` 返回 A，且与 memoricai 85.8% 可减 |
+| **P1** | 会话内 turn 级裁剪，或把会话预算改成 token 计量 | 第 38 步量化了现状代价：8-turn 预算下 `all-gold` 从 82.2% 掉到 6.6%，因为 10-turn 的会话整条被跳过。"整条准入"在真实会话尺寸下不成立 | 8-turn（或等 token）预算下 `all-gold` ≥ 60%，且不损害无预算行 |
+| **P1** | 给 `Question` 加 per-session 时间戳 | 现在 `sessionsOf` 给每题所有 session 盖同一个问题日期，`asOf` 因此恒等失效；时间只能靠渲染文本里的 `[date]` 前缀进入信号 | `asOf` 能过滤掉未来 session；TR 列出现可归因移动 |
 | **P0** | 竞品统一评测台 H1：Hindsight（MIT、可换 DeepSeek、本地 embedding）跑 100 题，同 reader 同 judge | 这是把 C 级竞品数字变成 A 级的唯一路径。**H0 已完成**：契约、`comparability()`、`measureRetrieval()` 循环、可证为零的下限，共 68 条测试，无模型无 key 即可跑通（`node tools/competitor-harness.mjs`）。剩下的是把一个 adapter 接上去 | 产出第一组 A 级竞品对比；`comparability()` 返回 A |
 | **P1** | LongMemEval-S A/B：`gated` 上下文 vs 现行上下文（A8） | 这是唯一能把 F11–F14 从"夹具成立"变成"语料成立"的实验；一轮是方向，两轮是结论 | 配对 McNemar，Δ 越过噪声底（MR ±2 / TR ±4 题） |
 | **P1** | 摄入侧自动判定 Type II 失效（同 slot 的 supersedes → 上游变更→下游规则） | 现在 `invalidates` 是声明的，与 PACMI 同一条边界；越过它是唯一能真正领先它的方向 | 在受控集与真实语料上各测一次，false-stale 不上升 |
