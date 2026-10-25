@@ -467,7 +467,7 @@ IE 1/150、TR 0/127，是一份"产品默认长什么样"的读数，不是治�
 | 未过线的能力 | MR <!-- reading:S3 -->69.6%、TR <!-- reading:S4 -->74.6% | 同上 |
 | 验收判据 | 18 条（13 gate / 5 aim，其中 1 条 accepted） | `cortex/docs/ACCEPTANCE-MATRIX.md` |
 | 受控集 | 17 例，8 家族，三臂 + 8 消融 | `tools/assumption-ablation.mjs` |
-| 测试 | 全仓 3,869（+ 561 条 tools 测试），四维覆盖率每包 ≥95%（core / ai / memory 全 100%） | `pnpm check` |
+| 测试 | 全仓 3,887（+ 561 条 tools 测试），四维覆盖率每包 ≥95%（core / ai / memory 全 100%） | `pnpm check` |
 | 导出债 | 392 条孤儿 / 853 条导出，逐条有理由 | `tools/export-census-baseline.json` |
 
 ### 13.2 下一步，按依赖排序
@@ -482,8 +482,11 @@ IE 1/150、TR 0/127，是一份"产品默认长什么样"的读数，不是治�
 | **DONE（第 38 步）** | ~~把 `cortex-session` 放上不由本仓库生成的语料~~ → 已接 LongMemEval-S | 真实语料第一轮就抓到两个缺陷，都不在排序里：adapter 把 hit 数当 turn 数（`recall 25.4%`），以及 session 预算以 turn 计量。gold 改成读 `answer_session_ids`（标注而非派生），抽样按 capability 分层 | 500 题读数：`93.6/81.0/0.781`（词法对照）对 `94.0/82.2/0.818`（Cortex）——**持平**；`sessionBudget 8` 掉到 `8.0%` |
 | **P0** | 让第一组**真实竞品**数字（H1：Hindsight 100 题 + DeepSeek reader + 官方 judge） | 现在表上只有我们自己的对照行。`comparability()` 只有在两行都过同一 reader/judge 时才返回 A | `comparability()` 返回 A，且与 memoricai 85.8% 可减 |
 | **DONE（第 39 步）** | ~~会话内 turn 级裁剪，或把会话预算改成 token 计量~~ → 两条都做了 | 依据 LongMemEval 论文第一条优化（session decomposition，recall@5 +9.4）；官方 harness 自带 `GRANULARITY: turn \| session` 对照。`selectTurnsWithinBudget` + `budgetUnit: 'chars'` | 同一 ~2.7k tokens：`recall@k 8.0% → 76.2%`、`MRR 0.080 → 0.758`；`all-gold 6.6% → 6.2%`（**退 0.4pp**，已记录原因） |
-| **P0** | **在 2.8k 上下文上放 reader，测答案准确率** | 竞品的 90–93% 是准确率，我们手上的 80.8–87.4% 是证据召回。召回是答案率的上界，不是答案率——两者之间是一段没测过的距离，此前所有"差几个点"的说法都没有分母 | 500 题 × 2.8k 上下文，官方 judge；给出 S1/S2–S5 的新一版；`comparability()` 对 Contextier / Mem0 / Zep 返回 A 或明确 B |
-| **P1** | 多会话证据组装（MR 的 23 题缺口） | 2.8k 预算只够买一个会话，而 MR 的 gold 横跨 2–3 个会话（`all-gold 12.4%`）。需要的是"跨会话的证据压缩"，不是更大预算 | 2.8k 下 `all-gold` ≥ 30%，MR 分能力 ≥ 100/121 |
+| **DONE（第 40 步）** | ~~在 2.8k 上下文上放 reader，测答案准确率~~ | 已接 Chain-of-Note reader + 官方分题型 judge；100 题：`lexical 65.0%`、`cortex-session 60.0%`（33k tok）、`cortex/trim-2.8k 52.0%`（2.8k tok）。**转化率 69–73%**（三种检索质量一致），所以当前 reader 的天花板约 73% | 读数已出；对竞品是 **C 级**（题数与 reader/judge 均不同），不可相减 |
+| **P0** | **同一条管线拆组件**：生产 memory arm 与竞品 adapter 在**对齐预算**下的 A/B | 第 40 步发现 adapter 60.0% 比端到端 81.0% 低 21 个点，但那是**两个不同子集、不同 prompt、不同管线**的推断。要变成测量，只能同管线每次拆一个组件 | 两臂差 ±10pp 内，或 21 点归因到具名组件（query expansion / rerank / abstention recovery / 生产 prompt） |
+| **P1** | 2.8k 下的**分能力**准确率 | 总分说不出 MR 还是 TR 在丢，两者修法不同；分能力召回已打印，分能力准确率已接线待跑 | MR 与 TR 的准确率分开报告 |
+| **P1** | reader 换模型（hits 冻结） | 分开"reader 弱"与"检索弱"：同一份 hits 换 reader，`recall@k` 恒定 | 相同 `recall@k` 下的 Δ 准确率 ≥5pp 才说明是 reader 问题 |
+| **P2** | 多会话证据组装（MR 的缺口） | 第 40 步证明 `all-gold` 是误导指标（6.0% 却 52.0% 准确率），所以"补全所有 gold"不是目标；真正的缺口要看分能力准确率 | 待 §P1 分能力读数后再定判据 |
 | **P1** | 给 `Question` 加 per-session 时间戳 | 现在 `sessionsOf` 给每题所有 session 盖同一个问题日期，`asOf` 因此恒等失效；时间只能靠渲染文本里的 `[date]` 前缀进入信号 | `asOf` 能过滤掉未来 session；TR 列出现可归因移动 |
 | **P0** | 竞品统一评测台 H1：Hindsight（MIT、可换 DeepSeek、本地 embedding）跑 100 题，同 reader 同 judge | 这是把 C 级竞品数字变成 A 级的唯一路径。**H0 已完成**：契约、`comparability()`、`measureRetrieval()` 循环、可证为零的下限，共 68 条测试，无模型无 key 即可跑通（`node tools/competitor-harness.mjs`）。剩下的是把一个 adapter 接上去 | 产出第一组 A 级竞品对比；`comparability()` 返回 A |
 | **P1** | LongMemEval-S A/B：`gated` 上下文 vs 现行上下文（A8） | 这是唯一能把 F11–F14 从"夹具成立"变成"语料成立"的实验；一轮是方向，两轮是结论 | 配对 McNemar，Δ 越过噪声底（MR ±2 / TR ±4 题） |
