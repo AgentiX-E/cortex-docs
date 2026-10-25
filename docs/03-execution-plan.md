@@ -467,7 +467,7 @@ IE 1/150、TR 0/127，是一份"产品默认长什么样"的读数，不是治�
 | 未过线的能力 | MR <!-- reading:S3 -->69.6%、TR <!-- reading:S4 -->74.6% | 同上 |
 | 验收判据 | 18 条（13 gate / 5 aim，其中 1 条 accepted） | `cortex/docs/ACCEPTANCE-MATRIX.md` |
 | 受控集 | 17 例，8 家族，三臂 + 8 消融 | `tools/assumption-ablation.mjs` |
-| 测试 | 全仓 3,887（+ 561 条 tools 测试），四维覆盖率每包 ≥95%（core / ai / memory 全 100%） | `pnpm check` |
+| 测试 | 全仓 3,894（+ 562 条 tools 测试），四维覆盖率每包 ≥95%（core / ai / memory 全 100%） | `pnpm check` |
 | 导出债 | 392 条孤儿 / 853 条导出，逐条有理由 | `tools/export-census-baseline.json` |
 
 ### 13.2 下一步，按依赖排序
@@ -485,7 +485,8 @@ IE 1/150、TR 0/127，是一份"产品默认长什么样"的读数，不是治�
 | **DONE（第 40 步）** | ~~在 2.8k 上下文上放 reader，测答案准确率~~ | 已接 Chain-of-Note reader + 官方分题型 judge；100 题：`lexical 65.0%`、`cortex-session 60.0%`（33k tok）、`cortex/trim-2.8k 52.0%`（2.8k tok）。**转化率 69–73%**（三种检索质量一致），所以当前 reader 的天花板约 73% | 读数已出；对竞品是 **C 级**（题数与 reader/judge 均不同），不可相减 |
 | **P0** | **同一条管线拆组件**：生产 memory arm 与竞品 adapter 在**对齐预算**下的 A/B | 第 40 步发现 adapter 60.0% 比端到端 81.0% 低 21 个点，但那是**两个不同子集、不同 prompt、不同管线**的推断。要变成测量，只能同管线每次拆一个组件 | 两臂差 ±10pp 内，或 21 点归因到具名组件（query expansion / rerank / abstention recovery / 生产 prompt） |
 | **DONE（第 40 步）** | ~~2.8k 下的分能力准确率~~ | 已出。**结论推翻工作假设**：TR 在 lexical 上 20/20 召回却 11/20 准确，在 cortex-session 上 19/20 → 7/20——**TR 是阅读赤字不是检索赤字**；KU 20/20 → 13/20；MR 在紧预算下 16/20 → 4/20；ABS 反向（13/20 → 18/20，缺证据时拒答恰好正确） | MR/TR/KU 的准确率与召回分开报告 |
-| **P0（新首位）** | **把生产 reader prompt 用在同一份 hits 上** | TR 在检索成功之后丢了 9/20，而 21 点差距里唯一能影响"证据已到位"的题的就是 prompt。原 P1"跨会话证据压缩"因此下调 | TR 在 2.8k 下准确率 ≥+15pp 且 `recall@k` 不变 |
+| **DONE（第 41 步）** | ~~把生产 reader prompt 用在同一份 hits 上~~ → 做成**单变量子句** | 依据 TReMu（29.8→77.7，取"写出日期+逐步做差"那半）、MemFlow（三步协议 + 最新值获胜）、Test of Time（声明证据顺序）。三臂 `con` → `dispatch`：66→72、64→69、51→55；TR 11/20→15/20（lexical，**判据达成**）、MR 10/20→14/20；`recall@k` 一位未变 | 判据达成（lexical TR +20pp），但 **n=20 不显著**；KU 反向 17→15 已记录 |
+| **P0** | **500 题确认**（127 TR / 121 MR，两臂） | 100 题上 +4~6pp 是方向不是结论；20 题子集上 +4 题 p>0.05 | TR/MR 配对检验显著，且 500 题上 Δ 与 100 题同号 |
 | **P1** | reader 换模型（hits 冻结） | 分开"reader 弱"与"检索弱"：同一份 hits 换 reader，`recall@k` 恒定 | 相同 `recall@k` 下的 Δ 准确率 ≥5pp 才说明是 reader 问题 |
 | **P2** | 多会话证据组装（MR 的缺口） | 分能力表说 MR 是**双重**赤字：紧预算下 16/20 召回、4/20 准确。所以先修阅读（上一条），再看剩多少是检索 | 在阅读修复之后重测；只对残余缺口做检索改动 |
 | **P1** | 记录并约束 reader 噪声 | 同一批 100 题两次运行，`lexical-reference` 65.0% vs 68.0%（±3pp）；任何"提升"必须同时越过重复运行波动与 ±9pp 抽样误差 | 后续每次读数报 2 次运行的区间 |
