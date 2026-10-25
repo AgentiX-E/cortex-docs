@@ -1,12 +1,12 @@
 {
-  "cases": 12,
+  "cases": 16,
   "arms": [
     {
       "arm": "flat",
-      "n": 12,
-      "correct": 3,
-      "accuracy": 0.25,
-      "retiredServed": 6,
+      "n": 16,
+      "correct": 5,
+      "accuracy": 0.3125,
+      "retiredServed": 7,
       "byFamily": {
         "type-i": {
           "n": 3,
@@ -31,6 +31,14 @@
         "cascade": {
           "n": 1,
           "correct": 0
+        },
+        "plan": {
+          "n": 3,
+          "correct": 1
+        },
+        "immutable": {
+          "n": 1,
+          "correct": 1
         }
       },
       "outcomes": [
@@ -128,16 +136,48 @@
           "answer": "f24",
           "expected": null,
           "correct": false,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "pl-lapsed-is-not-a-fact",
+          "family": "plan",
+          "answer": "f26",
+          "expected": null,
+          "correct": false,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "pl-pending-stays-a-plan",
+          "family": "plan",
+          "answer": "f27",
+          "expected": "f27",
+          "correct": true,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "pl-fulfilled-becomes-a-fact",
+          "family": "plan",
+          "answer": "f29",
+          "expected": "f30",
+          "correct": false,
+          "servedRetired": 1
+        },
+        {
+          "caseId": "im-history-is-not-rewritten",
+          "family": "immutable",
+          "answer": "f31",
+          "expected": "f31",
+          "correct": true,
           "servedRetired": 0
         }
       ]
     },
     {
       "arm": "annotated",
-      "n": 12,
-      "correct": 3,
-      "accuracy": 0.25,
-      "retiredServed": 6,
+      "n": 16,
+      "correct": 5,
+      "accuracy": 0.3125,
+      "retiredServed": 7,
       "byFamily": {
         "type-i": {
           "n": 3,
@@ -162,6 +202,14 @@
         "cascade": {
           "n": 1,
           "correct": 0
+        },
+        "plan": {
+          "n": 3,
+          "correct": 1
+        },
+        "immutable": {
+          "n": 1,
+          "correct": 1
         }
       },
       "outcomes": [
@@ -260,13 +308,45 @@
           "expected": null,
           "correct": false,
           "servedRetired": 0
+        },
+        {
+          "caseId": "pl-lapsed-is-not-a-fact",
+          "family": "plan",
+          "answer": "f26",
+          "expected": null,
+          "correct": false,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "pl-pending-stays-a-plan",
+          "family": "plan",
+          "answer": "f27",
+          "expected": "f27",
+          "correct": true,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "pl-fulfilled-becomes-a-fact",
+          "family": "plan",
+          "answer": "f29",
+          "expected": "f30",
+          "correct": false,
+          "servedRetired": 1
+        },
+        {
+          "caseId": "im-history-is-not-rewritten",
+          "family": "immutable",
+          "answer": "f31",
+          "expected": "f31",
+          "correct": true,
+          "servedRetired": 0
         }
       ]
     },
     {
       "arm": "gated",
-      "n": 12,
-      "correct": 12,
+      "n": 16,
+      "correct": 16,
       "accuracy": 1,
       "retiredServed": 0,
       "byFamily": {
@@ -291,6 +371,14 @@
           "correct": 2
         },
         "cascade": {
+          "n": 1,
+          "correct": 1
+        },
+        "plan": {
+          "n": 3,
+          "correct": 3
+        },
+        "immutable": {
           "n": 1,
           "correct": 1
         }
@@ -391,6 +479,38 @@
           "expected": null,
           "correct": true,
           "servedRetired": 0
+        },
+        {
+          "caseId": "pl-lapsed-is-not-a-fact",
+          "family": "plan",
+          "answer": null,
+          "expected": null,
+          "correct": true,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "pl-pending-stays-a-plan",
+          "family": "plan",
+          "answer": "f27",
+          "expected": "f27",
+          "correct": true,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "pl-fulfilled-becomes-a-fact",
+          "family": "plan",
+          "answer": "f30",
+          "expected": "f30",
+          "correct": true,
+          "servedRetired": 0
+        },
+        {
+          "caseId": "im-history-is-not-rewritten",
+          "family": "immutable",
+          "answer": "f31",
+          "expected": "f31",
+          "correct": true,
+          "servedRetired": 0
         }
       ]
     }
@@ -423,6 +543,14 @@
         "cascade": {
           "n": 1,
           "correct": 1
+        },
+        "plan": {
+          "n": 3,
+          "correct": 3
+        },
+        "immutable": {
+          "n": 1,
+          "correct": 1
         }
       }
     },
@@ -453,12 +581,20 @@
         "cascade": {
           "n": 1,
           "correct": 1
+        },
+        "plan": {
+          "n": 3,
+          "correct": 2
+        },
+        "immutable": {
+          "n": 1,
+          "correct": 1
         }
       }
     },
     {
       "removed": "uniqueness",
-      "accuracy": 0.8333333333333334,
+      "accuracy": 0.875,
       "byFamily": {
         "type-i": {
           "n": 3,
@@ -481,6 +617,14 @@
           "correct": 2
         },
         "cascade": {
+          "n": 1,
+          "correct": 1
+        },
+        "plan": {
+          "n": 3,
+          "correct": 3
+        },
+        "immutable": {
           "n": 1,
           "correct": 1
         }
@@ -513,12 +657,20 @@
         "cascade": {
           "n": 1,
           "correct": 1
+        },
+        "plan": {
+          "n": 3,
+          "correct": 3
+        },
+        "immutable": {
+          "n": 1,
+          "correct": 1
         }
       }
     },
     {
       "removed": "cascade",
-      "accuracy": 0.9166666666666666,
+      "accuracy": 0.9375,
       "byFamily": {
         "type-i": {
           "n": 3,
@@ -541,6 +693,166 @@
           "correct": 2
         },
         "cascade": {
+          "n": 1,
+          "correct": 0
+        },
+        "plan": {
+          "n": 3,
+          "correct": 3
+        },
+        "immutable": {
+          "n": 1,
+          "correct": 1
+        }
+      }
+    },
+    {
+      "removed": "temporality",
+      "accuracy": 0.875,
+      "byFamily": {
+        "type-i": {
+          "n": 3,
+          "correct": 3
+        },
+        "historical": {
+          "n": 2,
+          "correct": 2
+        },
+        "false-stale": {
+          "n": 2,
+          "correct": 2
+        },
+        "conflict": {
+          "n": 2,
+          "correct": 2
+        },
+        "type-ii": {
+          "n": 2,
+          "correct": 2
+        },
+        "cascade": {
+          "n": 1,
+          "correct": 1
+        },
+        "plan": {
+          "n": 3,
+          "correct": 2
+        },
+        "immutable": {
+          "n": 1,
+          "correct": 0
+        }
+      }
+    },
+    {
+      "removed": "lapse",
+      "accuracy": 1,
+      "byFamily": {
+        "type-i": {
+          "n": 3,
+          "correct": 3
+        },
+        "historical": {
+          "n": 2,
+          "correct": 2
+        },
+        "false-stale": {
+          "n": 2,
+          "correct": 2
+        },
+        "conflict": {
+          "n": 2,
+          "correct": 2
+        },
+        "type-ii": {
+          "n": 2,
+          "correct": 2
+        },
+        "cascade": {
+          "n": 1,
+          "correct": 1
+        },
+        "plan": {
+          "n": 3,
+          "correct": 3
+        },
+        "immutable": {
+          "n": 1,
+          "correct": 1
+        }
+      }
+    },
+    {
+      "removed": "fulfil",
+      "accuracy": 1,
+      "byFamily": {
+        "type-i": {
+          "n": 3,
+          "correct": 3
+        },
+        "historical": {
+          "n": 2,
+          "correct": 2
+        },
+        "false-stale": {
+          "n": 2,
+          "correct": 2
+        },
+        "conflict": {
+          "n": 2,
+          "correct": 2
+        },
+        "type-ii": {
+          "n": 2,
+          "correct": 2
+        },
+        "cascade": {
+          "n": 1,
+          "correct": 1
+        },
+        "plan": {
+          "n": 3,
+          "correct": 3
+        },
+        "immutable": {
+          "n": 1,
+          "correct": 1
+        }
+      }
+    },
+    {
+      "removed": "immutability",
+      "accuracy": 0.9375,
+      "byFamily": {
+        "type-i": {
+          "n": 3,
+          "correct": 3
+        },
+        "historical": {
+          "n": 2,
+          "correct": 2
+        },
+        "false-stale": {
+          "n": 2,
+          "correct": 2
+        },
+        "conflict": {
+          "n": 2,
+          "correct": 2
+        },
+        "type-ii": {
+          "n": 2,
+          "correct": 2
+        },
+        "cascade": {
+          "n": 1,
+          "correct": 1
+        },
+        "plan": {
+          "n": 3,
+          "correct": 3
+        },
+        "immutable": {
           "n": 1,
           "correct": 0
         }

@@ -7,11 +7,12 @@ Two files, both produced by one command with no model in it:
 | `ablation-remote.txt` | `node tools/assumption-ablation.mjs --verbose` | the three arms, the per-family split, the four ablations, and every case's answer |
 | `ablation-remote.json` | `node tools/assumption-ablation.mjs --json` | the same as data, for anyone who wants to recompute a delta |
 
-The set is twelve cases generated in-repo (`packages/cortex-eval/src/assumption-ablation.ts`), each
+The set is sixteen cases generated in-repo (`packages/cortex-eval/src/assumption-ablation.ts`), each
 isolating one family from the published literature: STALE Type I (co-referential conflict) and Type II
 (propagated conflict), PACMI's stale-premise and historical arms, a conflict family where the correct
 answer is "unknown", and a **false-stale control** where an update exists but lies outside the
-question's instant, so marking it stale is the error.
+question's instant, so marking it stale is the error, a **plan** family (a commitment that lapsed, one
+still pending, one fulfilled) and an **immutable** case where two settled events compete for a slot.
 
 Three things about this evidence that a reader should hold on to:
 

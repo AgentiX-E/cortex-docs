@@ -2639,6 +2639,98 @@ cascade         91.7%     -8.3pp   cascade
 | 3 | proposer 输出 `subject`/`predicate`/`at`，否则 ledger 大半为空 | `uniqueness` 与 `supersedes` 都以槽位为前提 |
 | 4 | LongMemEval-S A/B：`gated` 上下文 vs 现行上下文（A8） | 一轮是方向，两轮才是结论 |
 
+### 9.33 第 30 步：既定事实与计划愿景，必须是两条轴而不是一个字段
+
+评审人的第三个洞察：
+
+> "用户描述的是过去发生的事情，那么这个是不可改变的既定事实。如果用户描述的是将来打算做什么，
+> 或许会发生什么，这个则是用户的计划愿景或者推断……需要逐步修正或者遗忘未真正兑现的计划。"
+
+**上一轮已经有一个 `modality` 字段，但它是一个投影，不是能力。** 没有人自动填它，也没有任何机制让一个
+计划从「待办」走到「兑现/落空」，检索时两者同等对待。所以答案是：**字段在，能力不在。**
+
+#### 一、标准给的答案：两维，不是一维
+
+| 标准 | 它区分什么 |
+|---|---|
+| **TimeML / ISO-TimeML** 七类事件 | `I-ACTION`（attempt/try/promise，"does not necessarily actually happen"）与 `I-STATE`（believe/intend/want，"alternative possible worlds"）**单列**，与 `OCCURRENCE`/`STATE` 并列 |
+| **FactBank**（LDC2009T23） | 确定性四档 **CT / PR / PS / Uu** × 极性，与时间无关 |
+| **MEANTIME** | 在 FactBank 之外多一档 **`possibility (future)`**——"未来的可能性"是独立一等值 |
+
+所以正确的模型是**两维**：`futurity`（past/present/future）× `certainty`（factual/probable/possible）。
+旧的 `modality` 退化为这两维的投影，保留是为了不破坏既有调用方。
+
+#### 二、竞品做到哪一步
+
+| 工作 | 有的 | 缺的 |
+|---|---|---|
+| **PM-Bench**（2607.12385，COLM 2026）| 前瞻记忆基准：Virtual Week 范式，83 个任务、跨日、含取消与改期；明确指出失败形态是「已完成或已取消的计划仍被执行」 | 最好配置只 65.1% F1，**跨日 <50%**；它是基准不是机制 |
+| **Prospective Intention Store** | 把延迟意图建成**带类型与生命周期的状态**，迁移规则由代码确定性执行，模型只做语义判断 | 面向「是否该执行」，不面向「回答时该不该把它当事实」 |
+| **MCB**（2608.19564）| 记忆承诺边界四选一：永久记住 / 只用当下 / 需核实 / 问用户 | 关注「该不该写入」，不涉及计划的生命周期 |
+| **PASB**（2607.10526）| 证明写入边界是拐点：下游失败 45.0% → **71.9%**（+27pp）| 同上 |
+| Graphiti / Mem0 / Hindsight | 双时态、冲突过期、四层记忆 | **没有一个把「未来」与「过去」当成需要分别作答的池** |
+
+PIS 的数字最值得记住：**同一骨干 65.1% → 82.9%，小模型 4.2% → 66.2%**。它的结论不是「换更大的模型」，
+而是「**可枚举的状态应该在代码里，只有语言部分交给模型**」——这正是本仓一贯的立场。
+
+#### 三、实现：两维 + 四态 + 不可改写
+
+- `inferTemporality(text)`：标记表驱动（will/going to/plan to/next month ↔ yesterday/last year/ago ↔
+  might/may/could/probably）。两个默认值都是有意的选择：**无将来标记即非将来**（否则整段对话都被降级为
+  推测），**无模态词即确定**（把既定事实说成「也许」会安静地侵蚀信任，代价比说错一次更大）。
+- `isImmutable(fact)`：`type === 'event'` **且** 过去 → 不可被取代。判据是**类型**不是时态，因为
+  "I lived in London" 与 "I visited London" 都是过去时，只有前者可以被后来的事实取代。
+- `reconcilePlans(facts, now)`：`pending → fulfilled` 需**声明**，`pending → abandoned` 需**声明**，
+  `pending → lapsed` 只需「到期且无消息」。**唯一靠缺席的迁移，因此给得最轻**：`lapsed` 只把权重打到
+  0.4，不删除——没人说发生，不等于没发生。
+- `planFactor` / `describePlan`：兑现=1、待定=0.8、落空=0.4、放弃=0（有人说了才算数）；交付块只在非平凡时
+  打印 `plan: a plan, lapsed (due 2026-01-31)`。
+
+#### 四、读数（受控集 16 例，无模型）
+
+```
+arm         correct   accuracy
+flat        5/16      31.3%
+annotated   5/16      31.3%      ← 仍与 flat 相同
+gated       16/16     100.0%
+
+removed         accuracy  delta    targeted
+persistence     75.0%     -25.0pp  type-i, type-ii
+uniqueness      87.5%     -12.5pp  conflict
+cascade         93.8%      -6.3pp  cascade
+temporality     87.5%     -12.5pp  plan, immutable
+immutability    93.8%      -6.3pp  immutable
+lapse          100.0%      0.0pp   plan
+fulfil         100.0%      0.0pp   plan
+```
+
+**`-temporality` 掉 12.5pp，同时打掉两个家族**：不分过去未来之后，「发生过吗」会被计划回答；而
+`event + past` 的不可改写保护也失效（保护依赖这一维）。
+
+**`-immutability` 只掉一例，别的不动**：关掉保护后 `deriveSupersedes` 会建出「罗马取代巴黎」的边，
+**历史被改写成让当前答案更好看的样子**——这正是这条保护存在的理由。
+
+**`-lapse` 与 `-fulfil` 是惰性的，原因值得记下来**：意图过滤本身已经把未兑现的计划挡在事实性问题之外，
+所以去掉 lapse 只是改了标签不改答案；而兑现的计划会被兑现它的那条事件取代，`persistence` 先一步把它退掉，
+`fulfil` 根本没被问到。两者属于**状态正确性**而非本集上的答案正确性——`describePlan` 与 `planFactor`
+会读它们，永久 `pending` 的计划会被反复端出来。**表里明说这个集测不出它们的价格，就不假装测出来了。**
+
+#### 五、没做的与不能说的
+
+- `fulfils` / `abandons` 是**声明**的（与 `invalidates` 同一条边界）。"我四月跑了马拉松"兑现"我春天要跑
+  马拉松"是一个匹配问题，PM-Bench 与 PIS 是将来做这件事的参照。声称做到，就是在声称夹具提供的能力。
+- 16 例、构造的矛盾、按 id 破平的基线：**只能读成机制归因**，不能引用为任何基准上的分数。
+- LongMemEval-S 上仍然**未跑**（A8）。
+
+#### 六、下一步
+
+| 序 | 事 | 为什么 |
+|---|---|---|
+| 1 | 让 proposer 真的输出 `futurity`/`certainty`/`subject`/`predicate`/`at` | 现在全靠句子推理，计划一旦被改写就判不出来 |
+| 2 | `fulfils` 的自动匹配（同 slot + 语义重叠 + 时间在到期前后） | 这是唯一能越过「声明」边界的方向，也是 PIS 之后最明确的一步 |
+| 3 | 检索侧接 `planFactor`（现在只有消融在调） | 判据 R1–R4 仍未在真实上下文上验证 |
+| 4 | LongMemEval-S A/B（A8） | 一轮是方向，两轮才是结论 |
+
 ---
 
 ## 10. 本期变更与下轮计划
