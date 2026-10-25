@@ -484,9 +484,11 @@ IE 1/150、TR 0/127，是一份"产品默认长什么样"的读数，不是治�
 | **DONE（第 39 步）** | ~~会话内 turn 级裁剪，或把会话预算改成 token 计量~~ → 两条都做了 | 依据 LongMemEval 论文第一条优化（session decomposition，recall@5 +9.4）；官方 harness 自带 `GRANULARITY: turn \| session` 对照。`selectTurnsWithinBudget` + `budgetUnit: 'chars'` | 同一 ~2.7k tokens：`recall@k 8.0% → 76.2%`、`MRR 0.080 → 0.758`；`all-gold 6.6% → 6.2%`（**退 0.4pp**，已记录原因） |
 | **DONE（第 40 步）** | ~~在 2.8k 上下文上放 reader，测答案准确率~~ | 已接 Chain-of-Note reader + 官方分题型 judge；100 题：`lexical 65.0%`、`cortex-session 60.0%`（33k tok）、`cortex/trim-2.8k 52.0%`（2.8k tok）。**转化率 69–73%**（三种检索质量一致），所以当前 reader 的天花板约 73% | 读数已出；对竞品是 **C 级**（题数与 reader/judge 均不同），不可相减 |
 | **P0** | **同一条管线拆组件**：生产 memory arm 与竞品 adapter 在**对齐预算**下的 A/B | 第 40 步发现 adapter 60.0% 比端到端 81.0% 低 21 个点，但那是**两个不同子集、不同 prompt、不同管线**的推断。要变成测量，只能同管线每次拆一个组件 | 两臂差 ±10pp 内，或 21 点归因到具名组件（query expansion / rerank / abstention recovery / 生产 prompt） |
-| **P1** | 2.8k 下的**分能力**准确率 | 总分说不出 MR 还是 TR 在丢，两者修法不同；分能力召回已打印，分能力准确率已接线待跑 | MR 与 TR 的准确率分开报告 |
+| **DONE（第 40 步）** | ~~2.8k 下的分能力准确率~~ | 已出。**结论推翻工作假设**：TR 在 lexical 上 20/20 召回却 11/20 准确，在 cortex-session 上 19/20 → 7/20——**TR 是阅读赤字不是检索赤字**；KU 20/20 → 13/20；MR 在紧预算下 16/20 → 4/20；ABS 反向（13/20 → 18/20，缺证据时拒答恰好正确） | MR/TR/KU 的准确率与召回分开报告 |
+| **P0（新首位）** | **把生产 reader prompt 用在同一份 hits 上** | TR 在检索成功之后丢了 9/20，而 21 点差距里唯一能影响"证据已到位"的题的就是 prompt。原 P1"跨会话证据压缩"因此下调 | TR 在 2.8k 下准确率 ≥+15pp 且 `recall@k` 不变 |
 | **P1** | reader 换模型（hits 冻结） | 分开"reader 弱"与"检索弱"：同一份 hits 换 reader，`recall@k` 恒定 | 相同 `recall@k` 下的 Δ 准确率 ≥5pp 才说明是 reader 问题 |
-| **P2** | 多会话证据组装（MR 的缺口） | 第 40 步证明 `all-gold` 是误导指标（6.0% 却 52.0% 准确率），所以"补全所有 gold"不是目标；真正的缺口要看分能力准确率 | 待 §P1 分能力读数后再定判据 |
+| **P2** | 多会话证据组装（MR 的缺口） | 分能力表说 MR 是**双重**赤字：紧预算下 16/20 召回、4/20 准确。所以先修阅读（上一条），再看剩多少是检索 | 在阅读修复之后重测；只对残余缺口做检索改动 |
+| **P1** | 记录并约束 reader 噪声 | 同一批 100 题两次运行，`lexical-reference` 65.0% vs 68.0%（±3pp）；任何"提升"必须同时越过重复运行波动与 ±9pp 抽样误差 | 后续每次读数报 2 次运行的区间 |
 | **P1** | 给 `Question` 加 per-session 时间戳 | 现在 `sessionsOf` 给每题所有 session 盖同一个问题日期，`asOf` 因此恒等失效；时间只能靠渲染文本里的 `[date]` 前缀进入信号 | `asOf` 能过滤掉未来 session；TR 列出现可归因移动 |
 | **P0** | 竞品统一评测台 H1：Hindsight（MIT、可换 DeepSeek、本地 embedding）跑 100 题，同 reader 同 judge | 这是把 C 级竞品数字变成 A 级的唯一路径。**H0 已完成**：契约、`comparability()`、`measureRetrieval()` 循环、可证为零的下限，共 68 条测试，无模型无 key 即可跑通（`node tools/competitor-harness.mjs`）。剩下的是把一个 adapter 接上去 | 产出第一组 A 级竞品对比；`comparability()` 返回 A |
 | **P1** | LongMemEval-S A/B：`gated` 上下文 vs 现行上下文（A8） | 这是唯一能把 F11–F14 从"夹具成立"变成"语料成立"的实验；一轮是方向，两轮是结论 | 配对 McNemar，Δ 越过噪声底（MR ±2 / TR ±4 题） |
