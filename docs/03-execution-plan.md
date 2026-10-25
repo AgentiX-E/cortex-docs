@@ -478,6 +478,7 @@ IE 1/150、TR 0/127，是一份"产品默认长什么样"的读数，不是治�
 |---|---|---|---|
 | **P0** | `assemble` 接到 memory arm 的检索路径（四路召回 → 台账 → 块） | 现在 `assemble` 的调用者只有消融与测试，所以所有台账读数都是夹具读数。不接线，前三轮增量对真实分数贡献为零 | `arm` 的上下文由 `assemble` 产出，且 K0/K1 在真实语料上重测；S1 不降 |
 | **P0** | proposer v6：输出 `edges`、`subject`/`predicate`/`at`、`futurity`/`certainty` | 闸门与台账都以这些字段为前提；不给字段，闸门只会拒绝、台账大半为空 | 20 对样本上闸门接受率 ≥70%（G1）；`uniqueness`/`supersedes` 的触发次数非零 |
+| **P0** | 把 `buildSessionPrompt` 的相关性排序抽成纯函数，adapter 与 prompt 共用 | 这一步同时解决两件事：MR 的已知杠杆（选择不看 query），和 adapter 只覆盖三步的缺口。**已有证据**：合成集上任一命中 91.7% 但全 gold 只有 8.3%，且换问题返回同样的会话 | `cortex-session` 的 MRR 与词法行可比；同一不变式测试覆盖第四步 |
 | **P0** | 竞品统一评测台 H1：Hindsight（MIT、可换 DeepSeek、本地 embedding）跑 100 题，同 reader 同 judge | 这是把 C 级竞品数字变成 A 级的唯一路径。**H0 已完成**：契约、`comparability()`、`measureRetrieval()` 循环、可证为零的下限，共 68 条测试，无模型无 key 即可跑通（`node tools/competitor-harness.mjs`）。剩下的是把一个 adapter 接上去 | 产出第一组 A 级竞品对比；`comparability()` 返回 A |
 | **P1** | LongMemEval-S A/B：`gated` 上下文 vs 现行上下文（A8） | 这是唯一能把 F11–F14 从"夹具成立"变成"语料成立"的实验；一轮是方向，两轮是结论 | 配对 McNemar，Δ 越过噪声底（MR ±2 / TR ±4 题） |
 | **P1** | 摄入侧自动判定 Type II 失效（同 slot 的 supersedes → 上游变更→下游规则） | 现在 `invalidates` 是声明的，与 PACMI 同一条边界；越过它是唯一能真正领先它的方向 | 在受控集与真实语料上各测一次，false-stale 不上升 |

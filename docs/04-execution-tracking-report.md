@@ -3003,6 +3003,67 @@ null-floor          none       0.0%      0.0%      0.000   0/24      24     16
 2. **没有 answer/judge 阶段。** 它们需要模型，属于 H1 的 runner。
 3. **合成集的 gold 是推出来的，不是标注的。** 只对生成器成立；真实数据集必须用 `goldTurns`。
 
+### 9.37 第 36 步：把 Cortex 自己放上秤 —— 秤立刻指出了一个产品缺陷
+
+上一轮结尾写"秤上只放了一个砝码和一个空盘"。这一轮把 Cortex 放上去，结果是：
+
+```
+provider            build      recall@k  all-gold  mrr     found
+lexical-reference   none       100.0%    100.0%    0.630   24/24
+cortex-session      embedding   91.7%      8.3%    0.296   22/24
+cortex-session      embedding   87.5%      4.2%    0.291   21/24   （session budget 8）
+null-floor          none         0.0%      0.0%    0.000    0/24
+```
+
+#### 一、adapter 怎么保证测的是产品而不是副本
+
+`cortex-memory/src/provider.ts` 直接调产品的两个纯函数：
+
+```
+admitSessions(sessions, gate) -> selectSessionBudget(admitted, ceiling) -> hits
+```
+
+并有一条**不变式测试**：同一输入下，adapter 的返回必须等于这两个函数手工组合的结果。
+adapter 哪一天长出私有的选择逻辑，这条测试就会红——这是对"重建一套实现去测自己"的机械防御。
+
+类型定义在 memory 包内、**故意不 import `cortex-eval`**：反过来会让测量包成为产品的依赖。
+两者结构相同，靠形状满足契约。
+
+#### 二、秤指出了什么
+
+**任一命中 91.7%，全 gold 覆盖 8.3%。** 词法索引按问题排序，能覆盖每条 gold；产品的选择对 22/24
+题至少覆盖一条，但只有 2 题覆盖全部。
+
+这就是多会话失败的形状：**需要三个会话的题，用一条会话回答**。
+
+原因在产品里，不在 adapter：`selectSessionBudget` 按 `bestValue(session)` 排序，而这个函数**看不到
+query**，它看的是新近程度与长度。预算一紧，活下来的是"又新又长"的会话，不是"相关的"会话。
+有一条测试把这个性质钉住而不是道歉：同一份存储上换两个不同的问题，返回的会话完全相同。
+
+#### 三、adapter 没覆盖的那一步，先说清楚
+
+产品的 session 路径有四步，adapter 覆盖三步。第四步是 `buildSessionPrompt` 内部的**相关性排序**。
+在它被抽成纯函数之前：
+
+- `cortex-session` 的 **MRR 不可比**（表里打印出来只是为了显示它不可比）；
+- all-gold 也因为同一个缺失被**低估**：没有相关性排序时，`search(limit)` 按 session 下标截断，
+  而那是到达顺序。
+
+所以这批数字的诚实读法比表格窄：**准入与预算没有丢证据，选择丢了；而能修选择的那一环现在从外面调不到。**
+
+#### 四、下一步因此变得很小
+
+把 `buildSessionPrompt` 里的排序抽成纯函数，让 prompt 构造与 adapter 共用它，第四步就和前三步
+一起落在那条不变式测试下。这是一次重构，不是一次实验——而且它同时解决两件事：MR 的已知杠杆，
+和"adapter 只覆盖三步"的缺口。
+
+#### 五、没做的
+
+1. **没有 LongMemEval 上的读数。** 合成集只能说明"选择不看 query"这个性质存在，不能给出它的代价
+   （合成集的 gold 是推出来的，而且每题只有 3 个属性）。
+2. **没有 relevance 那一步。** 见上。
+3. **没有 answer/judge 阶段。** 需要 runner 的 key。
+
 ---
 
 ## 10. 本期变更与下轮计划
