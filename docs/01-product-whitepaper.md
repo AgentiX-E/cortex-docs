@@ -496,9 +496,13 @@ CI 真实全绿（不允许 `continue-on-error` / `|| true`）。这些纪律本
 
 | 等级 | 定义 | 允许的用法 |
 |---|---|---|
-| **A** | 同数据集、同 judge、同 reader、同指标 | 可以说"差多少" |
-| **B** | 同数据集同指标，但 reader/judge 不同，或用了代理指标（如 session hit rate） | 只能说方向 |
-| **C** | 不同数据集、不同子集，或厂商自报且无公开配方 | 只能作为动机，**不得**用于"我们落后 X" |
+| **A** | **我们自己跑过**，且数据集、judge、reader、top-k、预算全部一致 | 可以说"差多少" |
+| **B** | 我们自己跑过，但 reader 或 judge 不同（两边数字都打印） | 只能说方向 |
+| **C** | **我们还没跑**，且公开配方不足以复现 | 只能作为动机，**不得**用于"我们落后 X" |
+
+**上一版把 C 写成了一种对竞品的判决，这是错的。** 不可比的是**那个数字**（配方不明），不是**那个系统**：
+只要代码开源、模型可换、数据可注入，就可以自己跑出来，那才是 A 级。所以 C 现在是一个**待办**，
+带有理由，而不是一个结论。§6.3 给出执行方案。
 
 **LongMemEval-S 是唯一存在 A 级横比的轴**，也是因此它成为主战场：
 
@@ -535,6 +539,98 @@ CI 真实全绿（不允许 `continue-on-error` / `|| true`）。这些纪律本
 
 最后一行是这一版白皮书的结构性变化：**文档里的数字不再是抄来的，而是被 CI 校验的**。文档写
 86.8%、代码算出 86.8%，两者一致才允许合并；不一致时 `docs:crosscheck` 会指名文件、行号与两个值。
+
+### 6.3 自己跑竞品：把 C 级变成 A 级的方案
+
+上一版把 Hindsight 的 94.6% 标成 C 级并停在"不可比"。正确的追问是：**既然代码开源、模型可换，
+为什么不自己跑一遍？** 核查之后结论是——能跑，而且门槛比预期低。
+
+#### 能不能跑（逐个核实，依据各自官方文档）
+
+| 系统 | 许可 / 源码 | LLM 可换 | Embedding 可换 | 结论 |
+|---|---|---|---|---|
+| **Hindsight** | MIT，服务端 + 客户端 | **是**：25+ provider，含 `deepseek`、任意 OpenAI-compatible、Ollama/llama.cpp | 是，默认本地 `bge-small-en-v1.5` | **能跑**，且本地 embedding + 内嵌 Postgres，整机可离线（LLM 除外）|
+| **Mem0** | Apache-2.0 | 是（`configs/*.yaml`，OpenAI-compatible）| 是 | **能跑**，官方有 LongMemEval 评测脚本 |
+| **Graphiti / Zep** | Apache-2.0 | 是 | 是 | **能跑**，需图数据库（Neo4j/FalkorDB）|
+| **Letta** | Apache-2.0 | 是 | 是 | 能跑，但它是 agent-loop 形状，需要适配器压成 `search` |
+| **A-MEM / HippoRAG 2** | MIT，研究代码 | 是 | 是 | 子集能跑 |
+| Supermemory / Synap / Graphonomous / OMEGA | 闭源或不可复现 | 否 | 否 | 只能引用，且 Graphonomous 用的是关键词召回代理指标，不是官方 judge |
+
+**四个系统今天就能在同一套管线下跑**（Hindsight、Mem0、Graphiti、Letta），两个可在子集上跑。
+
+#### 一条被忽略的公开证据
+
+Hindsight 自己的对比里有一个比 94.6% 更有用的数：配 **20B 开源模型 83.6%**，同一个模型不用 Hindsight、
+把全部历史塞进上下文只有 **39.0%**。而 94.6% 那一行用的是 Gemini-3 Pro。
+
+这正好是可以复现的那一档：**我们有一个能调用的模型**。所以诚实的比较不是"Cortex 81.0 对 Hindsight 94.6"，
+而是"**同用 DeepSeek、同 judge、同 500 题，Cortex 与 Hindsight 各是多少**"，再把厂商的模型阶梯作为脚注。
+
+#### 统一评测台
+
+```
+dataset ──> ingest ──> search ──> answer ──> judge ──> report
+              │          │          │          │
+        provider A..N   top-k    一个 reader  一个 judge
+```
+
+契约已落地（`cortex-eval/src/competitor.ts`）：
+
+```ts
+ingest(sessions): IngestReport
+search(query, { limit, asOf }): SearchHit[]
+reset(): Promise<void>
+```
+
+四条让它公平的设计：
+
+1. **provider 只返回检索到的文本，不返回答案。** 生成归 harness，reader 因此是一个变量而不是每系统一个。
+2. **`build: 'llm' | 'embedding' | 'none'` 必须声明。** 用模型建库和纯词法索引不是一类东西，隐藏这一点
+   的比较不是比较。
+3. **`reset()` 存在，且 run 声明用不用它。** 全局模式（共享容器，接近生产）与隔离模式（每题一个容器，
+   无交叉污染）给出不同数字，所以模式属于配置。
+4. **`asOf` 传给每个 provider。** 有时间模型的用它，没有的忽略——**这个差异本身就是发现**，
+   表现为分类别差异，而不是一句免责。
+
+#### Cortex 也要当 provider
+
+这一条有代价。如果 harness 用一个管线跑竞品、而 Cortex 保留自己的管线，测的就是管线。
+所以 Cortex 也实现同一个契约：同样的 session 进、同样的 `search` 出。它失去自己管线带来的所有优势，
+而这正是重点。
+
+#### 可比性是一个函数，不是形容词
+
+`comparability(left, right)` 吃两份 run 配置，返回等级 + 差异字段：
+
+| 差异字段 | 等级 |
+|---|---|
+| 无 | **A** |
+| 只有 reader / judge / judge prompt | **B** |
+| dataset / 题数 / top-k / 预算 | **C**（不许谈差距）|
+
+把 top-k 放进硬性一栏是刻意的：读 200 条与读 10 条是两个实验，读得多的赢和记忆无关。
+
+#### 分期，按"最快产出一个可用数字"排序
+
+| 阶段 | 做什么 | 产出 | 成本 |
+|---|---|---|---|
+| **H0** | 词法参考实现 + Cortex adapter + `toSessions` + `comparability`（**本步已完成**）| 无模型、无 key、无网络也能跑通整条管线 | 0 |
+| **H1** | Hindsight，100 题子集，DeepSeek reader，官方 judge | **本项目第一个 A 级竞品数字** | 一个容器 + 100 次 ingest/recall 的 token |
+| **H2** | + Mem0 OSS + Graphiti，同 100 题 | 三系统同轴排名 | 三个服务 |
+| **H3** | 全 500 题 × 2 跑 × 4 系统 | 白皮书直接引用的表格 | H1 的 5 倍 |
+| **H4** | 厂商模型阶梯（我们调不到的模型）按配方引用 | 解释 83% 与 94% 之间距离的脚注 | 0（读）|
+
+#### 这套方案不解决的问题
+
+1. **冻结的基准仍然只测一个快照。** LongMemEval-S 塞得进 1M 窗口，"全都读进去"就能拿高分。BEAM（10M）
+   才是规模诚实的测法，但目前没有我们能跑的系统发过可复现的 BEAM 数。
+2. **LongMemEval 的填充对话来自别的语料**，风格可能泄漏"哪段是证据"。harness 修不了这个，
+   缓解办法是**同时报检索召回**，而不只报答案准确率。
+3. **共享 harness 偏爱能塞进契约的系统。** Letta 那种 agent-loop 形状压成 `search` 会失真；但反过来让每个
+   系统用自己的答题方式，就失去了 reader 这个受控变量，更糟。
+4. **我们自己的 adapter 是我们写的。** 防御只有一条：它要小、要被 review、要能在没有模型的情况下测通。
+
+一句话：**C 级从"永久判决"变成了"带理由的待办"**，而 H1 是把它变成 A 级的最小一步。
 
 ---
 

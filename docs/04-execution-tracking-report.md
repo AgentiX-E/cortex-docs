@@ -2849,6 +2849,92 @@ gated     = 全开（消融把其中一项关掉）
 按可测性排序（不是重要性）：`assemble` 接线 → proposer v6 出字段 → A8 的 A/B → 自动 Type II
 → 日期框架 / 第二跳检索 → A3 第三轮（需要人）。
 
+### 9.35 第 34 步：C 级不是判决，是待办 —— 把竞品接进同一套管线的契约
+
+评审人问了一句我上一轮答错的话：
+
+> "如果是因为模型或者测试集不同，难道不可以专门为 Hindsight 构建一个工作流使用我们可以使用的模型和
+> 数据集来跑 Hindsight 来获取指标做比较吗？"
+
+**可以。而上一版把 C 级写成了对系统的判决，这是错的。** 不可比的是那个**数字**（配方不明），
+不是那个**系统**；只要代码开源、模型可换、数据可注入，就能自己跑出来，那才是 A 级。
+
+#### 一、四层拆开，三层可解
+
+| 层 | 是什么 | 能否解决 |
+|---|---|---|
+| **L1 配方** | reader / judge / prompt / top-k / 子集 / 答案键版本不同 | **能，完全能**：一套 harness、一个 reader、一个 judge、一个深度 |
+| **L2 代码** | 闭源或只有托管 API | 部分：下面八个系统里七个有源码 |
+| **L3 模型** | 公开数字用的是 GPT-4o / Gemini-3 Pro | 能，**用替换的方式**——但必须声明，因为替换会改数字 |
+| **L4 成本** | 500 题 × N 系统 × 重复，且每次 ingest 都要调 LLM | **真实且是绑定约束**，这就是分期而不是承诺的原因 |
+
+#### 二、逐个核实"能不能跑"（依据各自官方文档，不是二手总结）
+
+| 系统 | 许可 | LLM 可换 | Embedding 可换 | 结论 |
+|---|---|---|---|---|
+| **Hindsight** | MIT | **是**：25+ provider，含 `deepseek`、任意 OpenAI-compatible、Ollama/llama.cpp | 是，默认本地 `bge-small-en-v1.5` | **能跑**，内嵌 Postgres，除 LLM 外可全离线 |
+| **Mem0** | Apache-2.0 | 是 | 是 | **能跑**，官方有 LongMemEval 脚本 |
+| **Graphiti** | Apache-2.0 | 是 | 是 | 能跑，需图库 |
+| **Letta** | Apache-2.0 | 是 | 是 | 能跑，但 agent-loop 形状需压成 `search` |
+| A-MEM / HippoRAG 2 | MIT 研究代码 | 是 | 是 | 子集能跑 |
+| Supermemory / Synap / Graphonomous / OMEGA | 闭源或不可复现 | 否 | 否 | 只能引用 |
+
+本地已核实的两条硬证据：`pip index versions hindsight-api` → **1.1.0 存在**；
+`pip download --no-deps hindsight-api` → **成功**。GHCR 的 9 GB 镜像在本沙箱里未在限定时间内拉完，
+所以 H1 的执行放在 CI runner（有 Org secrets 与更多时间），而不是本地。
+
+#### 三、一条被忽略的公开数字
+
+Hindsight 自己的对比里，比 94.6% 更有用的是：**配 20B 开源模型 83.6%**，同模型不用它、全历史塞上下文
+只有 **39.0%**；94.6% 那行用的是 Gemini-3 Pro。
+
+这正好是可以复现的那一档。所以诚实的比较不是"Cortex 81.0 对 Hindsight 94.6"，而是
+"**同用 DeepSeek、同 judge、同 500 题，两边各是多少**"，厂商的模型阶梯作脚注。
+
+#### 四、契约（已落地）
+
+`cortex-eval/src/competitor.ts`：
+
+```ts
+ingest(sessions): IngestReport          // sessions + turns + skipped[]
+search(query, { limit, asOf }): SearchHit[]
+reset(): Promise<void>
+```
+
+四条让它公平的设计，每一条堵住一种作弊：
+
+1. **provider 不返回答案，只返回检索到的文本。** 生成归 harness → reader 是一个变量，不是每系统一个。
+2. **`build: 'llm' | 'embedding' | 'none'` 必须声明。** 用模型建库与纯词法索引不是一类东西。
+3. **`reset()` 存在且模式要声明。** 全局（共享容器）与隔离（每题一容器）给不同数字。
+4. **`asOf` 传给每个 provider。** 有时间模型的用它、没有的忽略——**这个差异本身就是发现**。
+
+`comparability(a, b)` 把等级从形容词变成函数：只有 reader/judge 差 → B；dataset/题数/top-k/预算差 → C。
+**top-k 放在硬性一栏是刻意的**：读 200 条与读 10 条是两个实验。
+
+**Cortex 也要实现同一契约。** 否则测的是管线而不是系统。它因此失去自己管线带来的全部优势，
+这正是重点。
+
+#### 五、H0 已完成，H1 待跑
+
+| 阶段 | 内容 | 状态 |
+|---|---|---|
+| **H0** | `LexicalProvider` + `toSessions` + `comparability`，25 条测试，无模型无 key | ✅ 本步 |
+| **H1** | Hindsight 100 题，DeepSeek reader，官方 judge | ⏳ 待 CI runner |
+| **H2** | + Mem0 OSS + Graphiti | ⏳ |
+| **H3** | 全 500 题 × 2 跑 × 4 系统 | ⏳ |
+| **H4** | 厂商模型阶梯按配方引用 | ⏳（读）|
+
+#### 六、这套方案不解决的问题（写在前面，免得日后被当成立场）
+
+1. **冻结基准只测一个快照。** LongMemEval-S 塞得进 1M 窗口，"全读进去"就能高分；BEAM（10M）才是规模
+   诚实的测法，但目前没有我们能跑的系统发过可复现的 BEAM 数。
+2. **填充对话来自别的语料**，风格可能泄漏"哪段是证据"。缓解办法是**同时报检索召回**，不只报答案准确率。
+3. **共享 harness 偏爱能塞进契约的系统。** Letta 那种形状会失真；但让每系统自己答题就失去 reader 这个
+   受控变量，更糟。
+4. **我们自己的 adapter 是我们写的。** 防御只有一条：小、被 review、能无模型测通。
+
+一句话：**C 级从"永久判决"变成了"带理由的待办"**，H1 是把它变成 A 级的最小一步。
+
 ---
 
 ## 10. 本期变更与下轮计划

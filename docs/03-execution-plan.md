@@ -478,6 +478,7 @@ IE 1/150、TR 0/127，是一份"产品默认长什么样"的读数，不是治�
 |---|---|---|---|
 | **P0** | `assemble` 接到 memory arm 的检索路径（四路召回 → 台账 → 块） | 现在 `assemble` 的调用者只有消融与测试，所以所有台账读数都是夹具读数。不接线，前三轮增量对真实分数贡献为零 | `arm` 的上下文由 `assemble` 产出，且 K0/K1 在真实语料上重测；S1 不降 |
 | **P0** | proposer v6：输出 `edges`、`subject`/`predicate`/`at`、`futurity`/`certainty` | 闸门与台账都以这些字段为前提；不给字段，闸门只会拒绝、台账大半为空 | 20 对样本上闸门接受率 ≥70%（G1）；`uniqueness`/`supersedes` 的触发次数非零 |
+| **P0** | 竞品统一评测台 H1：Hindsight（MIT、可换 DeepSeek、本地 embedding）跑 100 题，同 reader 同 judge | 这是把 C 级竞品数字变成 A 级的唯一路径。方案与契约已在 `cortex-eval/src/competitor.ts` 与 `docs/PLAN-COMPETITOR-HARNESS.md` 落地，`LexicalProvider` 已能无模型跑通整条管线 | 产出第一组 A 级竞品对比；`comparability()` 返回 A |
 | **P1** | LongMemEval-S A/B：`gated` 上下文 vs 现行上下文（A8） | 这是唯一能把 F11–F14 从"夹具成立"变成"语料成立"的实验；一轮是方向，两轮是结论 | 配对 McNemar，Δ 越过噪声底（MR ±2 / TR ±4 题） |
 | **P1** | 摄入侧自动判定 Type II 失效（同 slot 的 supersedes → 上游变更→下游规则） | 现在 `invalidates` 是声明的，与 PACMI 同一条边界；越过它是唯一能真正领先它的方向 | 在受控集与真实语料上各测一次，false-stale 不上升 |
 | **P2** | 日期框架（`PREREG-DATE-FRAME.md` 已注册） | TR 的已知杠杆，但需要 P0 的接线完成后才可归因 | TR ≥ +8pp，且 IE/KU/ABS 一动即回退 |
