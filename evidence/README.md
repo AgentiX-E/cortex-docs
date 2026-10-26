@@ -13,6 +13,7 @@
 | `longmemeval/` | 94 篇验收判决、根因审计、分析脚本、dispatch 脚本、run id 与日志（2026-09 至 2026-10） | 按 `longmemeval/00-ANALYSIS-README.md` 的索引；结论已抽取进 `docs/04` §2、§4 |
 | `longmemeval/run-ids/` | 每次实验的 GitHub Actions run id | 用 `dispatch/download_*.sh` 重新下载产物 |
 | `longmemeval/scripts/` | 分析脚本（Python / Node），读取下载的产物 | 脚本注释写明它读什么、算什么 |
+| `longmemeval/40088479628/` | **一次调用里同时测两个系统**的产物（`reference-pipeline` 43.40% 对 `cortex-memory` 80.80%，McNemar p=1.694e-33） | 复核"81.0% 与 44.2% 是两个系统"这一结论的唯一物证；`README.md` 说明它为什么存在、删了哪两个字段 |
 
 POC 的代码与结果**不在这里**，在 `poc/`（代码）与 `poc/results/`（数字）。
 
