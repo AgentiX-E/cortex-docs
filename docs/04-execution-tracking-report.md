@@ -4120,8 +4120,24 @@ IE 拒答 135 题，其中只有 16 题答案就在眼前；TR 作答 105 题，
 2. **批判计数器**。两臂 500 题逐位相同，仍然是运行必须能解释的事实。
 3. **§9.48 的四项排除**。它们是对**参考管线**的正确排除，说明了它的 56.6 个点去了哪里。
 
-**并新增一条**：批判的 `recall` vs `per-item` 预测**未被检验**——它跑在一个 MR 路由根本不经过
-`critiqueAggregationLedger` 的系统里。必须在 `benchmark-cortex-memory.yml` 上重放。
+**并新增一条，以及它的第一次自我更正。** 本节初稿写过"批判是 `cortex-memory` 的机制，两次运行
+跑错了系统"。读代码否定了它：
+
+```
+$ rg -c critique packages/cortex-memory/src/memory.ts \
+                     packages/cortex-eval/src/natural-language-memory.ts
+packages/cortex-eval/src/natural-language-memory.ts:52
+```
+
+`memory.ts` 一个都没有：`enableAggregationCritique` / `critiqueAggregationLedger` /
+`aggregationCritiqueMode` **只在参考管线里**，所以 `benchmark.yml` 是能测它的唯一 workflow，
+§9.47 的两次运行位置正确。它们缺的是**可观测性**——两次运行早于 `critiqueStats` 落地——
+所以"两臂逐位相同"仍无法分成"从未到达 / 到达但没发现 / 到达但改了没影响答案"。
+**这个实验需要的是一次带计数器的重跑，不是搬场。**
+
+这次更正本身值得记下来：它是**同一个错误的一次变体**——从配置的形状而不是从代码去断言
+"某个机制在某条臂里"。第一次的代价是一整轮，这次是十分钟。规则只有一条：
+**在断言某个机制在某条臂里可达或不可达之前，先在该臂的源码里 grep 那个符号。**
 
 #### 五、修复：让身份跟着数字走
 
@@ -4283,7 +4299,7 @@ A 级带内或之上。
 
 | # | 优先级 | 动作 | 为什么是这个顺序 | 验收判据 |
 |---|---|---|---|---|
-| 1 | **P0** | **把批判实验搬到 `benchmark-cortex-memory.yml`**（`recall` vs `per-item`，500 题） | 这是唯一一条**零新代码**、只差一次 dispatch 的实验，而 §5.6.5 的两条预注册预测至今**未被检验**：上一轮跑在 MR 路由不经过 `critiqueAggregationLedger` 的系统里 | 两臂都带 `critiqueStats`；`eligible === fired + noOp + skipped`；MR Δ 越过 10 题（7.9pp）才称效应；配对 McNemar |
+| 1 | **P0** | **批判实验带计数器重跑**（`benchmark.yml`，`aggregation_critique=1`，`recall` 与 `per-item` 各一次，500 题） | 唯一一条**零新代码**、只差 dispatch 的实验。位置本来就对（批判只在 `natural-language-memory.ts`，`memory.ts` 里 0 处；`rg -c` 可复核），缺的是 `critiqueStats`——它在两次运行之后才落地 | 两臂都带 `critiqueStats`；`eligible === fired + noOp + skipped`；**"逐位相同"必须被分成三个数**；MR Δ 越过 10 题（7.9pp）才称效应；配对 McNemar |
 | 2 | **P0** | **MR 的检索单位实验**（`relevanceUnits: session`，§13.105 六条预测） | MR 是本仓**唯一"同一 run 里已知有更好答案"**的能力（84.30% 对 69.42%）。§13.105 的条件（48,000 字符 / 256 宽池 / user-only / cap 400）**现在全部在位**——该节当时的判词是"在 24,000 与 64 宽池下，会话单位会挤掉太多东西，那个判词对那个配置是对的" | 预测 3：MR 均值 ≥ 91；预测 4：MR 弃权 ≤ 10；预测 5：少算从 15 降到 ≤ 10；预测 6：MR `promptChars` 46,186 ± 1,000 |
 | 3 | **P1** | **21 点差距重新分解**（`cortex-memory` vs 最小 adapter，**对齐预算**） | 原分解读的是 `natural-language-memory.ts`，是 43.40% 那个系统的机器。要在 `cortex-memory` 自己的四个杠杆上重做：相关性池宽度、证据室、角色过滤、ask | 每次只动一个杠杆、配对、越过该列噪声地板；四项贡献相加与 21 点差 ≤3pp |
 | 4 | **P1** | **噪声地板写进每一次读数** | 已测得：127 题的 TR 列在 prompt 完全不变时可摆 **10 题（7.9pp）**。任何 Δ 不经此比较就称效应，都是把噪声写成发现 | 报告与文档里每个 Δ 旁标注对应列的噪声地板；<8pp 不称效应 |
@@ -4294,8 +4310,9 @@ A 级带内或之上。
 #### 为什么第 1 步不是"再修一次提示词"
 
 过去三轮的经验是同一个：**在一个看不见的机制上调参，等于再赌一次。** 批判的两条预测之所以悬置，
-不是因为机制无效，而是因为它从未被到达。而计数器（`eligible/fired/noOp/skipped`）已经在产物里，
-所以这一次 dispatch 的读数**在跑之前就能被判读**——这才是它排第一的原因，不是因为便宜。
+不是因为机制无效，而是因为读数里看不出它有没有到达。而计数器（`eligible/fired/noOp/skipped`）
+现在已经在产物里，所以这一次 dispatch 的结论**在跑之前就能被判读**——两个臂的三种状态各有对应的
+判词，不需要事后再解释。这才是它排第一的原因，不是因为便宜。
 
 #### 为什么第 2 步紧跟其后
 

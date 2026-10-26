@@ -1766,10 +1766,20 @@ const grade = differing.some(k => HARD.includes(k)) ? 'C'
 两条都要越过第 43 步测得的噪声地板：**121 题的列在 prompt 完全不变时可摆约 10 题（7.9pp）**。
 低于它的差不称差，且两条都会做同题配对检验，不靠总分。
 
-**这两条预测至今未被检验**，原因与批判机制无关：两条臂跑在 `benchmark.yml` 上，而那条 workflow
-的 feature 臂是参考管线（`nl-abstain-feature`，`topK=15`），它的 MR 路由根本不经过
-`critiqueAggregationLedger`。机制在该系统里从未被到达，所以"两臂逐位相同"是关于那次运行的结论，
-不是关于批判的结论。正确的 dispatch 在 `benchmark-cortex-memory.yml` 上，见 §5.6.6。
+**这两条预测至今未被检验，但位置是对的。** 最初的判断是"批判是 `cortex-memory` 的机制，所以两次
+运行跑错了系统"——读代码否定了它：
+
+```
+$ rg -c critique packages/cortex-memory/src/memory.ts \
+                     packages/cortex-eval/src/natural-language-memory.ts
+packages/cortex-eval/src/natural-language-memory.ts:52
+```
+
+`memory.ts` 一个都没有。`enableAggregationCritique` / `critiqueAggregationLedger` /
+`aggregationCritiqueMode` **只存在于参考管线**，所以 `benchmark.yml` 是能测它的**唯一** workflow，
+§9.47 的两次运行位置正确。它们缺的不是位置而是**可观测性**：两次运行早于 `critiqueStats` 落地，
+所以"两臂逐位相同"仍然无法区分为"从未到达 / 到达但没发现 / 到达但改了没影响答案"。
+**这个实验需要的是一次带计数器的重跑，不是搬场**（§5.6.6.5 第 3 条）。
 
 ---
 
@@ -1852,7 +1862,10 @@ const grade = differing.some(k => HARD.includes(k)) ? 'C'
 1. **21 点差距需要重新分解**，对象是 `cortex-memory` 与最小适配器之间，而不是参考管线与它之间；
 2. **MR 69.42% 是本仓唯一"已知有更好的答案"的能力**：同一 run 里参考管线 84.30%
    （`p = 2.935e-3`）。`PREREGISTRATION-CORTEX-MEMORY-ARM.md` §13.105 已为此注册六条预测；
-3. **批判实验要在正确的 workflow 上重跑**，否则 §5.6.5 的两条预测既不算通过也不算推翻。
+3. **批判实验要带计数器重跑**（`benchmark.yml`，`aggregation_critique=1` 两臂 `recall` /
+   `per-item`，500 题）。位置本来就对——批判只在参考管线里；缺的是把"两臂逐位相同"分成
+   "从未到达 / 到达但没发现 / 到达但改了没影响答案"的那三个数。不重跑，§5.6.5 的两条预测
+   既不算通过也不算推翻。
 
 ---
 
