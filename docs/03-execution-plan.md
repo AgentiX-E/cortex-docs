@@ -467,7 +467,7 @@ IE 1/150、TR 0/127，是一份"产品默认长什么样"的读数，不是治�
 | 未过线的能力 | MR <!-- reading:S3 -->69.6%、TR <!-- reading:S4 -->74.6% | 同上 |
 | 验收判据 | 18 条（13 gate / 5 aim，其中 1 条 accepted） | `cortex/docs/ACCEPTANCE-MATRIX.md` |
 | 受控集 | 17 例，8 家族，三臂 + 8 消融 | `tools/assumption-ablation.mjs` |
-| 测试 | 全仓 3,920（+ 572 条 tools 测试），四维覆盖率每包 ≥95%（core / ai / memory 全 100%） | `pnpm check` |
+| 测试 | 全仓 3,928（+ 572 条 tools 测试），四维覆盖率每包 ≥95%（core / ai / memory 全 100%） | `pnpm check` |
 | 导出债 | 392 条孤儿 / 853 条导出，逐条有理由 | `tools/export-census-baseline.json` |
 
 ### 13.2 下一步，按依赖排序
@@ -489,7 +489,9 @@ IE 1/150、TR 0/127，是一份"产品默认长什么样"的读数，不是治�
 | **DONE（第 42 步）** | ~~500 题确认~~ | 500 题、两臂、同一子句。总分 61.8→69.2 与 62.8→69.0；**TR 58/127→89/127 与 60/127→89/127**（+24.4 / +22.8pp），`recall@k` 一位未变；其余能力最多动 5 题，IE 两条臂都下降 | **判据达成**；净 +31 的最坏配对 p=3.5e-3（精确值待下次带 `records` 的运行） |
 | **DONE（第 43 步）** | ~~MR 子句改写：要求产出物的程序~~ → `--reader dispatch2` | 三步：逐块写"块号+日期+该块陈述的具体事实"（排除只提主题的块）→ 候选清单带出处 → 聚合从清单算并写出运算。500 题两臂：**MR 64/121→81/121（+17）与 61/121→77/121（+16）**，其余能力 ±4 内；配对 p=0.0009（session）/ 0.0639（lexical） | **判据达成**（MR +13–14pp，两条独立检索一致）；总分不显著的那条臂说明"总分不是合适的检验" |
 | **DONE（第 43 步）** | ~~判定：MR 缺口在 prompt 还是在索引层~~ | 预注册预测（*Judging ≠ Enumerating* 2608.01000：候选来自遍历上下文 vs 模型自我回忆）**成立**——遍历块有效、自我回忆无效，故索引层假设本轮不被支持，prompt 层仍有余量 | MR +16/+17 已给出答案 |
-| **P0** | **把 critique 改成"逐块判定"而不是"回想漏项"** | 上述预测的另一半：`enableAggregationCritique` 现在问模型"你第一遍漏了什么"，仍是枚举。预测它因此无效；改成逐块判定后应有效 | 两版本各跑一次 500 题端到端 MR，配对比较；预测"改动版 > 原版" |
+| **DONE（第 44 步）** | ~~把 critique 改成"逐行判定"~~ → `aggregationCritiqueMode: 'per-item'` | 上下文逐行编号 `[1]..[n]`，每行一条判定 `COUNT / NOT-COUNT / DUP-OF <m>`，汇总（MISSED / EXTRA）明确声明"从你刚写的判定导出"。依据 *Judging ≠ Enumerating*（2608.01000）：枚举会静默遗漏，逐条判定确认率约 90%。13 条测试，6 条在退回 `recall` 时变红 | 实现完成；**两次 500 题端到端运行已触发**（recall / per-item） |
+| **P0** | 读两次端到端运行的 MR，做同题配对 | 预注册：`recall` vs 出荷 ≈ 不动；`per-item` vs `recall` 向 per-item 移动。两者都要越过 7.9pp 噪声地板 | `per-item` 的 MR 比 `recall` ≥10 题且配对显著；否则预测被推翻，缺口归索引层 |
+| **P0** | 给 `paired-test` 增加 ablation report 输入 | 端到端产物是 `AblationReport`（`questions[].correct`），而配对工具只读 competitor run（`scores[].records`）。同一次比较需要读两种格式，但只能有一个比较器 | 用两份真实 report 跑通，且不新增第二个比较器 |
 | **P1** | 噪声地板写进每次读数 | 第 43 步测得：127 题的 TR 列在 **prompt 完全不变**时可摆 10 题（7.9pp）。此前 ±3pp 基于 20 题/能力的样本，偏乐观 | 任何 Δ 先与该列噪声比较；<8pp 不称效应 |
 | **P0** | **判定：MR 缺口在 prompt 还是在索引层** | 论文原文说多会话需要 "further fact extraction"，这是与本轮正交的竞争假设。若 `dispatch2` 不动 MR，则该假设在本层成立，缺口属 proposer 事实抽取，属索引层改动 | `dispatch2` 的 MR Δ <5pp 时，转做 proposer 抽取并单测其 MR 贡献 |
 | **WITHDRAWN（第 43 步核查）** | ~~把 dispatch 子句移植进生产 prompt~~ | **读代码后撤回**：生产侧已有三条等价或更强的机制——`enableTemporalEngine`（默认开，确定性时间引擎，比"让模型写减法"更强）、`enableBitemporalKnowledgeUpdate`（默认开）、以及 MR 的编号 ledger（生产 prompt 已 emit）。移植会得到与零无法区分的数字，并被误读成"提示词没用" | — |
