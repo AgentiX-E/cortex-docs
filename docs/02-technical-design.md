@@ -1766,6 +1766,94 @@ const grade = differing.some(k => HARD.includes(k)) ? 'C'
 两条都要越过第 43 步测得的噪声地板：**121 题的列在 prompt 完全不变时可摆约 10 题（7.9pp）**。
 低于它的差不称差，且两条都会做同题配对检验，不靠总分。
 
+**这两条预测至今未被检验**，原因与批判机制无关：两条臂跑在 `benchmark.yml` 上，而那条 workflow
+的 feature 臂是参考管线（`nl-abstain-feature`，`topK=15`），它的 MR 路由根本不经过
+`critiqueAggregationLedger`。机制在该系统里从未被到达，所以"两臂逐位相同"是关于那次运行的结论，
+不是关于批判的结论。正确的 dispatch 在 `benchmark-cortex-memory.yml` 上，见 §5.6.6。
+
+---
+
+### 5.6.6 测量（第 45 步）：数字的身份必须写在数字里
+
+#### 5.6.6.1 缺陷：一个仓库里的两个同名产物
+
+`benchmark.yml` 与 `benchmark-cortex-memory.yml` 都在 `longmemeval` 上跑 500 题、
+都用官方分题型 judge、都写一份 Markdown 报告，而**报告的标题逐字相同**：
+
+```
+# Cortex Benchmark Report
+- Dataset: `longmemeval` (500 questions)
+- Feature: `nl-abstain-feature` vs baseline `nl-naive-baseline`   ← 43.80%
+```
+
+```
+# Cortex Benchmark Report
+- Dataset: `longmemeval` (500 questions)
+- Feature: `cortex-memory` vs baseline `reference-pipeline`        ← 80.80%
+```
+
+两个系统的差别不是提示词，是**证据选择**：
+
+| | `benchmark.yml` | `benchmark-cortex-memory.yml` |
+|---|---|---|
+| 检索 | `retrieveTopKByQueriesHybrid`，`topK` 15 | 全 haystack 建索引，`relevanceTopK=256` |
+| 证据室 | 产品默认 24,000 字符（对检索结果施加） | `maxPromptChars=48000`（对 256 宽池施加） |
+| 角色过滤 | 无 | `user`（`multi-session,temporal`） |
+| 轮次截断 | 无 | 400 字符（同上两条路由） |
+| ask | `abstention-evidence-blocks` | `enumerated` |
+
+于是同一个能力在两边的方向相反，而这是配置的直接后果：IE/KU 的答案是一句只出现一次的话，
+15 轮检索必须把它排到第一（`40378588466` 的 379 条单会话记录上，gold 的区分词出现在交付上下文里的
+比例是 **IE 38.0% / KU 22.5%**，而 **TR 79.5% / ABS 93.3%**）；MR 需要的是跨会话的**广度**，
+参考管线按**会话**检索、逐会话截断、枚举，正好是 MR 的 ask 奖励的形状（84.30% 对 69.42%）。
+
+#### 5.6.6.2 为什么这不是"更谨慎"能修的
+
+那次误读的代价是一整轮：`benchmark.yml` 的 44.2% 被拿去与 `benchmark-cortex-memory.yml` 的 81.0%
+比较，于是"端到端基线不可复现"成了一个 P0，随后做了数据集哈希、embedding 确定性检查、
+12 MB 日志的 379 条逐题分析，并排除了四项技术原因。**每一项都正确，每一项回答的都是另一个系统的
+问题。** 而决定性证据（`40088479628` 一次调用同时测两者：43.40% 对 80.80%，McNemar `p=1.694e-33`）
+已经躺在磁盘上。
+
+根因不是疏忽：报告里 `- Feature: … vs baseline …` 一直存在，就在准确率上方五行。**被引用的从来
+不是那一行，而是标题和 `- 指标: 值`。** 一个五行的距离，就是身份丢失的全部距离。
+
+#### 5.6.6.3 设计约束：身份写在数字里
+
+| 位置 | 约束 | 为什么是这里 |
+|---|---|---|
+| 标题 | `# Cortex Benchmark Report — \`<feature>\`` | 目录、截图、粘贴的第一行 |
+| 抬头 | `- System under test: \`<feature>\` vs baseline \`<baseline>\`` | 在所有数字之前，截图自带说明 |
+| 可引用行 | `- Overall accuracy (\`<feature>\`): 80.80%` | **数字被单独摘走时唯一的载体** |
+| 分节标题 | `## Per-capability breakdown (\`<feature>\` arm)` | 表格被整段引用时不丢身份 |
+
+四条里只有第三条是不可省的。前三条是冗余，第四条是排版；第三条是**唯一在"只复制那一行"时仍然
+有效的**保证。
+
+判据写成三条断言，后两条比第一条重要：
+
+1. 标题含臂名，且 `System under test` 行出现在任何数字之前；
+2. **不存在**没有臂名的 `- Overall accuracy` / `- Abstention` 行（否定性质——一个只在某处写了臂名
+   的渲染器仍然允许这种抽取）；
+3. **两个不同的 feature 臂必须产出两个不同的标题**（配对性质——它使这次事故在结构上不可能重现）。
+
+#### 5.6.6.4 同一原则在别处的两处应用
+
+**验收矩阵**：`S1`–`S5` 与 `R1` 全部是 `cortex-memory` 臂的读数，页面上现在直接写出这一点，
+并写明 `benchmark.yml` 的 43.40% 不得替代它们。
+
+**阅读阶段 §4 的撤回**：`MEASURE-READING-STAGE.md` §4 曾把 81.0% 归给 `NaturalLanguageMemory`，
+并据此把"适配器 60.0% 对 81.0%"的 21 点差距分解成查询扩展、重排、弃答恢复、生产提示词四项。
+那四项读的是 `natural-language-memory.ts`——**43.40% 那个系统**的机器。**21 点是真的，它的分解不是**；
+重新分解是新增待办，不是已完成的结论。
+
+#### 5.6.6.5 遗留
+
+1. **21 点差距需要重新分解**，对象是 `cortex-memory` 与最小适配器之间，而不是参考管线与它之间；
+2. **MR 69.42% 是本仓唯一"已知有更好的答案"的能力**：同一 run 里参考管线 84.30%
+   （`p = 2.935e-3`）。`PREREGISTRATION-CORTEX-MEMORY-ARM.md` §13.105 已为此注册六条预测；
+3. **批判实验要在正确的 workflow 上重跑**，否则 §5.6.5 的两条预测既不算通过也不算推翻。
+
 ---
 
 ### 5.7 实现（第 10 步）：接线 —— 三个缺陷只在整条链跑起来时出现
