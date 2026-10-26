@@ -215,6 +215,20 @@
    `- 指标: 值`（02 §5.6.6、cortex `docs/MEASURE-BASELINE-DRIFT.md` §8）。
 
 
+
+35. **一个文件里没有记录身份，它就只能被无条件信任 —— 而"能说清自己是谁"比"能被读出来"更便宜**：
+   embedding 缓存的二进制头只有 `magic + version + count + dim`，而它的 docstring 宣称
+   "throws on a corrupt or incompatible buffer **so a stale cache is never silently trusted**"。
+   **那句注释是错的**，而且错在要紧处：两个同宽度的模型在它眼里逐字节相同，而两个 benchmark
+   workflow 的 Actions 缓存键是 `longmemeval-embedding-<语料哈希>-` —— **语料不变，一次运行就继承
+   上一次的 haystack 向量，查询向量却每次现算**。后端一旦移动，读者就是在用新空间的查询检索旧空间。
+   **这个状态里每一个计数器都健康**：`determinism max abs diff 0` 在**同一进程内**把同一段文本嵌
+   两次再比，模型变了两次都变，差仍是 0；`returnedDimensions 1024` 对异构同宽模型照样通过；
+   `Restored N vectors` 数的是条目而不是来源。修法是 v2 头携带 `{provider, model, baseUrl, dimensions}`
+   ——**产物里早就在印的四个字段，只是没写进缓存**——外加两处校验（四字段全比、payload 宽度与头部互校）
+   与"v1 直接拒绝、不迁移"。代价是下一次运行要重嵌约 11.5 万条，**写在明处**。
+   这条与第 34 条是同一条纪律的两个面：34 是**数字**离开了它所属的系统，35 是**数据**离开了它所属的
+   模型。共同点不是"粗心"，而是**身份没有被当成数据的一部分来存储**。（cortex `docs/MEASURE-CACHE-PROVENANCE.md`）
 ## 1. 产品定位
 
 | 维度 | Cortex |
