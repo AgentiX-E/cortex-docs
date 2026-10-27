@@ -1940,6 +1940,96 @@ magic(4) + version(1) + count(4) + dim(4)
 
 ---
 
+### 5.6.8 设计（第 47 步）：预注册的前提本身就是一条断言
+
+#### 5.6.8.1 事件：一个 P0 在被调度之前就死了
+
+`cortex/docs/PREREG-DATE-FRAME.md` 是一个排到 P0 的实验，声称为 temporal 与 multi-session 两条
+路由"加上日期框架"，因为它断言：
+
+> **What the reader is told today / Nothing.** `prompt.ts` carries no statement of the
+> conversation's date.
+
+**这句话是假的，而且写的时候就是假的。** 把两条 prompt 渲染出来即可看到：
+
+```
+$ buildPrompt(q, [datedTurn], 'temporal', {questionDate:'2023/06/02'})
+
+EVIDENCE:
+1. [2023/05/20] user: I ran ten kilometres today.
+
+QUESTION: How far did I run last month?
+
+Answer the question using only the evidence above.
+The question was asked on 2023/06/02. Resolve every relative expression ("last week", "two months
+ago") against that date.
+```
+
+外部那篇工作给日期框架的定义是 **"当前日期写进消息 + 每个内容块自带日期"**，而这两半都在：
+锚点句在，`[2023/05/20]` 前缀作为 `turn.content` 的一部分在**每一条路由**上都在。
+
+| 路由 | 锚点句 | 每轮日期 |
+|---|---|---|
+| `temporal` | **在**（数据集给了 `question_date` 时） | 在 |
+| flat（`abstention-evidence-blocks`） | 不在（`buildPrompt` 对非 temporal 丢弃 `questionDate`） | 在 |
+| `multi-session` | 不在（`buildSessionPrompt` 根本没有日期参数） | 在 |
+
+**处理组对一条已经收到该处理的路由不产生效应。** 而 P1、P2 都指向 temporal。
+
+#### 5.6.8.2 代价，以及为什么撤回比跑完更值
+
+| 如果跑 | 实际做的 |
+|---|---|
+| 一次 500 题 dispatch、约 55 分钟 runner | 两次 `buildPrompt` 调用 + 5 条断言 + 一次读 `prompt.ts` |
+
+更值的是结论本身：**外部的 +9.3 不是我们还没拿到的增益，而是已经计入 74.02% 的东西。**
+如果那套系统靠日期框架从 80.7 走到 90.0，而我们的 temporal 路由一直带着它却只有 74.02，
+那么**日期框架不是 TR 的杠杆**。这是 P1 的"不达标即回退"条款早就写好的结论，只是用 0 次
+dispatch 而不是 1 次拿到。
+
+#### 5.6.8.3 设计约束：前提必须在 dispatch 之前被检查
+
+| 检查 | 做在什么时候 | 为什么 |
+|---|---|---|
+| 机制所在的**包/文件**是否存在该符号 | 写预注册时（`rg -c <symbol>`） | 第 45 步的教训：把机制归错了包 |
+| 该机制**是否已经在跑** | 写预注册时（渲染一次真实 prompt） | 本节的教训：把已安装的东西当缺失 |
+| 对照组是否**有 headroom** | 写预注册时 | `entityIdentityClause` 的 +3 在一个 30/30 饱和列上无法复现 |
+| 差值是否**越过该列噪声** | 读结果之前 | 127 题列可摆 10 题（7.9pp）；500 题总分四次重复跨 15 题 |
+
+四条里前三条的成本都是"一条命令"级别。**把它们写成表格而不是写成原则，是因为原则这一轮已经
+失效过一次。**
+
+#### 5.6.8.4 同一轮的第二个产物：失败分解该记录什么
+
+`MEASURE-SOTA-FAILURES.md` 从 `40088479628` 的逐题记录做出了分解。它同时暴露了**产物缺什么**，
+两条都影响"下一次能不能少跑一轮"：
+
+| 缺的字段 | 它挡住了什么 | 成本 |
+|---|---|---|
+| 基线臂的逐题记录（现在只有聚合） | "两个臂在**同一题**上为什么不同"——配对检验只给 p 值，不给原因 | 一个数组、0 次模型调用；但产物已是 50 MB |
+| 每轮**渲染后**的字符数（只有 `evidenceChars` 与 `carried`） | "截断切掉了答案"只能推断，不能计数 | 一个字段 |
+
+第二条尤其值得单独说明：`goldOverlap.carried` 是对 `assembled.carried` 算的，也就是**渲染进
+prompt 的集合**，这一点是对的；但进入 prompt 时每轮要过 400 字符上限，而"答案被上限切掉"
+没有字段可查。本轮用字符偏移间接量了：MR 只有 4 题、TR 0 题的答案句起点在 400 之后——**所以
+上限不是原因，但这个结论是靠推断拿到的，不是靠计数。** 这与本仓已经修掉的两个仪器缺陷同形
+（报告不写自己测的是哪个系统；缓存不写自己是哪个模型）。
+
+#### 5.6.8.5 判据
+
+| 断言 | 排除的是 |
+|---|---|
+| temporal 渲染锚点句与"resolve every relative expression" | 一个"加了日期"却没说怎么用的改动 |
+| 每轮 `[date]` 前缀在证据块里 | 一个把日期当成 route 参数、从而丢掉块日期的改动 |
+| 数据集没给日期时**不**渲染锚点 | 一个发明参考日期的降级路径 |
+| flat 即使收到 `questionDate` 也不渲染锚点 | 路由泄漏（这是选项文档写明的性质） |
+| multi-session 不渲染锚点 | 把"唯一真缺锚点的路由"说成"都有了" |
+
+五条全部由 `cortex` 的 `date-frame-presence.test.ts` 钉住，**包括两条否定性质**——因为被撤回的
+是一个关于"代码渲染了什么"的断言，只有否定性质能防止它再次出现。
+
+---
+
 ### 5.7 实现（第 10 步）：接线 —— 三个缺陷只在整条链跑起来时出现
 
 前三层（写侧、卡片、提议）各有测试，各自都是对的。把它们按真实顺序接起来之后，一次运行就暴露

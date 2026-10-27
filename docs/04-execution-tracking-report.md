@@ -4516,6 +4516,154 @@ embedding，取 top-k 会话**——在这条臂上用任何现有设置都表�
 `40498191604` 已发起（500 题，`retrieval-session` + `units=session`，其余与对照 `40088479628`
 逐字相同）。判据是 **MR ≥ 96/121**：从 84/121 起 +12 题，六倍于 121 题列的 2 题噪声地板。
 
+### 9.55 第 47 步：一个 P0 死在一条命令上，而它死后留下的是更硬的东西
+
+#### 一、撤回：日期框架早就装好了
+
+排到 P0 的 `PREREG-DATE-FRAME` 断言 **"What the reader is told today / Nothing"**。把 prompt 渲染
+出来，这句话是假的：
+
+```
+$ buildPrompt(q, [datedTurn], 'temporal', {questionDate:'2023/06/02'})
+
+EVIDENCE:
+1. [2023/05/20] user: I ran ten kilometres today.
+
+QUESTION: How far did I run last month?
+
+Answer the question using only the evidence above.
+The question was asked on 2023/06/02. Resolve every relative expression ("last week", "two months
+ago") against that date.
+```
+
+外部那篇工作对日期框架的定义是**"当前日期写进消息 + 每个内容块自带日期"**，而**两半都在**：
+锚点句在 temporal 路由上，`[2023/05/20]` 前缀作为 `turn.content` 的一部分在**每条路由**上都保留。
+
+| 路由 | 锚点句 | 每轮日期 |
+|---|---|---|
+| `temporal` | **在** | 在 |
+| flat（`abstention-evidence-blocks`） | 不在（`buildPrompt` 对非 temporal 丢弃 `questionDate`） | 在 |
+| `multi-session` | 不在（`buildSessionPrompt` 无日期参数） | 在 |
+
+**处理组对一条已经收到该处理的路由不产生效应**，而 P1、P2 都指向 temporal。**0 次 dispatch，
+5 条断言**（`date-frame-presence.test.ts`，含两条否定性质）就得到结论，而不是一次 55 分钟的 500 题。
+
+#### 二、撤回之后留下的那句话，比原来的计划更有用
+
+**外部 +9.3 不是我们还没拿到的增益，而是已经计入 TR 74.02% 里的东西。** 如果那套系统靠日期框架
+从 80.7 走到 90.0，而我们的 temporal 路由一直带着它却只有 74.02，那么**日期框架不是 TR 的杠杆**——
+差的 12.6 个点来自它不触碰的地方。这正好是 P1 的"不达标即回退"条款会给出的结论，只是用 0 次
+dispatch 换来的。
+
+#### 三、96 个失败在哪里：45 个是拒答，51 个是答错
+
+从 `40088479628` 的逐题记录（`cortex/docs/MEASURE-SOTA-FAILURES.md`）：
+
+| 能力 | n | 对 | 错 | **拒答（错）** | 答错 | gold turn 至少一个在 prompt 里 |
+|---|---|---|---|---|---|---|
+| IE | 150 | 134 | 16 | **12** | 4 | 150/150 |
+| KU | 72 | 62 | 10 | 2 | 8 | 72/72 |
+| MR | 121 | 84 | **37** | 10 | **27** | 121/121 |
+| TR | 127 | 94 | 33 | **21** | 12 | 127/127 |
+| ABS | 30 | 30 | 0 | —（正确） | — | 30/30 |
+| **合计** | **500** | **404** | **96** | **45** | **51** | **500/500** |
+
+**五百题里没有一道的 gold turn 落在 prompt 之外**（`carried>0` 全有、`pool=0` 全无）。
+所以 SOTA 臂上的检索已经饱和，`reference-pipeline` 的 102/121 **不是召回优势**——两个臂都拿到了
+gold，差的 18 题是读者或"证据室怎么排"的差别。**"提高召回"这类叙事在这个臂上没有余地。**
+
+拒答占 TR 错误的 **64%**、IE 的 **75%**，而**本该拒答的 ABS 是 30/30**，且 `decisionReasons`
+是 `{empty:0, threshold:0, llm:75}`——**75 次拒答全是模型的主意，没有一次是门槛或空池。**
+
+#### 四、两个假设被测量处死，都是我自己的
+
+**① "Step 1 列表少一项"。** 契约说"没写列表不许拒答"，所以答案少 1 该是列表少 1。列表就在
+`rawOutput` 里，一个脚本可查：
+
+| 列表长度相对 gold | 题数 |
+|---|---|
+| 恰好 gold−1 | **3/12** |
+| 恰好 gold | 4/12 |
+| 更短（1 项对 gold 3） | 3/12 |
+| 比 gold 更长（8 对 5、12 对 4） | 2/12 |
+
+**列表长度与答案无关**：一题从 1 项列表答出 2（gold 3），另一题从 3 项列表答出 22（gold 23）。
+
+**② 把 `409 / 392 / 404` 当成一只臂的方差。** 它们不是：`392` 是 `relevanceUnits: session`
+（`39699987781`），`409` 是 `reviewPass: none`（`39509698041`），只有 `404` 是发货配置。
+**三个配置的三个数，被写成一只臂的波动**——与 `MEASURE-BASELINE-DRIFT.md` §8.7 的
+`217/221/224` 同一个错、同一个尺寸。**这台臂真实的四次重复跨度是 397–412，即 15 题。**
+
+#### 五、活下来的那一条：读者自己承认它在合并
+
+读十二题的原文，而不是数它们的行数：
+
+```
+[0a995998] gold 3，答 2
+  Step 1 — - Navy blue blazer（干洗取件）— Session 12
+           - Zara 靴子（换货，需取大一号）— Session 20
+           - Zara 靴子（2/5 换的，仍需取新的一双）— Session 31
+  Step 2 — blazer 是干洗取件，Zara 靴子在两个会话里出现，但 refer to the same
+           exchange/pickup event。Distinct items: 1 blazer + 1 双靴子 = 2。
+```
+
+**列了三项，算了两项，一句话交代。** 而契约正是这么授权的：
+
+> Step 1 … **Treat one event mentioned in several turns as one item**, and do not merge two items
+> into one.
+
+两个子句，当同一件事在两个会话里用不同措辞出现时，**前一个赢**。把"合并语言"在全臂上量一遍
+（先剔除模型把指令原文抄回来的那一例）：
+
+| 群体 | 带合并/去重语句 | 比例 |
+|---|---|---|
+| "恰好少 1"（n=12） | **5** | **41.7%** |
+| 答对（n=84） | 4 | 4.8% |
+
+Fisher 精确检验双侧 **p = 0.0012**。
+
+**它是什么、不是什么。** 是输出语句与结果之间的关联，不是干预——那句话可能是事后合理化。
+但它是本仓 MR 上第一条**具体到可以错**的发现：它预测"禁止无共同引文的跨会话合并"会移动这 5 题，
+而那 7 题不动。**上限 +5 题**，所以只能配对测。
+
+#### 六、判据从"总分差"改成"配对不一致数"
+
+`reviewPass: recover` 是本轮另一条量化：**只在 `multi-session` 触发，10 次尝试转换 1 次**，
+而 `temporal` 与 flat 的 33 次拒答**从未重试**。按 1/10 外推是 **+3 题**——对着 **15 题**的边际
+跨度。**+3 看不见 +15，除非配对。**
+
+所以三条候选按**群体大小**排序，而不是按证据强度：
+
+| 候选 | 群体 | 上限 |
+|---|---|---|
+| 拒答契约（证据带含糊措辞时仍作答） | 45 | 未知，**最大** |
+| 禁止无引文跨会话合并（§五） | 5 | +5 |
+| 把 `recover` 扩到 temporal / flat（§六） | 33 | +3 |
+
+MR 的合并发现证据更强，但它封顶 12 题；**45 次拒答才是能改总分的那一群**。
+
+#### 七、竞品：第三方复现把"可复现前沿"钉在 86，而钉住它的不是机制
+
+Redis 的 Agent Memory 报告（2026-05）在**同一 gpt-4o backbone、同一官方 judge、同一份 500 题**
+上复现八家，并同时打印自报与复现：**Vertex 自报 ~70 → 复现 42.4（−28）**，AgentCore 73.6 → 77.0
+（+3），Redis 自家 **86.5** 为生产系统最高。**自报与复现差 +3 到 −28。**
+
+**86.5 与 memoricai 的 85.8 收敛（差 0.7）**——两次独立第三方测量同意的地方才是前沿，不是某个
+最大值。而 NeuraWeave 固定同一份记忆只换 reader，五行从 **69.8 跨到 92.4（22.6 点）**；同一份
+全文上下文基线被三家测到 **59 / 60.6 / 60.2（跨 1.6）**。**可复现的是基线，不可复现的是 reader。**
+
+TR 的前沿则明确是**机制**：同在 gpt-4.1-mini 下，LycheeMemory V2 的 TR **87.22** 对 TiMem 的
+72.93——差的 14 个点来自**语义分段级巩固**，不是 reader。我们 TR 74.6 距 87.22 **12.6 点**，
+**比总分的 5.7 点更大**。**MR 是"我们自己有更好答案"，TR 是"别人有更好答案"**，两条路不该混排。
+
+#### 八、本轮的一处成本更正
+
+`PREREG-MR-SESSION-CHANNEL` 初稿说会话通道的嵌入成本"低一个数量级"。**错在方向**：它数的是
+*条数*（19,000 条 turn → 25,000 条会话），但一个会话的拼接文本约 5,400 字符，而一个 turn 约
+272 字符——**条数少、token 多 26 倍**。`40498191604` 因此比转身粒度的 A/B 慢得多，这是预期的，
+不是故障。**成本表在乐观方向错了 26 倍，正是后来会被当成事实引用的那类句子。**
+
+
 ---
 
 ## 10. 本期变更与下轮计划
@@ -4639,38 +4787,269 @@ embedding，取 top-k 会话**——在这条臂上用任何现有设置都表�
 | 端到端（历史） | **405.0/500（81.0%）** | `[实测] 39367801501` 起四次均值 | 同一 arm 配置，与上面差 0.2pp，属单次抽样 |
 | 同 run 的参照 | **43.40%** | 同上，`reference-pipeline` | McNemar `p=1.694e-33`；这是本仓唯一"同 reader 同 judge 同数据"的 A 级对照 |
 
-对外的坐标：**memoricai 85.8%（A 级，500 题、gpt-4o reader/judge）** 是可复现前沿，我们 80.80%
-低 **5.0pp**；Supermemory 81.6% 与我们同级。**缺口不在总分而在两个能力**：MR 69.42%（同一 run 里
-参考管线 84.30%，我们**落后 14.9pp 且显著**）、TR 74.02%。IE 89.33%、KU 86.11%、ABS 100% 已在
-A 级带内或之上。
+对外的坐标（第 47 步更新）：**两次独立第三方测量同意在 85.8–86.5**（memoricai 85.8，
+Redis 复现 86.5，§9.55 七），我们 80.80% 低 **5.7pp**。而**同一份记忆只换 reader 就能跨 22.6 点**
+（NeuraWeave 第三方复现），所以这个差**不足以支撑任何名次声明**——我们唯一别人没有的，是
+`reference-pipeline` 43.40% 那条同一次调用内的配对对照（McNemar `p=1.694e-33`）。
+
+**缺口不是"两个能力"，是两个不同性质的问题**：
+
+| | MR | TR |
+|---|---|---|
+| 数值 | 69.42%（84/121） | 74.02%（94/127） |
+| 参照 | **同一 run 的参考管线 102/121**，落后 18 题，`p=2.935e-3` | **同 reader 的 LycheeMemory 87.22%**，落后 12.6–13.2 点 |
+| 性质 | **我们自己有更好答案**（内部对照） | **别人有更好答案**（机制移植） |
+| 失败形态 | 27 答错（其中 12 恰好少 1）+ 10 拒答 | **21/33 是拒答** |
+
+IE 89.33%、KU 86.11%、ABS 100% 已在 A 级带内或之上，且**五百题的 gold turn 全部进了 prompt**——
+所以这三项的问题不在检索。
 
 #### 剩余步骤（按依赖排序）
 
 | # | 优先级 | 动作 | 为什么是这个顺序 | 验收判据 |
 |---|---|---|---|---|
-| 1 | **P0** | **MR 的会话粒度相关性通道**（`PREREG-MR-SESSION-CHANNEL` 已注册，待实现） | 检索单位作为杠杆已由 `39699987781` 按 §13.105.4 自己的判据闭合。剩下的是 `reference-pipeline` 真正在做的那件事：**把一个会话当评分单位**（拼接文本、一次 embedding），而本臂表达不了——`relevanceFor` 是 turn 级的。机制：会话分**投影到该会话的每个 turn**，于是现有"按最佳 turn 排序"自动变成会话排序，预算代码一行不动 | **MR ≥ 96/121（79.34%）**，从 84/121 起；IE/KU/TR/ABS 各动 ≤ 3 题；MR 弃权不升；`promptChars` ±20%；机制行读 `relevanceSignal=retrieval-session` 且计分单位数**低于** turn 索引 |
-| 2 | **P0** | **日期框架**（`cortex/docs/PREREG-DATE-FRAME.md`） | 零调用成本，外部同基准读数 **+9.3（CI [+4.0,+15.3]）**；本仓相对时间题 66% 对 81%。它直接打 TR 的 74.02%，且不依赖 MR 那条线 | P1 ≥ +8pp；P2/P3 不降 2；P4 不变 |
-| 3 | **P1** | **21 点差距重新分解**（`cortex-memory` vs 最小 adapter，对齐预算） | 原分解读的是 `natural-language-memory.ts`，是 43.40% 那个系统的机器。四个杠杆应在 `cortex-memory` 自己身上重做：相关性池宽度、证据室、角色过滤、ask | 每次只动一个杠杆、配对、越过该列噪声地板；四项贡献相加与 21 点差 ≤3pp |
-| 4 | **P1** | **噪声地板写进每一次读数** | 127 题列可摆 **10 题（7.9pp）**，121 题列约 **2 题**。本轮的 219/221/223 三次读数给出 44.6% 那条臂的跑间跨度 **0.8pp**——不写进读数就会把 4 题当效应 | 每份报告与文档里的 Δ 旁标注对应列的噪声地板；<8pp（大列）/ <3 题（MR 列）不称效应 |
-| 5 | **P1** | **第一组 A 级竞品读数**（Hindsight，MIT，可换 DeepSeek reader + 官方 judge，100 题） | 现存竞品数字全是 C 级（各自 reader/judge）。`comparability()` 已能算出"能不能相减"，缺的只是把一个 adapter 接上 | `comparability()` 返回 A；与 80.80% 可减 |
-| 6 | **P2** | 批判实验带计数器重跑（`benchmark.yml`，`recall` / `per-item`） | 位置本来就对（批判只在 `natural-language-memory.ts`），但**它所在的那条臂不是 SOTA 系统**（44.6% 对 80.8%）。它回答一个真问题，只是对"超越竞品"的贡献是零——所以排在 SOTA 路径之后，而不是之前 | 两臂都带 `critiqueStats`；"逐位相同"必须被分成三个数；MR Δ 越过 10 题才称效应 |
+| 0 | **运行中** | **`40498191604`**（`retrieval-session` + `units=session` + `topK=256`） | 上一轮已实现并 dispatch，判据先前注册。**在读出它之前不再动 MR 的设计**——否则两次改动混在一个读数里 | P1 机制行读 `relevanceSignal=retrieval-session`；**P2 MR ≥ 96/121**；P3 弃权不升；P4 IE/KU/TR/ABS 各 ≤3 题；P5 `promptChars` ±20% |
+| 1 | **P0** | **拒答契约：45 次拒答是本臂最大的一群失败** | 96 个错误里 45 个是"证据在手仍拒答"，占 TR 的 64%、IE 的 75%，而 ABS 30/30 且 `threshold:0`——**门槛没错，是模型在证据带含糊措辞时把含糊读成不成立**。这是唯一大到能改总分的一群（合并发现封顶 12 题） | **必须给出机制而不是措辞**：先从一个已归档的 TR 拒答原文反推出可检验的判据（如"两个已标注日期的事件 + 一个 hedge 词"），再改契约；判据是**配对不一致数**，不是总分 |
+| 2 | **P0** | **禁止无共同引文的跨会话合并**（`MEASURE-SOTA-FAILURES` §3.2） | 唯一一条有统计支撑的 MR 机制：合并语言出现在 **41.7%** 的"恰好少 1"里、**4.8%** 的答对里，Fisher **p=0.0012**。契约的两个子句里前一个在赢 | 上限 **+5 题**（12 题群体），只能配对测：预测"5 题由错转对、7 题不动、答对群体不动"；不一致数需越过 5 |
+| 3 | **P1** | **TR 的段落级巩固**（LycheeMemory V2 同 reader TR **87.22%**） | 我们 TR 74.6% 距它 12.6 点，**比总分的 5.7 点更大**，且同在 gpt-4.1-mini 下 TiMem 只有 72.93——**差的 14 点来自机制不是 reader**。这是"别人有更好答案"的那条线，与 MR 的内部对照不共享代码路径，可并行 | 先出设计（分段级巩固 = 写入侧而非读取侧），再预注册；判据落在 TR 列，配对，且不得让 IE/ABS 动 |
+| 4 | **P1** | **判据从"总分差"改成"配对不一致数"** | 本臂四次重复跨 **15 题**（397–412）。+3 与 +5 都看不见 +15，**除非配对**。`paired-test.ts` 已有；缺的是每份预注册都先写不一致数判据 | 每份预注册含 `discordant` 上下界；任何只写"≥ 总分 X%"的预注册不 dispatch |
+| 5 | **P1** | **第一组 A 级竞品读数**（Hindsight，MIT，可换 DeepSeek reader + 官方 judge，100 题） | 现存竞品数字全是 C 级。而第三方复现已证明**自报与复现差 +3 到 −28**（§9.55 七）——自己复现一次是唯一能引用别人的方式 | `comparability()` 返回 A；与 80.80% 可相减 |
+| 6 | **P2** | 批判实验带计数器重跑（`benchmark.yml`，`recall` / `per-item`） | 位置本来就对（批判只在 `natural-language-memory.ts`），但**它所在的那条臂不是 SOTA 系统**（44.6% 对 80.8%）。它回答一个真问题，只是对"超越竞品"的贡献是零 | 两臂都带 `critiqueStats`；"逐位相同"必须被分成三个数；MR Δ 越过 10 题才称效应 |
 
-#### 为什么第 1 步从"批判实验"换成了"会话粒度通道"
+#### 为什么第 1 步是"拒答契约"，而不是证据更强的那条 MR 发现
 
-上一版这张表的第一行是批判实验。**它被换掉不是因为它错了，是因为它所在的那条臂不是 SOTA 系统。**
-批判只在 `natural-language-memory.ts` 里，而那套东西跑出的是 **44.6%**；SOTA 臂是 `cortex-memory`
-的 **80.8%**。一个在 44.6% 臂上的机制，无论结论多干净，对"超越竞品"的贡献是零。
-**这是本轮唯一一次按目标而不是按成本排序。**
+这是本轮唯一一次**按群体大小而不是按证据强度**排序，理由是两个上限算得出来：
 
-而 MR 的会话粒度通道排第一，理由与 §9.52 三相同：缺口是 **15–25 题、配对、每一次运行都在**，
-而唯一已知能关闭它的做法（参考管线的会话级评分）**这条臂今天表达不了**。它不是 flag，
-所以要先设计；它也不是猜测，因为对照组每个 run 都在跑。
+| 候选 | 证据 | 群体上限 | 能改总分吗 |
+|---|---|---|---|
+| 跨会话合并（Fisher p=0.0012） | **最强** | 12 题（其中 5 题带合并语言） | 不能，天花板 2.4pp |
+| 拒答契约 | 目前只有形态，**还没有机制** | **45 题** | 能，天花板 9pp |
 
-#### 为什么第 2 步是日期框架而不是继续在 MR 上加注
+**证据最强的那个封顶在 12 题上。** 一个只可能移动 12 道固定题的改动物，即使 5 题全中，也小于本臂
+15 题的边际跨度——它值得做，但它不是"超越竞品"那条路上的第一块。而 45 次拒答是唯一一群大到
+能推总分的，占 TR 错误的 64%、IE 的 75%。
 
-MR 那条线要动结构，周期长且只有一个候选。日期框架是**外部已发表、同基准、零调用成本**的杠杆
-（+9.3，CI [+4.0,+15.3]），直接打 TR 的 74.02%，且与 MR 的改动**不共享代码路径**——两条可以并行，
-互不污染归因。**先做能并行的那条，而不是把两件事串在一个不确定的结构改动后面。**
+**但第 1 步的验收判据里写的是"先给出机制，再改契约"。** 这是本项目最贵的一课：只提建议的提示词
+无效（§ 反复记录），要求写下中间产物的有效。所以这一条不许从"措辞调优"开始，必须先从一份已归档
+的 TR 拒答原文（§9.50 §2 引的那一段：两个已标注日期的事件 + 一个 hedge 词 "recently"）反推出
+一个**可被计数**的判据，再改。
+
+#### 为什么日期框架从这张表里消失了
+
+上一版它是第 2 步，理由是"外部已发表、同基准、零调用成本 +9.3"。**§9.55 一撤回了它**：temporal
+路由早就带锚点句与每轮日期，**外部机制的两半都在**，所以 +9.3 已经计入 74.02——它不是待拿的增益。
+而唯一没有锚点的 `multi-session` 上，问题恰好是"数错"与"合并"，日期框架对两者都无能为力。
+
+**这条通道空出来的位置，给了"拒不拒答"这件事。**
+
+#### 下一次 dispatch 的两个动作（第 45 步续）
+
+`cortex` `37ae1df` 之后，两个 workflow 的第一次运行都会**恢复 0 条 embedding 并重新嵌入整个
+haystack**（参考管线约 11.5 万条 turn，约 1,800 个请求）。**没有前置条件**——初稿写的"先充值或切
+离线回退"基于一个被 `AUDIT-ZHIPU-429-ROOT-CAUSE.md` 推翻的说法，见 §9.50 三。只有两个动作：
+
+1. **设 `embedding_batch_interval_ms=100`（建议，非必需）**：约 1,800 个请求 × 100 ms ≈ 3 分钟，
+   用来远离厂商的**并发**上限（错误码 `1305`），不是余额问题。审计 §11 的实测是零限流。
+2. **跑完读日志的前两行**：`Restored N embedding vectors` 与 `corpus sha256:`。前者是这次缓存修复的
+   判别读数：**恢复 0 条之后**，如果 `benchmark.yml` 的读数向 86% 回归，那"9 月→10 月"的形态
+   就指向向量空间错配；如果不回归，语料哈希的比较就成了唯一剩下的候选。**这一条零成本，
+   它只要求读那两行，而不是只看总分。**
+
+#### 一句话的位置
+
+**`cortex-memory` 是 80.80%（404/500），与两次独立第三方测量同意的可复现前沿（85.8–86.5）差
+5.7pp；而五百题的 gold turn 全部进了 prompt，所以这个差一分钱都不在检索上。**
+
+第 47 步的净产出是**两个数**，都不是分数：
+
+1. **96 个失败被切开**：45 个是拒答（证据在手）、51 个是答错。这是第一次按"失败发生在哪一层"
+   而不是按"哪个能力低"来记账，也第一次证明检索在这个臂上**已经没有余地**。
+2. **一个 P0 在被调度前死了**，代价是一条命令。它留下的不是遗憾，是一条更硬的结论：
+   **外部的日期框架不是我们的杠杆，因为它早就装好了。**
+
+外加三条外部校准：可复现前沿是 **85.8–86.5**（两次独立第三方），**同一份记忆换 reader 跨 22.6 点**，
+**TR 的前沿（87.22）是机制不是 reader**。最后一条把主攻方向从 MR 挪了一格：MR 是"我们自己有更好
+答案"，TR 是"别人有更好答案"，两者不该混排。
+
+**下一步**：先读 `40498191604`（唯一在跑的实验，判据已注册）；然后按群体大小做拒答契约，
+按证据强度同时做合并禁令——**两条都以配对不一致数为判据，不以总分为判据。**
+---
+
+## 10. 本期变更与下轮计划
+
+### 10.1 本期变更（本仓库）
+
+| 变更 | 内容 |
+|---|---|
+| Safari | `safari-wd-probe.py` + `safaridriver`；`p01` 参数化浏览器；`serve.mjs` 抽成两个驱动共用 |
+| 语料链 | `p06-pii-recall`（Hub，CI）+ 3,000 条判定；`regressions.json` 冻结 13 条历史泄漏行 |
+| 真实证据 | `p07-dual-store-real-corpus` 在 59,675 条真实轮次上量出共享侧比例 |
+| 规则 | 三轮修补（vitals → CVV/钱包 → 账号/门牌），p04 三项指标全程未动 |
+| 输出侧 | 02 §6.4 新增三层设计（O1 草稿扫描 / O2 归因 / O3 密文回显），并写明只承诺"减少" |
+| 文档结构 | `docs/` 只保留四份：01 白皮书 / 02 技术设计 / 03 执行计划 / 04 本报告 |
+| 证据目录 | `docs/05-longmemeval-sota-analysis/` → `evidence/longmemeval/`（94 篇判决 + 脚本 + run-ids，**是记录不是文档**） |
+| 新增 POC | `poc/p05-read-side/`（11/11 断言）、`poc/p06-policy-scale/`（1,467 条候选事实） |
+| 新增读数 | A1 12/12、A4 修补前 3/12、修补后 0/12、A5 注入拦截 1/1；共享可达 4/8 → 7/8（全部接受）；coverage 31.7% / 29.2%；leak NOT MEASURED |
+| 规则修补 | 健康规则两轮：vitals 词族（该轮 24.9% → 28.4%），以及 `walk|sugar|calorie|intake`（本轮 9/12 → 12/12 召回） |
+| 宿主机制 | `serve.mjs` 抽取（两个驱动共用一套路由）、p01 浏览器参数化、`safaridriver` 探针、`poc-platform-probes.yml` |
+| 诊断 | `ci-smoke.yml`：把"CI 跑不了 Safari"与"作业根本没启动"分开 —— 结论是后者 |
+| 守卫 | `check-analysis-record.sh` 的记录路径改指 `evidence/longmemeval`；结构检查扩展到四份文档 |
+| 浏览器层（第 3 步） | `storage/sql.ts` + `storage/sql-storage.ts` + `browser/{rpc,opfs,opfs-worker,idb}.ts`；`sqlite.ts` 退化为会话适配器 |
+| 浏览器套件 | `packages/cortex-storage/test/browser/`（server + page + CDP 探针，零 Playwright 依赖）：两次启动、24 条检查、结果入库 |
+| 入口守卫 | 三个浏览器入口纳入 `entry-guard` 的可移植清单（禁 `node:` 可达） |
+| 台账 | 新增 `browser-storage-surface` 分组（14 条），基线由脚本重建 |
+| 模型层（第 4 步） | `cortex-llm` → `cortex-ai`；`.` / `./local` / `./web` 三入口；`@huggingface/transformers` 4.3.1；`dtype` 钉死 fp32 |
+| 一致性脚本 | `packages/cortex-ai/test/parity/run.mjs`：临时工程装旧库（sharp 覆盖 + `--ignore-scripts`），真权重比两条臂并验重排顺序 |
+| 重排 | 不再经 `text-classification` 管线，直接读 `AutoModelForSequenceClassification` 的 logits |
+| 注解 | 删除 `cortex-ai` 的两条 `c8 ignore start`（改为注入模块加载器后被测穿）；`cortex-core` 的登记表同步收缩 |
+| 守卫 | 新增 `cortex-ai` 的三条画像（`.`/`./local`/`./web`），支持逐入口 `forbid`；守卫改为可被测试导入 |
+| 分诊层（第 5 步） | `core/src/triage/{rules,writer}.ts`；表在导入时 `assertRuleTable` 自校验；`TriageWriter` 唯一写入口；`promote()` 唯一跨边界路径 |
+| 夹具 | 60 条标注与 13 条历史泄漏行**从 POC 原样搬入** `core/src/triage/__tests__/fixtures/`，各带来源说明 |
+| 台账 | 分诊面导出登记进 `core-llm-node-surface` 的理由段（消费方是卡片队列与输出守卫），基线由脚本重建 |
+| 输出层（第 7 步） | `core/src/triage/output-guard.ts`：O1 范围扫描 + O2 归因；豁免以窗口内的 shared 行为准；报告单位是句子 |
+| 回显层（第 8 步） | 同文件：O3 n-gram 回显、白名单扣除、位置映射归一化；成本表实测 |
+| 提议层（第 9 步） | `core/src/triage/proposer.ts`：`TriageProposer`（四道闸）、`buildProposerPrompt`、`groundedIn`；`CardQueue.attach()` 与导出表的新列 |
+| 提示词 | `triage-proposer/v2`：删掉 v1 的例句与句子形态占位符（v1 被 0.5B 原样返回 44/60 次） |
+| 真模型链 | `cortex-ai/test/proposer/run.mjs`（`--from` 可只重算不重跑）+ `live-result.json`；权重经 `hf-mirror.com` |
+| 适配器缺陷 | `OpenAICompatibleLLM.completeStructured` 现在把 schema 转发下去，请求体因此带 `response_format` |
+| 台账 | 新增 12 条 `core-llm-node-surface` 条目（提议层导出面），基线由脚本重建 |
+| 会话（第 10 步） | `memory/src/disclosure/session.ts`：`DisclosureSession`（say / propose / accept(atom) / dismiss / edit / refresh / expire / cards / evidence / export），要求两个 `Storage` |
+| 本地生成 | `cortex-ai/src/local/llm.ts`：`createLocalLLM`；`pipelines.ts` 抽出 `preparePipeline` 供两条路径共用 |
+| 审计面 | `KnowledgeCard.sourceText` + 导出条件列 `source`（措辞变化时才出现） |
+| 演示 | `tools/triage-demo.mjs`：九次进程调用跑通全链；`--llm local\|openai`，key 只从环境变量来 |
+| 测试依赖 | `cortex-memory` 新增 devDependency `@agentix-e/cortex-storage`（只在测试里用真引擎） |
+| O3 语料（第 11 步） | `core/src/triage/echo-corpus.ts`：`EchoCorpus`（Bloom + 滚动哈希 + 复核计数）；`output-guard.ts` 的减法从建库移到查询 |
+| 成本基准 | `packages/cortex-core/test/echo/run.mjs` + `result.json`：两版实现、四个规模、p50/p95、过滤器体积 |
+| 台账 | 3 条新导出 + `OutputGuard` 移出孤儿表，理由写进 `rebuild-export-census-baseline.py` |
+| 输出接线（第 12 步） | `memory/src/disclosure/session.ts`：`check(draft, {task, requireCitation?, minEchoChars?})`；`output-guard.ts`：O3 按任务作用域早退、一句话一个 finding |
+| 演示 | `tools/triage-demo.mjs` 新增 `check <task> "<draft>"`；证据记录扩到 13 次调用 |
+| A3 仪器（第 13 步） | `eval/src/a3.ts`：`scoreA3`、`exactMcNemar`、五值判定；`tools/a3-review.mjs`：prepare / review / score |
+| 预注册 | 03 §7.1.1：单元、顺序、N、判据、停止规则、空结果的含义；外加**开跑前的处理强度门槛** |
+| 配置（第 14 步） | `ai/src/profile.ts`：`resolveLlmProfile`、`describeProfile`、`readApiKey`、`PROFILE_ENV`（七个别名都在这里，错误信息与文档用同一份） |
+| 入口闭包 | `tools/entry-guard.mjs` 新增**文件级**禁令与自检；`ai/src/json.ts`、`ai/src/rerank/cross-encoder.ts` 拆分（旧名字仍再导出） |
+| 零网络证据 | `ai/test/profile/network.mjs` + `result.json`；`evidence/a3-dosage/network-nocall.json` |
+| 提示词 | `triage-proposer/v3`：切分规则从"通常不止一条"改成"第二个从句有自己的主语或动词"；`cards.json` 现在记录 `promptVersion` |
+| 演示 | `triage-demo.mjs` 支持 `--llm remote`（缺 key 时**报错退出**，不回退）与 `--dtype`；录制扩到 14 次调用，含失败路径 |
+| 测量工作流（第 15 步） | `.github/workflows/measure-models.yml`：dispatch 专属，四作业（远端生成 / embedding / 提交读数 / 密钥卫生）；输入参数化 `model`、`cards`、`sentences`、`embedding_dimensions` |
+| 读数归档 | 每次 dispatch 把 `readings/` 提交到 `readings/<run id>` 分支（产物 90 天会过期，读数不该）；本次读数的副本在 `cortex-docs/evidence/remote-reading/` |
+| 双 backend 脚本 | `ai/test/proposer/run.mjs` 支持 `--llm local|remote`、`--model`、`--dtype`、`--out`；改用包内 `createLocalLLM` 而不是自己包一层 pipeline |
+| embedding 冒烟 | `eval/test/embedding-smoke.mjs`：3 句、2 个余弦、断言「相关 > 无关」，并把 provenance 写进产物 |
+| 采集页面（第 16 步） | `eval/src/review-page.ts`：`renderA3ReviewPage` / `planReview` / `resumeKey`；`tools/a3-review-page.mjs` 是 CLI（参数、配置校验、绝对 `--out`） |
+| 证据 | `evidence/a3-review/review-remote.html`（20 对，打开即可点）+ 两张截图 |
+| 释放路径（第 17 步） | `core/src/triage/release.ts`（令牌、警告、判定、摘要）；`writer.release()` / `releases()` 共用 `cross()`；会话层 `release` / `releases` |
+| 演示 | `triage-demo.mjs` 新增 `facts` / `release` / `releases`；录制扩到 18 次调用 |
+
+| 断言闸（第 18 步） | `core/src/triage/claims.ts`：`splitSentences` / `isClaim` / `claimsIn`；`card.ts` 的 `open` 用它设定 `text`、为空则不建卡；`accept` 在文本被截短时先 `revise` 重判 |
+| 体量读数 | `core/test/card-volume/run.mjs` + `corpus.json`（十个证据窗口）+ `result.json`（全量与样本两栏）；`docs/MEASURE-CARD-VOLUME.md` 记录方法与边界 |
+| 台账 | `rebuild-export-census-baseline.py` 新增"THE CLAIMS GATE"理由段；新增 1 条孤儿、2 条获得调用方 |
+| 接地（第 21 步） | `core/src/triage/grounding.ts`：`contentGrounded`（数字/人名/实词四字符词干/否定）、`isVerbatimRun`（折叠缩写）、`distillationOf`、`looksTemporal`；`proposer.ts` 提示词 v4 + 闸门替换 + `firstAttestedAt` 排序；`card.ts` 的 `attach` 改用同一函数 |
+| 读数 | `tools/a3-review.mjs prepare` 打印 `distillation:` 并写进 `cards.json`（`verbatimAtoms`/`timeKept`）；run 40073815898 的产物在 `evidence/remote-reading-v4/` |
+| 采集页 | `evidence/a3-review/review-remote-v4.html`（用 v4 卡片重建；`resumeKey` 含提示词版本，因此与 v2 那轮互不干扰） |
+| 拒答闸门（第 23 步） | `memory/src/abstention-recovery.ts`（`declinedItems` / `planAbstentionRecovery` / `buildRecoveryPrompt` / `asksForCount` / `DECLINE_TOKEN`）；`memory.ts` 在 `answerSessions` 里接线并加 `recoveryCensus()`；`types.ts` 的 `AbstentionRecovery`；`bench-memory-arm` 的 `CORTEX_MEMORY_ABSTENTION_RECOVERY` 与 `featureConfig.abstentionRecovery`；`run-ablation` 条件展开 |
+| 读数 | `cortex/docs/MEASURE-ABSTENTION-RECOVERY.md`：三跑的三能力对照表、四态判别、预注册与回退规则 |
+| 采集页（第 19 步） | `eval/src/review-page.ts`：删掉 `.done{display:none}`；`#a3-undo` / `#a3-reset` / `#a3-save` 进常驻吸顶条；skip 持久化（`{trials, skipped}`，旧裸数组仍可读）并计入进度、不进 JSONL；完成页说明 N 为何缩小；`Undo` 由最大步序号重算，无历史数组 |
+| 判据面板 | 页面内 `<details class="how">`：四个按钮各一个例子 + 两条规则（各自独立判断、不要猜哪边是模型写的）+ skip 损失一对 |
+| 浏览器探针 | `eval/test/review-page/probe.mjs`：真 Chromium + loopback origin，量 `offsetHeight`；17 项检查，结果入库 `last-run.json` |
+| 单元测试 | `review-page.test.ts` 24 → 28：CSS 不得隐藏脚本用 `hidden` 显示的区块；控件必须在 `#a3-done` 之前；客户端脚本必须能解析；面板必须点齐四个按钮 |
+| 演示 | `tools/triage-demo.mjs`：`say` 的 `null` 现在分两种打印——规则已判（rule: family / shared）与"这一轮没有断言"；同一句提示语说两种原因是 CLI 在撒谎 |
+
+### 10.2 下轮计划（按依赖排序）
+
+第 1–23 步完成。这一轮把**目标**改对了：不是追内部参考管线的 224，而是追公开读数的 450+，
+而赤字**全部**落在 MR 与 TR 两个能力上（248 题）。
+
+| # | 动作 | 为什么是这个顺序 | 验收判据 |
+|---|---|---|---|
+| 1 | **让重问可观测**（`recovery` 的文本进产物） | 第 26 步的结论是"闸门对、治疗无效"，但**原因不可见**：10 次重问只有 1 次答出，另外 9 次为什么拒答读不出来——同一个 pass 上第二次出现观测缺口。改提示词之前必须能看见 | 每条带清单的拒答都记录重问文本与判定 |
+| 2 | **日期框架**（`cortex/docs/PREREG-DATE-FRAME.md`） | 零调用、有外部读数（+9.3，CI [+4.0,+15.3]）、且不依赖上轮失败的调用层机制；相对时间题 66% vs 81% 三跑同向 | P1 ≥ +8pp；P2/P3 不降 2；P4 不变 |
+| 3 | **补检索**（不足即再查，arXiv 2610.22668） | MR 另外 17 条失败 gold 不在池里，提示词到不了 | 预注册 + 配对 |
+| 4 | **A3 在 v4 原子上重跑**（页面已重建） | 上一轮测的是"切段 vs 原句"且接受率贴天花板；v4 的原子 33.3% 逐字，值得再量一次 | 20 对、配对、五值之一 |
+| 5 | **整链真实基准**（`say → 卡片 → 提议 → 发布 → 释放 → 读侧 → check`） | 结构完备但从未整链跑过 | 卡片数、提议可用率、释放次数、各层拦截数 |
+| 6 | **本地 1.5B**、`./analytics`、Safari 持久 profile、`./web` 真机、释放 UI | 与主路径无关或需真机 | 见 03 §10.1.1 |
+
+**为什么第 1 步是"让重问可观测"而不是"改提示词"**：上一轮已经吃过一次同样的亏（P1 读不出来，
+补了 census）。这一次 10 次重问只有 1 次答出，而**重问的文本根本不在产物里**——不知道另外 9 次是
+被"清单不够"说服，还是被提示词里第二句许可放走的。在一个看不见的机制上调参，等于再赌一次。
+
+**为什么第 2 步是日期框架而不是继续修恢复 pass**：恢复 pass 已经被测过，转化率 10%、净 −1；
+日期框架零调用、有同基准的外部读数（+9.3，CI [+4.0,+15.3]），而且不依赖那个失败的调用层机制。
+**先做有外部支持且零成本的那条**，而不是在同一条路上加注。
+
+**为什么第 4 步还排在计划里**：A3 是唯一由人给出的判断，它的独立性不能被跳过；但它量的是
+"原子是否值得留下"，与 SOTA 分数无直接关系，所以它不再排第一。
+
+**关于"设计阶段是否完美"**：9 条门槛 **9/9 ✅**，缺口清单为空。这一轮新增的反例值得记下：
+**上一轮把"差距 20 题"当成事实写进了三份文档**，而它依赖的基准（224/500）比所有公开系统都低
+一个量级。基准本身是一个待验证的假设，和"defer 是少数"（第 18 步）属于同一类错误——
+**不是算错了，是对标的对象错了**。
+
+### 10.3 第 45 步之后：当前位置与最优路径
+
+> §10.2 的表是第 23 步时代的排队（目标从"内部参考管线 224"改成"公开读数 450+"）。它没有作废，
+> 但它排的是 A3 与提议层的账，与本轮之后的主路径不同。**当前的主路径在下面这张表里。**
+
+#### 当前位置（三个数，都有臂名）
+
+| 量 | 值 | 出处 | 说明 |
+|---|---|---|---|
+| 端到端 | **404/500（80.80%）** | `[实测] 40088479628` | `cortex-memory` 臂，单次 |
+| 端到端（历史） | **405.0/500（81.0%）** | `[实测] 39367801501` 起四次均值 | 同一 arm 配置，与上面差 0.2pp，属单次抽样 |
+| 同 run 的参照 | **43.40%** | 同上，`reference-pipeline` | McNemar `p=1.694e-33`；这是本仓唯一"同 reader 同 judge 同数据"的 A 级对照 |
+
+对外的坐标（第 47 步更新）：**两次独立第三方测量同意在 85.8–86.5**（memoricai 85.8，
+Redis 复现 86.5，§9.55 七），我们 80.80% 低 **5.7pp**。而**同一份记忆只换 reader 就能跨 22.6 点**
+（NeuraWeave 第三方复现），所以这个差**不足以支撑任何名次声明**——我们唯一别人没有的，是
+`reference-pipeline` 43.40% 那条同一次调用内的配对对照（McNemar `p=1.694e-33`）。
+
+**缺口不是"两个能力"，是两个不同性质的问题**：
+
+| | MR | TR |
+|---|---|---|
+| 数值 | 69.42%（84/121） | 74.02%（94/127） |
+| 参照 | **同一 run 的参考管线 102/121**，落后 18 题，`p=2.935e-3` | **同 reader 的 LycheeMemory 87.22%**，落后 12.6–13.2 点 |
+| 性质 | **我们自己有更好答案**（内部对照） | **别人有更好答案**（机制移植） |
+| 失败形态 | 27 答错（其中 12 恰好少 1）+ 10 拒答 | **21/33 是拒答** |
+
+IE 89.33%、KU 86.11%、ABS 100% 已在 A 级带内或之上，且**五百题的 gold turn 全部进了 prompt**——
+所以这三项的问题不在检索。
+
+#### 剩余步骤（按依赖排序）
+
+| # | 优先级 | 动作 | 为什么是这个顺序 | 验收判据 |
+|---|---|---|---|---|
+| 0 | **运行中** | **`40498191604`**（`retrieval-session` + `units=session` + `topK=256`） | 上一轮已实现并 dispatch，判据先前注册。**在读出它之前不再动 MR 的设计**——否则两次改动混在一个读数里 | P1 机制行读 `relevanceSignal=retrieval-session`；**P2 MR ≥ 96/121**；P3 弃权不升；P4 IE/KU/TR/ABS 各 ≤3 题；P5 `promptChars` ±20% |
+| 1 | **P0** | **拒答契约：45 次拒答是本臂最大的一群失败** | 96 个错误里 45 个是"证据在手仍拒答"，占 TR 的 64%、IE 的 75%，而 ABS 30/30 且 `threshold:0`——**门槛没错，是模型在证据带含糊措辞时把含糊读成不成立**。这是唯一大到能改总分的一群（合并发现封顶 12 题） | **必须给出机制而不是措辞**：先从一个已归档的 TR 拒答原文反推出可检验的判据（如"两个已标注日期的事件 + 一个 hedge 词"），再改契约；判据是**配对不一致数**，不是总分 |
+| 2 | **P0** | **禁止无共同引文的跨会话合并**（`MEASURE-SOTA-FAILURES` §3.2） | 唯一一条有统计支撑的 MR 机制：合并语言出现在 **41.7%** 的"恰好少 1"里、**4.8%** 的答对里，Fisher **p=0.0012**。契约的两个子句里前一个在赢 | 上限 **+5 题**（12 题群体），只能配对测：预测"5 题由错转对、7 题不动、答对群体不动"；不一致数需越过 5 |
+| 3 | **P1** | **TR 的段落级巩固**（LycheeMemory V2 同 reader TR **87.22%**） | 我们 TR 74.6% 距它 12.6 点，**比总分的 5.7 点更大**，且同在 gpt-4.1-mini 下 TiMem 只有 72.93——**差的 14 点来自机制不是 reader**。这是"别人有更好答案"的那条线，与 MR 的内部对照不共享代码路径，可并行 | 先出设计（分段级巩固 = 写入侧而非读取侧），再预注册；判据落在 TR 列，配对，且不得让 IE/ABS 动 |
+| 4 | **P1** | **判据从"总分差"改成"配对不一致数"** | 本臂四次重复跨 **15 题**（397–412）。+3 与 +5 都看不见 +15，**除非配对**。`paired-test.ts` 已有；缺的是每份预注册都先写不一致数判据 | 每份预注册含 `discordant` 上下界；任何只写"≥ 总分 X%"的预注册不 dispatch |
+| 5 | **P1** | **第一组 A 级竞品读数**（Hindsight，MIT，可换 DeepSeek reader + 官方 judge，100 题） | 现存竞品数字全是 C 级。而第三方复现已证明**自报与复现差 +3 到 −28**（§9.55 七）——自己复现一次是唯一能引用别人的方式 | `comparability()` 返回 A；与 80.80% 可相减 |
+| 6 | **P2** | 批判实验带计数器重跑（`benchmark.yml`，`recall` / `per-item`） | 位置本来就对（批判只在 `natural-language-memory.ts`），但**它所在的那条臂不是 SOTA 系统**（44.6% 对 80.8%）。它回答一个真问题，只是对"超越竞品"的贡献是零 | 两臂都带 `critiqueStats`；"逐位相同"必须被分成三个数；MR Δ 越过 10 题才称效应 |
+
+#### 为什么第 1 步是"拒答契约"，而不是证据更强的那条 MR 发现
+
+这是本轮唯一一次**按群体大小而不是按证据强度**排序，理由是两个上限算得出来：
+
+| 候选 | 证据 | 群体上限 | 能改总分吗 |
+|---|---|---|---|
+| 跨会话合并（Fisher p=0.0012） | **最强** | 12 题（其中 5 题带合并语言） | 不能，天花板 2.4pp |
+| 拒答契约 | 目前只有形态，**还没有机制** | **45 题** | 能，天花板 9pp |
+
+**证据最强的那个封顶在 12 题上。** 一个只可能移动 12 道固定题的改动物，即使 5 题全中，也小于本臂
+15 题的边际跨度——它值得做，但它不是"超越竞品"那条路上的第一块。而 45 次拒答是唯一一群大到
+能推总分的，占 TR 错误的 64%、IE 的 75%。
+
+**但第 1 步的验收判据里写的是"先给出机制，再改契约"。** 这是本项目最贵的一课：只提建议的提示词
+无效（§ 反复记录），要求写下中间产物的有效。所以这一条不许从"措辞调优"开始，必须先从一份已归档
+的 TR 拒答原文（§9.50 §2 引的那一段：两个已标注日期的事件 + 一个 hedge 词 "recently"）反推出
+一个**可被计数**的判据，再改。
+
+#### 为什么日期框架从这张表里消失了
+
+上一版它是第 2 步，理由是"外部已发表、同基准、零调用成本 +9.3"。**§9.55 一撤回了它**：temporal
+路由早就带锚点句与每轮日期，**外部机制的两半都在**，所以 +9.3 已经计入 74.02——它不是待拿的增益。
+而唯一没有锚点的 `multi-session` 上，问题恰好是"数错"与"合并"，日期框架对两者都无能为力。
+
+**这条通道空出来的位置，给了"拒不拒答"这件事。**
 
 #### 下一次 dispatch 的两个动作（第 45 步续）
 
