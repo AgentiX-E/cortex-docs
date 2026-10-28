@@ -2851,6 +2851,7 @@ unrun   算不出来——报告，但永不当作通过
 | S-2 激活 / S-3 图 / S-4 重要度 | 访问计数 / 共现边 / 实体密度 | 每信号 census（命中数、改变序的题数） | 500 | 权重 0 | 各自 recall@10 ≥ +2 | **权重 0 发货**；S1 不动即删 | 未实现 |
 | S-5 交叉编码器重排 | 对 (query, passage) 逐对独立打分后重排 | `rerankCensus.{calls,pairs,fallbacks,changed}` | 500 | 融合序不变 | MR ≥ +3 且 IE 不跌 | 若 `fallbacks > 0` 则本轮判**装配失败**，不得读成"重排无效" | **本轮注册**（`SOTA-LANDSCAPE.md` §4.9、§9） |
 | 竞品复现：mem0 | 同协议 `Add`/`Search`，同语料、同 judge | `ingest: N of M stored, K refused`、recall@k、all-gold@k | LongMemEval-500 | 本臂 | 只报**检索级**读数，永不与准确率并排 | 若装配全损则报 `ok:false` 而不是 0.0% | 完成（B 级，`COMPETITOR-REPRODUCTION.md` §6.3） |
+| 采样的温度（`TEMPERATURE`） | 决定同一 prompt 是否给同一答案 | `memoryArmConfig.reader.temperature`（`null` = 请求里没有这个字段） | 500 | `T=0` 对 `T=default` | 逐路由移动 < 5–6 题（现测得的地板） | 若两者在 500 题上逐题相同，**删输入而不是修输入** | **缺陷已登记**（`PREREGISTRATION` §13.114）：这一臂从未发送过温度 |
 | 竞品复现：RAW-RAG | 同上，四阶段 | 同上 + `rerank` 端点 manifest | 同一 `longmemeval_s_cleaned.json` | 本臂 | 在**相同 reader** 下比 | 未决依赖：`/rerank` 端点（智谱可替代 Cohere） | 未跑 |
 
 #### 14.5.3 三条防自欺规则（每一条都来自一次真实事故）

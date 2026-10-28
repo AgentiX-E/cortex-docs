@@ -5778,3 +5778,51 @@ R4 的否证值得单独记一句：预注册默认了"换 reader 只会更好"�
 **两者不是同一种机制，所以那次否定不能外推到这一次。** 而这次可执行的原因很具体：智谱的
 `POST /api/paas/v4/rerank` 与 `cortex-ai` 的 `OpenAICompatibleReranker` **协议同形**，
 只需改 baseUrl，且 `ZHIPU_API_KEY` 已在 Runner 上。
+
+### 9.70 第 53 步（续）：这一臂从来没有发送过温度
+
+#### 一、一条"所有层都对、但没有任何一层读"的边
+
+workflow 声明 `temperature` 输入（默认 `'0'`，描述写 "0 = deterministic"），dispatch 发送它，
+`§10.3` 注册它，四份文档都说"温度 0"。而这条路径上**没有代码读它**：
+
+| 层 | 做什么 |
+|---|---|
+| `benchmark-cortex-memory.yml` | `TEMPERATURE: ${{ github.event.inputs.temperature \|\| '0' }}` —— 只转发 |
+| `cortex-eval/src/llm-factory.ts` | `createLlmFromEnv` 读 key / baseUrl / model / thinking，**不读温度** |
+| `cortex-memory/src/memory.ts` | `#consult` → `this.#llm.complete(prompt)`，**不传选项** |
+| `cortex-ai/src/llm/openai-compatible.ts` | `if (opts.temperature != null) body['temperature'] = …` —— 从不为真 |
+
+`TEMPERATURE` 全仓只被 `cortex-eval/bench/run.ts`（**参考管线**的 runner）读取。所以这条臂
+的每一次读数都是服务端默认温度（DeepSeek 为 `1.0`）下的抽样。
+
+#### 二、为什么既有守卫看不见
+
+这是 §7.3 侧信道的第三形态（"转发了但没人读"）的一个变体：它在 `bench-memory-arm.test.ts`
+的视野之外，因为**值从来没有变成 option**。那张守卫表检查的是"option 被设置了但没人读"，
+而这里连 option 都没被设置。
+
+#### 三、影响的两半
+
+| 影响 | 判定 |
+|---|---|
+| 配对比较（McNemar、discordant、Δ） | **不受影响**：两臂同一个 reader、同一个温度 |
+| 415/416/417/421 的 5–6 题跨度 | **被解释了**：那是 `T=1.0` 的采样，此前只称之为"仪器自身的移动" |
+| "可复现到题"这句话 | **对这条臂不成立**，已从文档里改正 |
+| 阈值（85.0% 等） | **不变**：它们本就是对着抽样均值定的 |
+
+#### 四、为什么不在这一轮修
+
+把 `T` 钉到 0 会移动每一个数：分布变窄，均值可能朝任一方向走，而 `ACCEPTANCE-MATRIX` 的每条
+阈值都是对着抽样标定的。这种规模的改动需要自己的 dispatch、自己的对照、自己的一节——
+不是一个夹在文档轮里的顺手修改。
+
+本轮做的是**记录 + 让产物能说真话**：`MemoryArmConfig.reader` 新增，
+`reader.temperature` 是 `number | null`（`null` = 请求里没有这个字段，渲染为 `temp=default`），
+由 `resolveReaderIdentity(env)` 填充——它与 `createLlmFromEnv` **共用同一个函数**，
+因此"作答的模型"与"产物写的模型"不可能是同一个环境的两份读法。10 条测试，其中一条**故意钉住**
+"即使 `TEMPERATURE` 在环境里也不读它"，因为一个悄悄开始遵守它的编辑会移动全部历史数字。
+
+§13.114 同时登记了修复它的那次运行的两条预测与删除条款：若 `T=0` 与 `T=default` 在 500 题上
+逐题相同，则**删掉这个输入**而不是修它——一个不改变任何东西的声明式输入比缺失更糟，
+它每次出现在配置行里都在消耗读者的注意力。
