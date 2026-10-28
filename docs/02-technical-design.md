@@ -2810,3 +2810,76 @@ unrun   算不出来——报告，但永不当作通过
    是发布时把它变成 exit 2 的开关。
 3. **受控集不是基准。** K/T 系列的数字来自 17 例合成集合，只回答"机制在不在它该在的地方"，
    不回答"能涨几分"。这句话写在 `docs/ACCEPTANCE-MATRIX.md` §4.1 的最后一列。
+
+### 14.5 每一个增量都必须先有判据，再有权重
+
+§14.1–14.4 规定的是"判据是数据"这件事的**机制**。这一节规定的是**内容**：本仓已经上线的、
+已注册未跑的、以及尚未实现的每一个增量，各自用哪一件仪器、在哪一份集合上、与谁比、
+达到什么数字算成功、以及什么条件下它必须被删除。
+
+#### 14.5.1 契约的形状（七格，缺一格则该增量不得发货）
+
+| 格 | 回答的问题 | 缺失时的失败方式 |
+|---|---|---|
+| **机制** | 它按什么因果路径改变读者的输入？ | 一个说不出机制的增量，其正负结果都无法归因，等于一次昂贵的抽样 |
+| **仪器** | 产物里的哪个字段能看见它**触发过**？ | "配置了"与"触发了"在准确率里长得一样（§5.6.10） |
+| **集合** | 哪一份题、多少题、哪个子集？ | 子集在论文里而不是在代码里时，数字永远对不上 |
+| **对照** | 减掉哪一个值就是它的对照臂？ | 没有单变量对照，Δ 里混着两三个变化 |
+| **判据** | 达标的具体数字是多少？ | "应该有提升"永远不可能失败 |
+| **删除条款** | 出现什么结果就删掉它？ | 没有删除条款的增量会永久留在默认配置里，代价无人认领 |
+| **成本** | 每题多花多少 token / 调用 / 秒？ | 一个 +1 分的增量若贵 3 倍，它在生产里不存在 |
+
+#### 14.5.2 台账（按上线顺序；"状态"一列是唯一允许含糊的地方，且必须指到一节）
+
+| 增量 | 机制 | 仪器（产物字段） | 集合 | 对照 | 判据 | 删除条款 | 状态 |
+|---|---|---|---|---|---|---|---|
+| `retrievalThreshold: 0` | 检索门控决定"证据够不够格作答" | `abstentionReasons.threshold` | LongMemEval-500 | `0.25` | 门控关闭时 `threshold=0` 且名册不回退 | `0.25` 已按预注册恢复原值 | 采纳（§10.9） |
+| `promptContract: abstention-evidence-blocks` | 证据分块 + 弃权合约 | `renderingRoutes` | 500 | `extractive` | 禁止状态数下降 | 任一能力回退即回滚 | 采纳（§13.61） |
+| `ask: enumerated` | 两步契约（先枚举再计算） | `askRoutes`、Step 1 列表行数 | MR 121 | `computed` | MR ≥ +5 题 | 其他五路由逐字节相同才算单变量 | 采纳（§13.34） |
+| `relevanceSignal: retrieval-hybrid` | 稠密余弦 + 稀有词通道 RRF | `relevanceSignal`、pool 命中 | 500 | `retrieval` | TR +≥10 题且无能力回退 | 若池覆盖不升则只保留词通道 | 采纳（§13.64） |
+| `relevanceUnits: turn` | 预算按 turn 花，不按 session | `relevanceUnits` | MR 121 | `session` / `session-fill` | session 单元不得更优 | 已由 `39699987781` 判定 turn 更优 | 采纳（§13.31） |
+| `maxTurnChars: 400` + `routes` | 单 turn 上限，只在 MR/TR 生效 | `maxTurnChars`、`maxTurnCharsRoutes` | 500 | `none`（全路由） | 全局形态 IE −30 已否决；路由形态名册 ≥ 对照 | 未触及三能力须逐字符复现 | 采纳（§13.76） |
+| `maxPromptChars: 48000` | 预算买房间而不截断 | `featurePromptEvidenceChars` | 500 | `24000` | MR 交付金标 ≥ +10pp | 若 96,000 不更优则此为终值 | 采纳（§13.82）；96,000 在测（§14.5.3） |
+| `evidenceRoles: user` | 只读用户轮，剔除助手轮 | `evidenceRoles`、渲染字符构成 | MR+TR | `all` | MR ≥ +5 且 TR ≥ +5，其余三能力逐字符复现 | 若任一能力回退即回滚 | 采纳（§13.84） |
+| `reviewPass: bare` | 裸弃权再问一次，提示里不含该 token | `bareRetry.{attempted,answered}` | 500（flat/temporal 可达） | `none` | 四次均值 ≥ 对照 +10 题 | 若转化率 <50% 或 ABS 下降 | 采纳（§13.107/§13.112） |
+| `reviewPass: audit` | 二次复核只审成员资格 | 审计后计数变化 | MR 121 | `none` | MR ≥ +3 | **已否决**：成员判定不可由二次提问改善 | 关闭（§13.94） |
+| `reviewPass: recover` | 弃权且 Step 1 非空时再问一次 | `recoveryCensus` | MR/TR | `none` | 可恢复题 ≥ 5 且全对 | 若把 ABS 的正确拒答翻成错误则弃 | **注册未跑**（§13.92） |
+| `queryExpansion: llm` | 建索引前用一次模型调用扩查询 | `queryExpansion`、命中集合差 | MR 121 | `none` | 命中金标的题 ≥ +5 | 若每题多一次调用而 MR ≤ 0 则删 | **注册未跑**（§13.97） |
+| `selfConsistency: 3` | 三次采样投票 | `selfConsistency` | 500 | `none` | ≥ +5 题且显著 | 若只抵消噪声则删（§13.102 已示此风险） | **测得无效**（§13.101） |
+| 读者：`deepseek-v4-pro` | 更强推理 | `DEEPSEEK_MODEL`（**尚不在 `memoryArmConfig` 内**，见 §13.110.1 债务） | 500 | `deepseek-chat` | \|Δ\| ≥ 5 | 已判 **−7.20pp**，删 | 关闭（§13.110） |
+| S-1 时间信号 `0.5**(Δt/30d)` | 半衰期衰减并入余弦，只作用于已召回 turn | `temporalBoosts` 导出 | TR 127 | 权重 0 | TR recall@10 ≥ +3 | 权重 0 发货；S1 不动即删 | 实现完成、未接线（`PLAN-RETRIEVAL-SIGNALS.md`） |
+| S-2 激活 / S-3 图 / S-4 重要度 | 访问计数 / 共现边 / 实体密度 | 每信号 census（命中数、改变序的题数） | 500 | 权重 0 | 各自 recall@10 ≥ +2 | **权重 0 发货**；S1 不动即删 | 未实现 |
+| S-5 交叉编码器重排 | 对 (query, passage) 逐对独立打分后重排 | `rerankCensus.{calls,pairs,fallbacks,changed}` | 500 | 融合序不变 | MR ≥ +3 且 IE 不跌 | 若 `fallbacks > 0` 则本轮判**装配失败**，不得读成"重排无效" | **本轮注册**（`SOTA-LANDSCAPE.md` §4.9、§9） |
+| 竞品复现：mem0 | 同协议 `Add`/`Search`，同语料、同 judge | `ingest: N of M stored, K refused`、recall@k、all-gold@k | LongMemEval-500 | 本臂 | 只报**检索级**读数，永不与准确率并排 | 若装配全损则报 `ok:false` 而不是 0.0% | 完成（B 级，`COMPETITOR-REPRODUCTION.md` §6.3） |
+| 竞品复现：RAW-RAG | 同上，四阶段 | 同上 + `rerank` 端点 manifest | 同一 `longmemeval_s_cleaned.json` | 本臂 | 在**相同 reader** 下比 | 未决依赖：`/rerank` 端点（智谱可替代 Cohere） | 未跑 |
+
+#### 14.5.3 三条防自欺规则（每一条都来自一次真实事故）
+
+1. **触发必须可见。** 判据读的字段必须是"这件事发生过"的证据，不是"它被配置了"的证据。
+   `reviewPass: bare` 曾被配置、被发货、被计入 +3.15，而产物里没有任何计数——
+   22 次触发是事后从日志里数出来的（§5.6.10）。此后每个增量发货前必须回答：**哪个字段能证伪它**。
+2. **单变量必须是可验证的，不是可声明的。** 未触及的路由必须**逐字符**复现对照窗口，
+   并写进预注册；`aggregation` 的第一次派发就违反了这条——它的 fallthrough 返回控制块，
+   悄悄把 flat 与 temporal 的合并句删掉，TR 掉 21 题（§13.104）。
+3. **失败也可能是装配失败。** 任何"没效果"的结论必须先排除三件事：机制是否运行
+   （`fallbacks`）、载荷是否合法（`ok:false`）、维度是否匹配（mem0 的 1536 vs 1024）。
+   本仓已经因为跳过这一步，把一次维度不匹配读成了 `0.0%` 的系统能力。
+
+#### 14.5.4 下一件要发货的仪器：逐题台账（借自 MemoryTax）
+
+本仓现有的判据是**聚合**的：McNemar、discordant 身份列表、per-capability 表。这三样合起来能回答
+"这次改动是否显著"，不能回答"它买下哪几题、卖掉哪几题"。而后者才是决定**两个增量能否叠加**的数字：
+若 S-1 与 S-5 各自 +3 题，但买的是同一批题，合起来仍然是 +3。
+
+`github.com/hexuan21/MemoryTax`（MIT）把这件事写成了三个词，且是本仓可以直接实现的：
+
+| 术语 | 定义 | 本仓对应字段 |
+|---|---|---|
+| memory benefit | **只有系统答对**的题 | `featureCorrect ∧ ¬baselineCorrect`（已存在，且已列出题号） |
+| memory tax | **只有对照答对**的题 | `baselineCorrect ∧ ¬featureCorrect`（同上） |
+| net value | benefit − tax | 现有 Δ 的另一种写法 |
+
+所以缺的不是数据，是**把两张身份列表变成一份台账**并跨增量对齐。落地形式：
+`cortex-eval/src/ledger.ts` 输出 `{bought: string[], sold: string[], kept: string[]}`，
+按 `questionId` 对齐任意两次运行，使"S-1 买下的 7 题里，有 5 题 S-5 也买下了"成为一条可打印的句子。
+这是下一个 P1 仪器增量，判据：两份运行台账的 bought ∪ sold 必须等于总 Δ（否则有题被重复计入）。
