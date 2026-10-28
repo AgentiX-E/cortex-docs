@@ -664,8 +664,8 @@ fail-closed 的全部论证是"私有一律先跑"，而在原型里这句话的
 | 方案 | 私有召回 | 60 条 coverage | 13 条冻结回归 | 1,467 条 coverage |
 |---|---|---|---|---|
 | 现行表 | 9/12 | 26.7% | 0/12 泄漏 | 28.6% |
-| `walk(ing|s)?` | 11/12 | 30.0% | 0/12 | 28.9% |
-| **`walk|sugar|calorie|intake`** | **12/12** | **31.7%** | 0/12 | **29.2%** |
+| `walk(ing\|s)?` | 11/12 | 30.0% | 0/12 | 28.9% |
+| **`walk\|sugar\|calorie\|intake`** | **12/12** | **31.7%** | 0/12 | **29.2%** |
 | 再加 `stretch(ing)?` | 12/12 | 31.7% | 0/12 | 29.2% |
 
 选了第三行：它把召回补满，而加 `stretch` **没有任何增量**，所以不加。false-share（0/12）与
@@ -4908,7 +4908,7 @@ reader、我们的 judge、我们的数据、我们的预算**去跑它的代码
 | 证据目录 | `docs/05-longmemeval-sota-analysis/` → `evidence/longmemeval/`（94 篇判决 + 脚本 + run-ids，**是记录不是文档**） |
 | 新增 POC | `poc/p05-read-side/`（11/11 断言）、`poc/p06-policy-scale/`（1,467 条候选事实） |
 | 新增读数 | A1 12/12、A4 修补前 3/12、修补后 0/12、A5 注入拦截 1/1；共享可达 4/8 → 7/8（全部接受）；coverage 31.7% / 29.2%；leak NOT MEASURED |
-| 规则修补 | 健康规则两轮：vitals 词族（该轮 24.9% → 28.4%），以及 `walk|sugar|calorie|intake`（本轮 9/12 → 12/12 召回） |
+| 规则修补 | 健康规则两轮：vitals 词族（该轮 24.9% → 28.4%），以及 `walk\|sugar\|calorie\|intake`（本轮 9/12 → 12/12 召回） |
 | 宿主机制 | `serve.mjs` 抽取（两个驱动共用一套路由）、p01 浏览器参数化、`safaridriver` 探针、`poc-platform-probes.yml` |
 | 诊断 | `ci-smoke.yml`：把"CI 跑不了 Safari"与"作业根本没启动"分开 —— 结论是后者 |
 | 守卫 | `check-analysis-record.sh` 的记录路径改指 `evidence/longmemeval`；结构检查扩展到四份文档 |
@@ -4950,7 +4950,7 @@ reader、我们的 judge、我们的数据、我们的预算**去跑它的代码
 | 演示 | `triage-demo.mjs` 支持 `--llm remote`（缺 key 时**报错退出**，不回退）与 `--dtype`；录制扩到 14 次调用，含失败路径 |
 | 测量工作流（第 15 步） | `.github/workflows/measure-models.yml`：dispatch 专属，四作业（远端生成 / embedding / 提交读数 / 密钥卫生）；输入参数化 `model`、`cards`、`sentences`、`embedding_dimensions` |
 | 读数归档 | 每次 dispatch 把 `readings/` 提交到 `readings/<run id>` 分支（产物 90 天会过期，读数不该）；本次读数的副本在 `cortex-docs/evidence/remote-reading/` |
-| 双 backend 脚本 | `ai/test/proposer/run.mjs` 支持 `--llm local|remote`、`--model`、`--dtype`、`--out`；改用包内 `createLocalLLM` 而不是自己包一层 pipeline |
+| 双 backend 脚本 | `ai/test/proposer/run.mjs` 支持 `--llm local\|remote`、`--model`、`--dtype`、`--out`；改用包内 `createLocalLLM` 而不是自己包一层 pipeline |
 | embedding 冒烟 | `eval/test/embedding-smoke.mjs`：3 句、2 个余弦、断言「相关 > 无关」，并把 provenance 写进产物 |
 | 采集页面（第 16 步） | `eval/src/review-page.ts`：`renderA3ReviewPage` / `planReview` / `resumeKey`；`tools/a3-review-page.mjs` 是 CLI（参数、配置校验、绝对 `--out`） |
 | 证据 | `evidence/a3-review/review-remote.html`（20 对，打开即可点）+ 两张截图 |
