@@ -5132,6 +5132,24 @@ system under test: 100 refusal(s), 0 empty result(s) of 100 question(s).
 报告打印 `ingest: N of M stored, K refused` 与原因。本地 `mem0ai 2.2.1 + faiss-cpu` 实测：
 ingest 2 turns、search 2 hits。
 
+修复不是靠单元测试论证的。**同一套 harness、同一个 driver、同一个语料生成器**，修复前后：
+
+| | 修复前（`40519523383`，LongMemEval 100 题） | 修复后（`--sut mem0 --people 3`，合成语料） |
+|---|---|---|
+| recall@k | 0.0% | **100.0%** |
+| all-gold | 0.0% | 88.9% |
+| MRR | 0.000 | **1.000** |
+| 拒答 | 100/100 | **0/15** |
+
+但这**不是**一个 mem0 的分数：嵌入器是哈希空间（`comparable_to: "a hash-space run only"`）、
+语料是我们自己的。`all-gold 88.9%` 低于 `recall 100%` 这件事本身是 mem0 的行为特征——
+它返回的是抽取后的 memory 文本而不是原始 turn，所以"命中文本里不含 gold turn 逐字"计为召回但不计为
+all-gold。真语料上要盯的正是这个差：**"mem0 找到了"与"mem0 返回了让我们找到的东西"是两句不同的话。**
+
+`~tok` 列在 mem0 上是 **12**，词法臂约 2,600——因为 mem0 返回短抽取记忆。这是这个语料上的真实成本优势，
+而在 LongMemEval 上未测（已发表的 Mem0 配置报 6.8–7.0k）。**记录这个差而不是那个数**：token 列是读者
+用来谈效率的那一列，而它是在实际跑过的语料上量的。
+
 这一条的对外意义比它对 mem0 的意义大：§6.1.4 新引入的第三方复现表里，`Graphiti 0.0%`、
 `Cognee 20.0%`、`Mem0 OSS 32.4%` 与我们的 `0.0%` **是同一个形状**。所以那三行在各自
 harness 里是能力读数还是仪器读数，**目前无人能说**——包括发布它们的人。
