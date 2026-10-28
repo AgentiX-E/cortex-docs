@@ -1,43 +1,44 @@
 {
-  "$comment": "The machine-readable form of the only end-to-end reading this project has. Every number here is quoted from docs/01-product-whitepaper.md §2.3, which reports four runs of the adopted arm configuration against the same judge. It exists so that an acceptance gate reads a number instead of a paragraph, and so that a document and a gate cannot disagree about what was measured.",
+  "$comment": "The machine-readable form of the only end-to-end reading this project has. Every number here is quoted from docs/01-product-whitepaper.md \u00a72.3, which reports four runs of the adopted arm configuration against the same judge. It exists so that an acceptance gate reads a number instead of a paragraph, and so that a document and a gate cannot disagree about what was measured.",
   "benchmark": "LongMemEval-S",
   "questions": 500,
   "runs": 4,
-  "reader": "DeepSeek, adopted arm configuration (user turns only, 48,000-character window)",
+  "reader": "DeepSeek, adopted arm configuration (user turns only, 48,000-character window) plus the bare-decline retry: a reply that is the abstention token and nothing else is asked once more with that token absent from the prompt, on the flat and temporal routes only",
   "judge": "the official per-category LongMemEval judge prompts",
   "metric": "judge accuracy, mean of four runs",
   "overall": {
-    "accuracy": 0.81,
-    "correct": 405.0,
-    "low": 397,
-    "high": 412,
-    "singleRunUnion": 446
+    "accuracy": 0.8345,
+    "correct": 417.25,
+    "low": 415,
+    "high": 421,
+    "singleRunUnion": null,
+    "singleRunUnionCaveat": "Not recomputed for this configuration: the union needs per-question records and the artifacts were not collected. Reported as null rather than carried over from the previous configuration, because a union from one arm is not a property of another."
   },
   "categories": {
     "information-extraction": {
-      "accuracy": 0.895,
-      "correct": 134.25,
+      "accuracy": 0.9283,
+      "correct": 139.25,
       "n": 150
     },
     "knowledge-update": {
-      "accuracy": 0.8681,
-      "correct": 62.5,
+      "accuracy": 0.8715,
+      "correct": 62.75,
       "n": 72
     },
     "multi-session": {
-      "accuracy": 0.6963,
-      "correct": 84.25,
+      "accuracy": 0.7169,
+      "correct": 86.75,
       "n": 121
     },
     "temporal-reasoning": {
-      "accuracy": 0.7461,
-      "correct": 94.75,
+      "accuracy": 0.7835,
+      "correct": 99.5,
       "n": 127
     }
   },
   "abstention": {
-    "accuracy": 0.975,
-    "correct": 29.25,
+    "accuracy": 0.9667,
+    "correct": 29.0,
     "n": 30
   },
   "referencePipeline": {
@@ -49,5 +50,75 @@
     "temporal-reasoning": 87
   },
   "classificationCaveat": "The category denominators here are 150 / 72 / 30 / 121 / 127. The published LongMemEval splits are 150 information-extraction (70 user + 56 assistant + 24 preference variants counted differently), 78 knowledge-update, 133 multi-session and 133 temporal-reasoning across the same 500 questions. The cleaned local copy regroups thirty of them, so a category percentage in this file is not directly comparable with a category percentage quoted from a paper that used the published grouping. This is recorded rather than corrected because changing the grouping now would move eleven historical readings at once.",
-  "abstentionCaveat": "The thirty false-premise questions form their own bucket rather than being counted inside their parent category, so the five rows sum to 500 (150 + 72 + 30 + 121 + 127). A published paper that keeps them inside the parent category will report different category percentages on the same questions."
+  "abstentionCaveat": "The thirty false-premise questions form their own bucket rather than being counted inside their parent category, so the five rows sum to 500 (150 + 72 + 30 + 121 + 127). A published paper that keeps them inside the parent category will report different category percentages on the same questions.",
+  "previousConfiguration": {
+    "comment": "The four-run mean this file carried before the bare-decline pass was measured, kept so a later reader can see what moved and by how much rather than only where it landed.",
+    "arm": "reviewPass: none",
+    "overall": {
+      "accuracy": 0.81,
+      "correct": 405.0,
+      "low": 397,
+      "high": 412,
+      "singleRunUnion": 446
+    },
+    "categories": {
+      "information-extraction": {
+        "accuracy": 0.895,
+        "correct": 134.25,
+        "n": 150
+      },
+      "knowledge-update": {
+        "accuracy": 0.8681,
+        "correct": 62.5,
+        "n": 72
+      },
+      "multi-session": {
+        "accuracy": 0.6963,
+        "correct": 84.25,
+        "n": 121
+      },
+      "temporal-reasoning": {
+        "accuracy": 0.7461,
+        "correct": 94.75,
+        "n": 127
+      }
+    },
+    "abstention": {
+      "accuracy": 0.975,
+      "correct": 29.25,
+      "n": 30
+    }
+  },
+  "comment": "The machine-readable form of the only end-to-end reading this project has. Every number here is a mean of four runs of ONE configuration against the same judge; the configuration is named in `reader` and in `arm`. It exists so that an acceptance gate reads a number instead of a paragraph, and so that a document and a gate cannot disagree about what was measured.",
+  "arm": {
+    "reviewPass": "bare",
+    "reviewBareDecline": true,
+    "reach": [
+      "flat",
+      "temporal"
+    ],
+    "note": "The abstention route is excluded in code because there the token is the correct answer; multi-session is excluded because it consults directly and never enters the retry."
+  },
+  "runs_detail": [
+    {
+      "run": "40615882821",
+      "correct": 417,
+      "retries": 22
+    },
+    {
+      "run": "40620480416",
+      "correct": 415,
+      "retries": 19
+    },
+    {
+      "run": "40673786159",
+      "correct": 416,
+      "retries": 25
+    },
+    {
+      "run": "40673797599",
+      "correct": 421,
+      "retries": 22
+    }
+  ]
 }
