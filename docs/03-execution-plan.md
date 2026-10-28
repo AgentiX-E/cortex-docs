@@ -517,6 +517,9 @@ IE 1/150、TR 0/127，是一份"产品默认长什么样"的读数，不是治�
 | **P2** | 第二跳检索，打 MR 的 17 条检索型失败 | MR 是最大赤字；失败普查已把类型分好 | MR ≥ +5 题 |
 | **P3** | A3 第三轮点击（g34–g57，21 张卡已备） | 判断的是"模型能不能提炼带时间的事实"；需要人 | D1 从 unrun 变有值 |
 | **P3** | 重问可观测（把 retry 文本写进产物） | 10:1 的原因至今不可见；这是 R1 无法诊断的唯一原因 | 产物含每次重问的 prompt 与首答 |
+| **DONE（第 50 步）** | **竞品第一次读数 `0.0%` 的仪表缺陷**（`cortex/docs/COMPETITOR-REPRODUCTION.md` §6.1） | `40519523383` 印出 `mem0 embedding 0.0% 0.0% 0.000`，并称 `100 refusal(s), 0 empty result(s)`。真因两级叠加：**向量库维度从未声明**（`FAISSConfig.embedding_model_dims` 默认 1536，嵌入器 1024，faiss 对每次 `add` 抛裸 `AssertionError`）→ 每个会话被 driver 记成 `skipped` → **没有任何渲染读这个列表** → 库为空 → 每次 `search` 抛同一断言 → 被父进程记成"拒答" | **协议从三个判词改为四个**（运行失败 / 系统拒答 / 什么都没找到 / **语料没进库**）。三处修复：driver 传 `embedding_model_dims` 且嵌入器未声明宽度时拒绝猜；进库为零是**比较失败**（driver 判一次、协议层再判一次，因为规则属于所有 driver）；报告打印 `ingest: N of M stored, K refused` + 原因。17 条测试，全部无 key 可跑；本地 `mem0ai 2.2.1 + faiss-cpu` 实测 ingest 2 turns / search 2 hits |
+| **DONE（第 50 步）** | **`reviewPass: 'bare'` 的计数器**（`cortex/docs/MEASURE-SOTA-FAILURES.md` §7.1） | 500 题读数 **80.80%**，与控制组**逐题相同**；产物只写 `reviewPass=bare`，即"配置了"，没有"触发了"。这个"相同"有两种相反读法（触发了 21 次全没救回 / 一次没触发），指向相反行动，而在计数器落地前**不可区分** | `bareRetryCensus()` 走 `recoveryCensus()` 已确立的三条决策：缺席（不带通道）／抛异常（当缺席，不毁整轮）／载荷非两个非负整数（丢弃不转换）。**独立字段独立段**，不与 `recovery` 合并——作用对象不同（矛盾清单 vs 只有 token），合并会允许把转换记到没产生它的治疗上。7 条测试，含"两个通道同时存在时互不串味"。渲染时 `attempted: 0` 与字段缺席是两个断言，由测试分别钉住 |
+| **REGISTERED（第 50 步）** | **两个读数待发**：`reviewPass=bare`（带计数器）与修复后的 `--sut mem0` | 第一个判 P1–P4（`attempted>0`；IE/TR 各减 ≥3；ABS 仍 30/30 且 MR 不动；额外调用 ≤35）。第二个是**本项目第一个可引用的竞品读数**，判据是行旁同时出现 store 宽度与 ingest 计数 | 两个 dispatch；token 恢复后立即触发 |
 
 ### 13.3 一条不会再犯的错
 
