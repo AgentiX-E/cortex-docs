@@ -6094,3 +6094,86 @@ agent，每题 2–3 步。那是架构而不是提示词，是下一阶段诚�
 tokens，来自 550 条 turn 的池。Mastra 因此从另一面支持 §13.123.1 的结论——**瓶颈不是房间，是阅读**——
 同时也给"多加点上下文"这个反射动作划了上界：它用 2.5 倍于本臂的窗口，只比参考管线多 0.7 点 MR。
 
+
+### 9.73 第 53 步（续）：IE 十道错题里九道是形状问题，不是知识问题
+
+#### 一、一个从未被任何表读过的字段
+
+`grounded` 自第一批产物起就在逐题记录里，而**没有一张表读它**。按它切 500 题：
+
+| 桶                    | 题数 | 正确 | 正确率 |
+| --------------------- | ---- | ---- | ------ |
+| 作答且接地            | 312  | 277  | 88.8%  |
+| 作答但**未**接地      | 136  | 111  | 81.6%  |
+| 弃答                  | 52   | 29   | 55.8%  |
+
+`ungrounded` **不是**幻觉探测器：136 道里 111 道仍判对。它在本题集上主要是**形状失败**，
+而这件事只有下钻一层能力才看得见。
+
+#### 二、把 IE 的十道错题逐题列出来
+
+IE 共 150 题、错 10 道，其中 **9 道 `grounded=false`**。答案本身说明了原因：
+
+| 题号        | 答案长度   | 实际输出的是什么                          |
+| ----------- | ---------- | ----------------------------------------- |
+| `75832dbd`  | **31,547** | 整段证据块连 memory id 一起抄回来          |
+| `57f827a0`  | **16,766** | 同上，另一个窗口                          |
+| `d6233ab6`  | 577        | 证据区的一个片段                          |
+| `1da05512`  | **0**      | 什么都没输出                              |
+| `0a34ad58`  | 1,241      | 以 `Based on the evidence, here are helpful …` 开头 |
+| `a89d7624`  | 872        | 关于丹佛音乐场景的自由散文                |
+| `0edc2aef`  | 57         | `No evidence items match the question abo…` |
+| `09d032c9`  | 137        | 同一句，换个问题                          |
+| `95228167`  | 64         | 还是同一句                                |
+| `778164c6`  | 14         | `Escovitch Fish` —— **十道里唯一真正的知识失误** |
+
+**九道形状失败，一道知识失败。** 三种形状：把证据回显出来当答案（3 道）、声明"找不到"而不弃答（3 道）、
+写散文（2 道），外加一道空回复。全库范围内有 27 个答案看起来像证据回显，其中 **20 个仍被判对**——
+这正是总分掩盖它的原因：裁判的容差吸收了二十个，而失败的那九个恰好落在**唯一以短语为 gold** 的能力上。
+
+#### 三、参考臂在这条路由上多三道护栏
+
+参考臂 flat 路由用的 `buildQaPrompt`，按顺序写着三句本臂没有的话：
+
+```
+Work in two steps, but write ONLY the final answer.
+Step 1 — Silently read each turn and identify … do NOT write them out.
+Step 2 — Answer the question using ONLY those identified facts.
+Your entire reply is one line in exactly this form, with nothing before or after it:
+Answer: <a word, name, number, or short phrase>
+Answer with ONLY the answer phrase (a word, name, number, or short phrase), with no explanation.
+```
+
+本臂 flat 块对同一个问题渲染出来是：
+
+```
+Answer the question using only the evidence above.
+The answer may require combining evidence from more than one turn or session: …
+Reply with the answer alone. If the evidence does not contain the answer, reply exactly INSUFFICIENT_EVIDENCE
+```
+
+三处差异，各自对应上面三种失败形状：
+
+| 参考臂的话                                                      | 它挡住什么                       | 本臂 |
+| --------------------------------------------------------------- | -------------------------------- | ---- |
+| `Your entire reply is one line in exactly this form: Answer: …` | 回显证据、空回复                 | **无** |
+| `with no explanation`                                            | `Based on the evidence, …`、`No evidence items match …` | **无** |
+| `Work in two steps, but write ONLY the final answer`             | flat 单步作答，此处不适用        | **无** |
+
+本臂最接近的一句是 `Reply with the answer alone`，而它是关于答案**长度**的句子。参考臂给的是**形状**：
+一行、字面前缀、前后无物。
+
+#### 四、由此得到的一条规则
+
+**gold 是短语的路由需要"回复形状"，不是"回复长度"。** "answer alone"约束多少，`Answer: <phrase>`约束是什么。
+只有后者能被解析器检查，也只有后者能被 `parse.ts` 的最后一行规则救回来。
+
+**它不授权的事**：加护栏在 token 上不免费（§13.104.5 已测：更长的指令买弃答，因为预算记在证据上——
+这三行约 200 字符，等于半条 turn）；它也**不能与 `silent` 同时派发**——两者都是 `ask` 值、都改指令块，
+一次动两个谁都不定价。顺序由已测的东西固定：`silent` 挂在参考臂的**多会话**块上、已在飞；护栏属于
+**flat** 块、需要自己的派发。
+
+**它的注册（写在这里，免得以后临时发明）**：`ask=answer-line`，flat 块加两句护栏、别的都不动，
+reach 仅 `flat`，对照 `enumerated`。预测：IE 错题 10 → ≤ 4；flat 路由上长度超过 400 字符的答案数 → 0；
+KU 与 ABS 逐字节不变（它们的块没被动）。证伪条件：IE 不改善，或任何非 flat 路由的提示词变了。
+
