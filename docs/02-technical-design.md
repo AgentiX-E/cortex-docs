@@ -2665,8 +2665,13 @@ TD(λ) 资格迹。**当前只实现前三项的前两项与阈值遗忘；`sink
 | 值            | 它约束的是                | 具体措辞                                            | 触达                             |
 | ------------- | ------------------------- | --------------------------------------------------- | -------------------------------- |
 | `enumerated`  | 列表**怎么写**            | *write both of them out*，弃答条件 = 列表为空        | multi-session / flat / temporal  |
-| `silent`      | 列表**写不写**            | *do NOT write them out*，弃答条件 = 证据完全不匹配   | 同上，flat 与 temporal 逐字节相同 |
+| `silent`      | 列表**写不写**            | *do NOT write them out*，弃答条件 = 证据完全不匹配   | 同上，flat 与 temporal 逐字节相同。**实测 MR 87 → 61（−26），已否证** |
 | `answer-line` | 回复的**形状**而非长度    | *one line: `Answer: <phrase>`*、*with no explanation* | **仅 flat**                      |
+
+**`silent` 的实测结论写在 §13.127：列表是 Step 2 计数的状态，不写出来就等于让它凭记忆数。** 66 道证据
+逐字相同的 MR 题上掉了 17 题，错答形态是"少数一项的和"（`25 + 40 + 120 = 185` → `65`）。参考臂那句
+*do NOT write them out* 之所以在它那里成立，是因为它的 Step 1 只要 recognize **一道题**的条目，而本臂的
+Step 1 要逐 session 走一遍名册——两件事同名不同工。
 
 `answer-line` 是第九个值，它换的是另一个轴：本臂 flat 块原有一句 `Reply with the answer alone`，那是在
 约束**多少**；参考臂 flat 块给的是一行、字面前缀、前后无物，那是在约束**是什么**。只有后者能被
