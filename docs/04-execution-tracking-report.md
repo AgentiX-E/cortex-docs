@@ -7522,3 +7522,70 @@ against one draw`" 是对此前每一份产物的诚实标注，只花一行。
 
 4.2 / 5.8 这两个数在此前从未出现在本册任何地方，而三条注册（§13.133 的 +1.3、§13.141.5 的 4/10、§13.143 的
 各门槛）都是按这条算术说它们在自己那个人群上够不到的门槛写下的。
+
+### 9.96 第 64 步：那十道题现在可寻址了——用人口普查的差，而不是第四个计数器
+
+#### 一、9.95 留下了什么
+
+`ablation.recovery` / `ablation.bareRetry` 是**整次运行**的 `{attempted, answered}`。于是每一条针对这两个机制的
+转化判据，都指着一个产物无法寻址的人群：§13.145.3 那张表的 1.7–3.8 列是一段关于"一组没人能指认的题"的算术。
+
+修法本可以在产品里放一个逐题重置的标志位。它被否掉的理由值得写下来：**有状态的信号灯，对机制没有触到的每一道题
+都是陈旧的。** `#lastReview` 只在 `#promptSessionAware` 里重置，而只有 multi-session 路由进得去——于是一道 flat 题
+紧跟在一道 MR 题之后被读取时，报出来的是那道 MR 题的值。同一个形状搬到新字段上，会得到 379/500 道题都错、且错
+在"看起来像命中"那个方向上的逐题标记。
+
+#### 二、仪器
+
+`traceReviewMechanisms(system, trace)` 包住特性侧系统，逐题记录 `recoveryCensus()` 在**这一次作答**前后有没有
+前进：
+
+- **取差，不新增计数器。** 产品已经把这件事说了三遍（`abstentionReasons`、`bareRetryCensus`、`recoveryCensus`），
+  第四个计数器就是第四处可以漂移的地方。
+- **原型链，不是展开。** `Object.create(system)` 而不是 `{ ...system }`：类实例的方法挂在原型上，展开一个都拷不到，
+  而 `isSessionAware` 正是查 `answerSessions` 存不存在——丢掉这个成员就把一个真系统变成了只会 flat 的系统。
+- **按前缀覆盖每个 `answer*`。** 今天七个路由成员；用前缀而不是清单，将来新增的成员自动被覆盖，而不是悄悄不被追踪。
+- **仪器不在就写缺席。** 没有 `recoveryCensus` 时原样返回；会抛的 accessor 视作缺席，只探一次然后放弃，而不是每题
+  重试。两种情形都**不写字段**——`false` 会在"本该知道的仪器根本不存在"的这次运行上声称机制没触发，而 `--treated`
+  会把它归成 untouched 而不是 unknown。
+- **两个字段而不是一个。** 触发了又二次弃答的是 `recoveryAttempted` 而无 `recoveryAnswered`，那一半说的正是
+  "机制跑了"，而不是"它往哪边跑"。
+
+记录字段是 `recoveryAttempted` / `recoveryAnswered`，并按 `promptChars` 同样的理由经 `report-write.ts` 的重建转发
+——重建不带字段，就是归约时静默丢字段，而这一个是"一次 review pass 触到了哪些题"的唯一逐题陈述。
+
+#### 三、7 条验收，全部走公共接口
+
+| # | 标准 | 测试 |
+| --- | --- | --- |
+| 1 | 追踪**逐题**变化，而不是逐次运行 | `marks which question the pass reached, not only how many times it ran` |
+| 2 | 触发但二次弃答 = `attempted` 有、`answered` 无 | `records a retry that fired and declined again as attempted without answered` |
+| 3 | 没有普查的系统两个字段都不写 | `writes neither field for a system that cannot be traced` |
+| 4 | 会抛的普查算缺席，不算运行失败 | `treats a throwing accessor as absent rather than failing the run` |
+| 5 | 常量普查什么都不标记 | 上面那批普查用例（现在也会看到每题 `attempted: false`） |
+| 6 | 包装器不丢 `answerSessions` | 既有的会话感知臂用例会以一个"只会 flat"的系统失败 |
+| 7 | 计数与追踪不可能互相矛盾 | 两者在同一个函数里读同一个 accessor；第 4 条正是它们会矛盾的那个场合 |
+
+第 1 条的夹具是承重的那一条。这批测试的第一版用的是**只有一道题**的数据集，那里每个逐题字段都只有一个取值，一个
+"把运行级数字写到每条记录上"的实现照样通过。现在夹具只在两道题里的第二道上推进普查，于是 `[false, true]` 是唯一
+能过的答案——而"读最终计数"的追踪会给出 `[true, true]`，正是那个缺陷看起来最合理的样子。
+
+#### 四、改动过程中被抓到的两件事
+
+**没加保护壳的包装器破了臂早就守着的一条规则。** `bench-memory-arm-census.test.ts` 早就要求"会抛的
+`recoveryCensus` 要留下缺席的计数"，而追踪的第一版把异常抛了出去，把那条测试变成了 `runBenchmark` 里的一段栈。
+在真派发上那就是一次 2h20m 的运行以没有任何产物收场。它被找到，是因为包装器就坐在计数已经在读的那个 accessor 上。
+
+**导出普查拒收了这次改动。** `traceReviewMechanisms` 与 `ReviewMechanismTrace` 一度为了给单测 import 而导出，
+`pnpm check` 的 `census:check` 报 `2 NEW orphan(s) not in the baseline`——报得对：一个没有生产调用方的导出，就是
+在邀请下一个读者去 import 它。修法不是把它们塞进 `tools/export-census-baseline.json`，而是**收回导出、把测试挪到
+公共接口上**，而"一道题的夹具"正是这样才被发现的：直接的单测被一道题满足了，臂级的测试满足不了。
+
+#### 五、它改变了什么
+
+`--treated recoveryAttempted=true` 现在能把记录集切到 pass 真正触到的那批题，于是 §13.145.3 的第三、第四行从
+算术变成读数——**在下一次派发上**：在这个字段存在之前写下的任何产物都不带它，而 `ledger.mjs` 会把缺失的一侧报成
+`unknown` 而不是 untouched。
+
+它也给之后每一条机制判据留下了同一个接缝：`bareRetryCensus()` 是同一种形状，而"对某一道题触发、对下一道不触发"
+是通例——包装器按 accessor 取名，第二个机制就是一个新包装器，记录类型不用动。
