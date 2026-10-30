@@ -9886,3 +9886,101 @@ token 是同一批 token，不同的只是计费路径。这是唯一一笔不�
 
 所以关于成本的诚实总结是：**内容没有脂肪，而账单仍是登记价格模型下的 2.8 倍**（90.0% 对 32.5%）。
 两句话出自同一份 artifact，而只有一句在这一节之前是可测的。
+
+### §9.120 13.171 指纹抵达了记录，而这条链上有四跳可以把它丢掉
+
+`13.168.5` 登记了四条验收项，并说明第四条——**每条记录上一个 prompt 的哈希**——要**最先**查，
+因为其余三条都预设「重复就是重复」。这一节把那一条建起来。
+
+#### §9.120.1 哈希在哪儿算，以及是什么性质决定了这一点
+
+两个包都是候选，而其中一个不许做哈希：
+
+| 包 | `src` 里的宿主导入 | 可以 `node:crypto` 吗 |
+| --- | --- | --- |
+| `cortex-memory` | **零** | 不行——浏览器可行性研究正是建立在这条性质上，它的文档把「不碰宿主 API」当性质而不是当巧合 |
+| `cortex-eval`，入口 `src/index.ts` | 再导出图里零 | 本可避免，而且今天确实为零：`node:fs`/`node:path` 只出现在 `bench-memory-arm.ts` 与 `review-page.ts`，两者都不被 `index.ts` 再导出 |
+| `cortex-eval`，`bench-memory-arm.ts` | 已有 `node:fs` | 可以——它就是写 artifact 的那一跳 |
+
+于是 `prompt-digest.ts` 是这个包里唯一导入 `node:crypto` 的文件，由臂导入，入口图的宿主纯净性不变。
+这不是偏好问题：`@agentix-e/cortex-eval` 今天可以在浏览器里被构建，而把摘要放进 benchmark 循环，
+会破掉它，且这个仓里没有任何测试会察觉。
+
+#### §9.120.2 为什么传的是文本而不是摘要
+
+`cortex-memory` 增加 `lastPromptText()`，在 `#recordEvidence` 里与另外三个一起记录——那是模型拿到的
+精确字节还握在手里的唯一调用点。它返回 `assembled.prompt`，不是把 carried 的 turn 重新拼起来：
+重拼会复现证据段，却丢掉指令块与问题，于是两份**问法不同**的调用会被指纹报成「同一个请求」。
+
+文本随后经 `ScoredEvaluation.promptTexts` 与 `AblationResult.featurePromptTexts` 传到臂，在那里被哈希。
+保留它不构成新的成本级别：`featureRetrievedContexts` 每题已存到 24,000 字符，这里是一份同量级的 prompt。
+
+被否掉的方案是在 `cortex-memory` 里实现一个零依赖摘要——手写 SHA-256 或 FNV 变体。它能不把文本带进
+eval 层、在 artifact 上火耗为零。否掉的理由是：一条产品路径上的手写哈希，唯一能给的辩护是「向量过了」，
+而 `node:crypto` 可以对着 FIPS 验证，也不欠这个辩护。
+
+#### §9.120.3 四跳，以及每一跳的空值规则
+
+| 跳 | 携带 | 丢掉它会长什么样 |
+| --- | --- | --- |
+| `cortex-memory.lastPromptText()` | 精确 prompt，或任何调用之前的 `null` | 一次弃答会报出上一题的 prompt |
+| `ScoredEvaluation.promptTexts` | 每题一项，系统无访问器时 `null` | 向量缺席——「没有请求捕获」 |
+| `AblationResult.featurePromptTexts` | 用 `!` 复制，绝不兜底 | 无法装配的 ablation |
+| `QuestionRecord.promptDigest` | 16 个十六进制字符，或**字段缺席** | 一条读起来像「系统没有 prompt」的记录 |
+
+最后一跳的规则与 `promptChars` 相同：`null` 与 `undefined` 都渲染为缺席，因为「报不出 prompt」不等于
+「报了空 prompt」。所以 `promptDigest('')` 从不写入——空串的摘要之所以存在于单元测试里，
+正是为了让它在 artifact 中的缺席成为决定而不是疏忽。
+
+#### §9.120.4 一个不可能与自己和解的断言
+
+臂级测试直接用 `node:crypto` 算期望值，而不是调 `promptDigest()`。调那个 helper，会在臂把**问题**
+而不是 prompt 拿去哈希时也通过——而那正是唯一一种仍能产出十六个字符的错误值。
+两个相邻候选值被点名排除（`expected('Where?')`、`expected('turn 0')`）。
+
+配对测试用两道题，其 prompt 只差一个结尾字符，并断言第二条记录带的是**第二份** prompt 的摘要。
+一个在循环之后而不是逐题读取的捕获，能通过「每条记录都有摘要」，却恰好在这里失败。
+
+摘要自身的测试用 FIPS 向量钉住算法——`sha256("abc")` 截断为 `ba7816bf8f01cfea`，空串为
+`e3b0c44298fc1c14`——再拿两百个伪随机 ASCII 串与 `node:crypto` 交叉验证，因为四个公开向量只证明
+实现在「有人看着它挑出来的那四个串」上自洽。
+
+#### §9.120.5 转发检查，以及证明它会咬
+
+`report-write.ts` 在重建记录时逐字段手列，而这个重建已经丢掉过四个字段：`featureConfig`、`promptChars`、
+`recoveryAttempted`、`questionDate`。`13.160` 把逐字段断言换成了一个遍历记录自身键名的循环，
+于是新字段只要存在就进入检查。把 `promptDigest` 加进那个 fixture 就是全部改动——然后把改动删掉，
+确认这个循环真的会咬：
+
+```
+… 删掉转发那一行，跑 report-write.test.ts
+× forwards every optional per-question field
+  → field promptDigest did not survive the reduction   1 failed | 27 passed
+… 恢复
+  28 passed
+```
+
+#### §9.120.6 验证了什么
+
+- `cortex-memory`：**44 文件 / 712 条**，其中 6 条是新的（`prompt-text.test.ts`）——与 stub 模型记录下来的
+  prompt 逐字节相等、预算生效时返回预算后的 prompt、session 路由、两题之间是替换而非累积、
+  任何调用之前为 `null`、以及一个从没到达 reader 的弃答之后仍为 `null`；
+- `cortex-eval`：**100 文件 / 2,475 条**，其中 `prompt-digest.test.ts` 新增 7 条、臂侧新增 4 条，
+  `report-write.test.ts` 扩了一个 fixture；
+- `tsc --noEmit` 干净，`pnpm check` 全链绿——先跑了 `prettier`（两个新文件被格式闸门拦下，
+  拦在提交之前而不是之后）。
+
+#### §9.120.7 这次不主张什么
+
+不主张回答了缓存那个问题。它让问题**可答**，条件是下一次带这个字段的运行；而**目前档案里每一份
+artifact 都没有 `promptDigest`**——所以 `13.169` 第 5 条（人口之外的 `promptChars` 相等）仍是老 artifact
+上唯一可用的机制检查，指纹的第一次读数属于未来。
+
+不主张那几轮是逐字节相同的，而且也不能：字段存在的目的就是去查。这里主张的只是——
+一次带着它的运行，用每条记录 16 字节，就能说出 `13.168.8` 里三种解释中哪一种成立。
+
+不主张建完了 `13.168.5` 的第 1–3 条——按臂与按角色拆分仍未建。停在这里的理由就是登记自己写的顺序：
+如果两轮根本不是重复，一个建立在那个假设上的归属，测的是一个从来不是由那些零件构成的总数。
+
+不主张 64 位是证明。相等意味着在 64 位上相等，而每次运行约一千条记录，不同 prompt 之间发生碰撞的概率
+量级是 1e-14——比「这次运行与上次可比」这件事本身出错的机会还小。
