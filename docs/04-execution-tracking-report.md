@@ -9078,3 +9078,25 @@ ladder 读不出的题是**更难的**题，不是随机的题；③产出的窗
 
 判据因此加了第八条（`13.160.4`）：二十一条每条都要落到四个处置之一、三个（现在是四个）计数都要给出；**把条目从一张清单搬到
 另一张而不处置，只是换了哪个工具忽略它们**。
+
+**更正（`13.160.5`）：上面那条 `covers` 判「删」是错的，而错法与正在量的缺陷同源。** 判它的时候我只按**名字**去看别的文件——
+桶行在 `index.ts:201`、其余出现全在注释里。改成用解析器读测试文件之后，`knowledge/__tests__/edges.test.ts:169` 就在调它：
+`expect(covers({ start: 0, end: 10 }, { start: 0, end: 10 })).toBe(true);`。删了会弄坏一个正是在量这个函数行为的测试。
+**用按名字匹配的检查，审不了一条关于名字的结论。**
+
+按三条问题重读——自己文件用不用它、有没有**测试 import** 它、桶是否转出它——二十一格的处置是：
+
+| 处置 | 数 | 符号 |
+| --- | --- | --- |
+| **test seam** | **17** | `covers`、`dot`、`norm`、`normalize`、`reciprocalRankFusion`（core）、`unrun`、`Arm`、`Ablation`、`resolve`、`tokenize` ×2、`answerTokens`、`isAbstention`、`PROMPT_CONTRACTS`、`DEFAULT_PROMPT_CONTRACT`、`ASK_ROUTES`、`matchesAllTags` |
+| **unexport** | **4** | `sleep`（cortex-ai）、`Resolution`（cortex-core）、`Resolution`（cortex-eval）、`TURN_CAP_ROUTES`（cortex-memory） |
+| **delete** | **0** | — |
+| **keep-with-reason** | **0** | — |
+
+十七条每一条的唯一非偶然消费者都是**量它的那个测试**。这不是本仓的偶然：普查把测试排除在调用方之外，于是**任何为了被直接测试而
+存在的导出都必然看起来是死的**。账本里早有这一类——`TEST SEAM`——§9.105 那步还往里加过两条。
+
+**于是 P1-census 重新定价**：它买不到二十一次删除，它买到的是**十七条不再写错的台账**、四处去掉 `export`、以及一道不再把
+「有测试在量它」「文档提到过它」「没人用它」混为一谈的门。这仍值得做，但值得晚做：一次两小时的派发与一次 `pnpm check` 的
+红，不在一个量级上。而且多出第四条、也是最强的理由——**人口主要是接缝，所以修复的产出比找出它的那份测量更小**。测量值那一个
+小时，是因为它给工作重新定了价；工作值得推迟，是因为价格跌了。
