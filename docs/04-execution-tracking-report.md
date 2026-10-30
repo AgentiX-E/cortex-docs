@@ -9469,3 +9469,103 @@ lines.push('Comparability is a five-tuple: dataset | variant | answer model | ju
 因为这次派发的机制是参照的**逐字**版本，放宽模式会让处理变成「我们的分类器加我们的提示词」，
 任何读数都无法归属。它们是登记给后续增量的人口；现在点名它们，正是为了让「7」这个数字诚实：
 一个悄悄长到 11 的 reach，是谁也无法归属的数字。
+
+### §9.115 工具守卫被指向了它早已通过的语料，第一个新文件就让它是错的
+
+这一节不属于 arm。它属于读取 arm 工作流的**仪器**，写在这里是因为它找到的四个缺陷里有三个在仪器自身，
+而不在被审计的对象里。
+
+#### §9.115.1 这是 P1，不是杂务
+
+`13.161` 的第十一次复发是一个 workflow 的 `run:` 块把 dispatch 输入直接插进了 bash。
+那就是 `docs/OPS-SHELL-INTERPOLATION.md` 记了十一遍的同一次碰撞，发生在守卫**从未读过**的那一类文件里：
+它只扫 `tools/*.py` 与 `docs/*.md` 就停了。而声明的范围是「本仓记录在案的 shell 片段」，
+`run:` 块恰恰是本仓记录的最要紧的那段 shell——它是唯一在无人值守下、在带着 provider key 的机器上
+执行的 shell。
+
+所以登记下来的修法是**放宽文件**而不是放宽规则，并把放宽做成闸门而不是习惯：
+`pnpm test:tools` 已经对 `.` 跑守卫，而 `pnpm check` 跑 `test:tools`，
+因此住在守卫里的抽取器写下的那一刻就是闸门。
+
+#### §9.115.2 先量，再改规则
+
+抽取器先写，规则一条不动，扫一遍语料：
+
+| workflow | `run:` 块 | 报告 |
+| --- | --- | --- |
+| `benchmark-cortex-memory.yml` | 7 | 1 |
+| `benchmark.yml` | 6 | 0 |
+| `competitor-retrieval.yml` | 12 | 2 |
+| `measure-models.yml` | 13 | 0 |
+| `verify.yml` | 3 | 0 |
+
+四十一个块，三条报告，**没有一条是 workflow 的缺陷**。这是这个守卫十二轮里第一次误报，
+而它由一个新增文件就逼了出来——这个不对称值得登记：**假阴性要等输入变了才现形，假阳性在输入一变就现形。**
+
+#### §9.115.3 缺陷 A：展开式文法拒绝了合法的 bash
+
+memory 工作流自己的审计步骤结尾是
+`python3 tools/readout-arm-run.py --audit "$report" "${extra[@]}"`，守卫说它「不是 shell 参数展开」。
+它就是。`_PATTERN` 要求一个名字加一个**可选运算符**，而下标以 `[` 开头，没有任何分支接受它。
+
+这个缺口能活下来，是因为 `tools/*.py` 与 `docs/*.md` 里没有任何文件用数组变量。
+第一个用的是守卫从未被指向的那个文件。
+
+修法是名字之后加一个可选组 `(?: \[[^\]]*\] )?`。它没有把这个文件写下时就存在的那条洞重新打开——
+当初的草稿因为某个分支能匹配任意文本，所以接受了 `${String(t).padEnd(5)}`——因为名字仍然必须存在、
+仍然必须排在第一位，而 `test_widening_the_grammar_did_not_reopen_the_first_draft` 把两件事断言在同一处。
+
+#### §9.115.4 缺陷 B：一条消息里有两句关于 JavaScript 的假话
+
+`competitor-retrieval.yml` 用 `node -e '...'` 跑语料检查，**单引号**，程序打印
+`` `instances: ${rows.length}` `` 与 `...: ${annotated.length}`。守卫两条都报了，而它打印的两句话都是假的：
+
+- 「位于解释器 payload 内，shell 尚未交出去」——payload 是单引号，shell 原样交出去。shell 那条规则
+  回答了一个没人问它的问题。
+- 「该语言没有这种构造」——`${...}` **就是** JavaScript 的插值。它在那边是正确语法，
+  而守卫把正确的写法判成了缺陷。
+
+第二句不是编码笔误，是**前提**：它被写进 `_INTERPRETER` 的注释（「其余都是自带插值语法的语言，
+`${...}` 在那里往好里说是错误语法」），然后被两条测试钉住。它能活下来，
+和缺陷 A 同一个原因：被扫语料里没有任何 `node -e` payload 用过模板字面量，
+这个前提从未被真阴性检验过。
+
+#### §9.115.5 为什么修法是范围豁免，而不是把消息写得更好
+
+改写后的消息会是真的——「在 JavaScript payload 里这是模板字面量；如果你的意思是 shell 的值，它不会被替换」——
+而它会对**正确的代码**开火。对正确代码开火的守卫，就是 OPS 文档里已经写过的那种「会被删掉的守卫」，
+连它做对的那几条规则一起删。
+
+判定「是不是模板字面量」需要 payload 的 token。这个工具没有 JavaScript 解析器。
+启发式就是穿着判决外衣的猜测——而这正是本节对 A、B 两个缺陷的抱怨本身：机制断言了它没有量过的东西。
+
+于是 `_JS_INTERPOLATION_LANGUAGES = {node, nodejs, deno, bun}` 被 payload**语言**规则跳过，且只被那条规则跳过。
+对被**活的** payload（双引号或无引号，shell 真的先展开）开火的那个分支从不查这个集合，仍然报告。
+残余缺口是点名而不是藏起来：单引号的 `node -e` payload 里出现 shell 形状的 `${HOME}` 现在静默，
+因为它与模板字面量在**不解析程序**的前提下无法区分。
+
+#### §9.115.6 两条已存在的测试被改写，这才是承重的一步
+
+| 测试 | 原本断言 | 现在 |
+| --- | --- | --- |
+| `test_catches_it_for_every_known_interpreter` | `node` 与 `deno` 会报告单引号 payload 里的 `${a.b}` | 四个 JavaScript 名字**按决定**移出参数化列表 |
+| `test_a_real_expansion_in_a_non_shell_payload_is_still_reported` | `node -e 'x = ${HOME}'` 会被报告 | 改用 `python3`，那句打印的话在那里是真的 |
+
+两条都在断言一件 node 自己否定的事。留着它们，等于把一个假句子留在工具的词汇表里、还配一条测试替它辩护，
+这比一个没人测试的假句子更糟。每一条被移除的，都由三条测试替代：豁免本身、仍然开火的活 payload 方向、
+以及豁免让出去的那一格。
+
+#### §9.115.7 验证了什么
+
+- `python3 tools/check-shell-interpolation.py .` → `13 fragment(s) clean (41 workflow run block(s) among them)`，exit 0。
+  七个工具片段、一份文档、五个 workflow 视图。
+- `pytest tools/__tests__/test_check_shell_interpolation.py` → **104 passed**，原为 86：新增二十条，
+  随 JavaScript 参数化移除两条。
+- 抽取器把块数一并返回、报告一并打印，因为「零块」与「零违规」否则是同一个输出——
+  一个 `run:` 键不再被识别的 workflow，会以「里面什么都没有的文件」通过。
+
+#### §9.115.8 这次不主张什么
+
+四十一个块是本仓现有的语料，不是这种形状能取到的语料。写成 YAML anchor/alias 的 `run:`、
+由 matrix 表达式生成正文的 `run:`、以及拼在 `env:` 值里的 shell，都在抽取器读到的地方之外，
+一条也没有被登记为覆盖。零报告是这三个缺陷的不存在，不是隐患的不存在。
