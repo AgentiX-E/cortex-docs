@@ -35,20 +35,24 @@ dataset | variant | answer model | judge | harness
 这是我们找到的唯一一份"同一流水线跑所有系统"的公开结果（答题 GPT-4.1-mini，裁判 GPT-4o-mini，
 由 MemOS 团队发起，公开 adapters 与运行配置）：
 
-| 系统 | LongMemEval-S | 备注 |
-|---|---|---|
-| MemOS | **89.20** | 发起方自己的产品，同一 harness 下也第一 |
-| EverOS | 80.40 | |
-| Zep / Graphiti | 79.80 | 该系统在本表里的第三次读数 |
-| Letta | 77.67 | MemGPT 一脉，LoCoMo 77.12，两数据集几乎一致 |
-| Hindsight | 72.20 | |
-| Supermemory | 66.07 | 自报 84.6 |
-| Viking | 61.07 | |
-| Mem0 (cloud) | 56.00 | 自报 94.4 |
-| Cognee | 51.80 | |
+| 系统 | LongMemEval-S | LoCoMo | 备注 |
+|---|---|---|---|
+| MemOS | **89.20** | 88.83 | 发起方自己的产品，同一 harness 下两个数据集都第一 |
+| EverOS | 80.40 | — | |
+| Zep / Graphiti | 79.80 | 63.83 | LongMemEval 上是该系统本表的第三次读数；LoCoMo 自报 94.7，**同 harness 低 30.9 点** |
+| Letta | 77.67 | 77.12 | MemGPT 一脉，两个数据集几乎一致 |
+| Hindsight | 72.20 | 81.99 | 反过来：LoCoMo 比 LongMemEval 高 9.8 |
+| Supermemory | 66.07 | 73.53 | 自报 84.6；LoCoMo 上排第五，LongMemEval 上排第六 |
+| Viking | 61.07 | — | |
+| Mem0 (cloud) | 56.00 | 77.68 | 自报 94.4；开源版第三方复现 **49.0** |
+| Cognee | 51.80 | 83.48 | **两个数据集差 31.7 点，本表最大** |
+
+**两列一起读才是这张表的用处。** Cognee 在 LongMemEval 上垫底、在 LoCoMo 上第三；Zep 在
+LongMemEval 上第三、在 LoCoMo 上倒数第二。**名次会随数据集翻转**，所以任何"某系统 SOTA"
+的说法都必须带数据集名——这也正是 §8 要求补第二个数据集的实证理由，而不是一句方法论口号。
 
 **这张表的价值不在于名次，在于它证明了名次可以被测量的方式改变多少。** Mem0 从 94.4 掉到 56.0
-（−38.4），Zep 自报 90.2 在这里 79.8，Supermemory 从 84.6 掉到 66.07（−18.5）。
+（−38.4，开源版第三方复现 49.0，即 −45.4），Zep 自报 90.2 在这里 79.8，Supermemory 从 84.6 掉到 66.07（−18.5）。
 
 **这张表的局限必须同时说**：它由参赛者之一发起，且它在 LongMemEval 上把 Mem0 读成 56.0，
 与 Mem0 自己的 94.4 相差 38 点——两者必有一个测的不是对方在测的东西。我们的立场是：
@@ -56,20 +60,38 @@ dataset | variant | answer model | judge | harness
 
 ## 3. 一个系统能被读成多少种分数
 
-| 系统 | 读数 | harness 数 | 跨度 |
+`node tools/competitor-ledger.mjs --spread` 的原样输出：
+
+```
+Mem0            LongMemEval  spread 45.4  (49 .. 94.4)
+Zep / Graphiti  LoCoMo      spread 30.9  (63.83 .. 94.7)
+Zep / Graphiti  LongMemEval  spread 19.0  (71.2 .. 90.2)
+Supermemory     LongMemEval  spread 18.5  (66.07 .. 84.6)
+full context    LongMemEval  spread  2.0  (60.2 .. 62.2)
+```
+
+注意 Zep 出现两行：它在两个数据集上各有自己的跨度，而 `LongMemEval` 的 19.0 是本节表格里要读的那个数
+（LoCoMo 的 30.9 对应 §2 备注里那条「同 harness 低 30.9 点」）。**同一个系统在不同数据集上跨度不同，这本身就是 §8 要求第二个数据集的理由之一。**
+
+| 系统 | 读数（同一数据集 LongMemEval-S） | harness 数 | 跨度 |
 |---|---|---|---|
+| Mem0 | 94.4 / 93.4 / 56.0 / 49.0 | 4 | **45.4** |
 | Zep | 90.2 / 79.8 / 71.2 | 3 | **19.0** |
 | Supermemory | 84.6 / 66.07 | 2 | **18.5** |
-| Mem0 | 94.4 / 93.4 | 1（两个版本） | 1.0 |
 | full context（无记忆） | 62.2 / 60.2 | 2 | 2.0 |
 
-后两行是让前两行可读的东西：
+Mem0 一行是四个读数，因为它有**两种口径 × 两种部署**：自报（94.4 自托管配置、93.4 新版）与
+复现（56.0 托管服务、49.0 开源自托管）。把这四个数平均成"Mem0 是 73.6 分"没有任何含义——
+**这不是同一件事的四个测量，这是四件不同的事**。台账把它们放在同一个 `system` 下是为了算出这个
+45.4，而 `deployment` 字段是为了记住它们不是一件事。
 
-- **Mem0 的 1.0 点是一个作者的两个版本**，不是 harness 效应。把它引作"harness 影响很小"的证据，
-  就是本文要防的那个错误。台账工具会给这一行打上 `version difference, not a harness effect`，
-  并把跨 harness 的行排在它前面。
-- **`full context` 只有 2.0 点**，而它是一个完全没有记忆机制的系统。这是效应量的地板：
-  任何记忆系统的跨度都应该对着 2.0 读，而不是对着 0 读。
+最后一行是让前几行可读的东西：**`full context` 只有 2.0 点**，而它是一个完全没有记忆机制的系统
+——整份 haystack 塞进 prompt。这是**效应量的地板**：任何记忆系统的跨度都应该对着 2.0 读，而不是对着 0 读。
+Mem0 的 45.4 是地板的 22 倍，Zep 的 19.0 是 9.5 倍。
+
+工具还区分另一种跨度，本表暂时没有实例但规则要在：**同一个 harness 下的两个读数是一个版本差异，
+不是 harness 效应**（`version difference, not a harness effect`），并且这类行会被排在跨 harness 的行
+**之后**——因为读者会把第一行当成最大的发现，而版本差异不是本文在说的事。
 
 ## 4. 第三方对比表内部也不是同一条件
 
@@ -150,7 +172,7 @@ supermemory-published: members disagree about answerModel (GPT-5, GPT-4o)
 |---|---|---|
 | **上下文 token / 查询** | Contextier 91.6% @ 2,807；Mem0 93.4% @ 6,787；Zep 90.2 @ 4,408 | 我方 prompt 均值 46–47k 字符，**每道题都顶到 48k 预算**。这在成本上不可持续，且掩盖了"检索选得好不好"——预算恒定用满时，选择质量不可观测 |
 | **延迟** | MemScore 三轴写 `85% / 120ms / 1500tok` | 我们没有 p50/p95。零调用的机制和 68 次调用的机制在准确率上可能打平，在延迟上不会 |
-| **第二个数据集** | LoCoMo 与 LongMemEval 同报；两者分数常常差 10 点以上 | 单数据集上的 +15 可能只是对该数据集的形状过拟合 |
+| **第二个数据集** | LoCoMo 与 LongMemEval 同报；同 harness 下 Cognee 差 **31.7** 点、Hindsight 差 9.8 点、Supermemory 差 7.5 点（反方向） | 单数据集上的 +15 可能只是对该数据集的形状过拟合；§2 的两列已经证明名次会翻转 |
 
 补这三轴不是为了好看：**第 8 节第一行直接解释第 6 节的缺陷**。MR 的枚举失败发生在
 166–184 轮、46k 字符的交付里——如果检索能给出 30 轮相关证据而不是 170 轮，成员判定会容易得多。
