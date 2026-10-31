@@ -10648,3 +10648,90 @@ id 不是秘密。
 - **不声称 96,000 是对预算。** 触达过了，准确率与损伤都失败；交易是 −8 KU 与 +12 TR 换 1.62 倍 token，正确的预算要等一次有缓存的运行。
 - **不声称 id 修复会提升准确率。** id 是装饰性的；预测是「不超过噪声带的移动」，而移动了才是更有意思的结果。
 - **不声称缓存预测会成立。** 它按「四轮里三轮重发相同字节」登记为 60%——provider 拒绝缓存仍然是未命中的一个活解释，而这次的仪器能区分两者。
+
+### §9.128 第二个浏览器引擎：24/24 与同一个摘要，而第一次跑死在共享模块里
+
+`§10.2` 第 2 条要求持久性**在至少两个引擎上复现**。这条门的难点不在跑第二遍浏览器，而在于「第二个 Chromium 档案」不是第二个
+引擎：同一份 VFS、同一个 SQLite 构建、同一片 bug 面。所以仪器先被拆开，再谈读第二个引擎。
+
+#### §9.128.1 拆法：流程归共享模块，引擎只提供 `open(origin)`
+
+`packages/cortex-storage/test/browser/restart-suite.mjs` 拥有全部四个阶段——矩阵、确定性写入、**重启**、读回、摘要比对——调用方
+只提供 `open(origin)`：在给定档案上启动浏览器、导航、等 `window.__ready`、返回 `{ evaluate, close }`。哪些模式跑、多少行、
+摘要是否相等、以及第 24 条检查，**都不是**按引擎分叉的代码。
+
+这不是洁癖。若两个探针各写一遍流程，它们迟早会在**与引擎无关**的地方分歧：行数、摘要函数，以及最安静的那一项——第二次启动
+是否复用同一 **origin**。OPFS 是 per-origin 存储，换一个端口就换一个库，第二次启动读到空库然后**通过**。
+
+`bidi.mjs` 是 Firefox 那一半：找二进制、headless + `--remote-debugging-port`、用 Node 自带的 WebSocket 讲 WebDriver BiDi。不引
+Playwright，理由与 `cdp.mjs` 相同。
+
+#### §9.128.2 读数（Firefox 159.0 / Gecko 20100101 / rv:159.0，2,000 行）
+
+| # | 判据 | Chromium（CDP） | Firefox（BiDi） |
+| --- | --- | --- | --- |
+| 1 | 拿到哪一层 | `opfs`，`refused: []` | `opfs`，`refused: []` |
+| 2 | 引擎串 | `sqlite-wasm 3.54.1 on opfs-sahpool (journal: delete)` | **逐字符相同** |
+| 3 | 检查数 | **24/24** | **24/24** |
+| 4 | 24 条检查名 | — | 与 Chromium **顺序与字符串都相同** |
+| 5 | 重启后 2,000 行 | 摘要 `4000247205`，`matches: true` | 摘要 `4000247205`，`matches: true` |
+| 6 | 逐行提交 2,000 次 | 120,444 ms（17 行/s） | 124,949 ms（16 行/s） |
+| 7 | 一个事务 | 208 ms（9,625 行/s） | 270 ms（7,407 行/s） |
+| 8 | 读回 | 15.8 ms | 15.0 ms |
+
+第 5 行是这条门真正要的：两个引擎、两份 `createSyncAccessHandle` 实现、两层不同存储，2,000 行按同一顺序回来，得到**同一个整数**。
+摘要是对 `JSON.stringify(row)` 按查询顺序做 FNV-1a，纯整数运算、无引擎面，所以「同样的行、同样的顺序」蕴含「同一个整数」；而
+它是在 Firefox 跑之前按 `4000247205` **登记**的，这让一致成为读数而不是拟合。
+
+第 6–8 行**不是判据**：同一台机器两次跑就能差 ~15%，跨引擎更没有可比性（不同的 WASM 编译、不同的 VFS 实现）。把它们做成门，
+只会在一次合法运行上报红（`§11.4`）。
+
+#### §9.128.3 第一次跑失败，而它证明的**不是**存储问题
+
+第一次 Firefox 尝试死在**共享模块**的第 40 行：
+
+```
+TypeError: Cannot read properties of undefined (reading 'hash')
+    at runRestartSuite (restart-suite.mjs:40:42)
+```
+
+Firefox 上的 OPFS 一切正常，且根本没被问到。原因在协议层：
+
+> WebDriver BiDi 不把对象发成对象。`script.evaluate` 返回
+> `{ type: 'object', value: [ ['hash', { type: 'number', value: 4000247205 }], … ] }`——一个 `[key, RemoteValue]` 有序表；
+> 数组是 `{ type: 'array', value: [RemoteValue, …] }`。`evaluate` 直接返回 `outcome.result.value`，于是共享模块拿到的是线格式。
+
+这是**实测**出来的，不是从规范读出来的：一次真实往返（`({ hash: 4000247205, count: 2000, arr: [1,"a",null], nested: {ok:true},
+u: undefined, nan: NaN, neg: -0 })`）顺带钉住三个「大概猜不对」的形状——`NaN` 是**字符串** `'NaN'`、`-0` 是 `'-0'`、`undefined`
+是**没有 `value` 字段**的类型。第三个猜错也无害，前两个猜错会在数值断言上安静地错（`-0` 变成 `0`）。
+
+修法：`deserialize` + `valueOf` 两个纯函数，`evaluate` 缩成六行传输。**在没有浏览器的机器上也能钉住它**，这也是它唯一能被钉住的
+方式：
+
+- `bidi.mjs --self-test`，**8 条**，fixture 全部转录自那次真实往返：数字、对象对表、带 null 的数组、`undefined`（并断言键仍在）、
+  JSON 带不动的四个数、无枚举对的对象、数组里的嵌套对表、异常。`8 passed, 0 failed`。
+- `tools/__tests__/test_bidi_deserialize.py`，**4 条**，进 `pnpm check`：自测通过；每个用例**按名**出现（删一条是覆盖率损失，
+  不是数字变小）；导入模块不跑测试；**变异测试**把该分支改回 `return remote.value;` 必须**按名**失败——实测 `4 passed, 4 failed`，
+  即结果本身是对象的那四条。最后这条是唯一能阻止这次修复被「顺手整理」掉的东西。
+
+#### §9.128.4 顺带付掉的两笔账
+
+| 事实 | 代价 | 现在的形态 |
+| --- | --- | --- |
+| `browsingContext.getTree` 被拒：*System access is required. Start Firefox with the MOZ_REMOTE_ALLOW_SYSTEM_ACCESS=1* | 想拿 tab id 得开一个本 suite 不该需要的系统能力 | tab id 以只读访问器暴露（`connection.context`），而不是重新发现 |
+| 自测的入口判断不能写成 `argv[1].endsWith('bidi.mjs')` | 变异 fixture 换个文件名就不会跑自测，变异测试变成空转 | 改成 `import.meta.url === pathToFileURL(argv[1]).href` |
+
+还有一笔是**测量仪器的**：自测里那句异常文案最初写成 `'TransactionOpenError: nested'`，而 `pnpm check` 立刻红了——因为导出普查
+是**文本扫描**，`packages/*/test/**` 下的 harness 是「非测试调用方」，`packages/*/test/` 与 `bench/` 同类。于是一个字符串字面量
+把一个真实的孤儿符号「认领」了，孤儿数 401 → 400，基线断言失败。这说明普查有一个已知边界（文本扫描不区分调用与提及），而本轮
+的教训是**新代码不要拿真实孤儿名当文案**；文案已改成不指向任何导出名的句子，普查回到 401/基线。
+
+#### §9.128.5 关掉这一条改变了什么
+
+`§10.2` 四道门：**3/4 已关**（第 1 条打包器 + 体积守卫，第 2 条两个引擎）。产品完成度 **12/13 ≈ 92%**。
+
+剩下的一条是 false-share 上界 ≤5%——它需要**语料与读者**，不是浏览器，因此本轮推不动；第 4 条（读数带 run id/配置行/逐题记录）
+早已满足。所以「浏览器可用 / 隐私安全」这句话**仍不可发布**，理由从四条变成一条，但一条也是一条。
+
+不在本节声称的：Safari/WebKit（WebDriver 会话模型里没有持久档案，需要真机）、多标签页并发、隐私模式、配额耗尽，以及
+「Firefox 是受支持平台」——拿到层并在重启后存活是 API 契约，配额行为、淘汰顺序与多标签同步句柄争用是另一句话、另一套测量。
