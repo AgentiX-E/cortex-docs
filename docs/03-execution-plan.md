@@ -887,7 +887,7 @@ TR 0 / 10 / +2，ABS 0 / 0 / 0。而真正被处理的 34 道只买 2 卖 0，�
 | **P2-browser-gate-2（已完成，`9.128`）** | `restart-suite.mjs`（四阶段流程，引擎只提供 `open(origin)`）+ `bidi.mjs`（WebDriver BiDi，无自动化库）+ `probe-firefox.mjs` | Firefox 159 上 **24/24**、检查名与 Chromium **逐字符串相同**、2,000 行重启后摘要同为 **`4000247205`**、opfs 层拿到且 `refused: []`。第一次跑的失败**不是**存储问题：BiDi 把对象发成 `[key, RemoteValue]` 有序表，`evaluate` 把线格式原样返回，共享模块三行后 `TypeError` | 反序列化拆成 `deserialize`/`valueOf`，自测 8 条 + `test_bidi_deserialize.py` 4 条（含把该分支改回 `remote.value` 的变异测试，按名失败 4/8）进 `pnpm check`；只此一条把 §10.2 推到 3/4 |
 | **P0-triage-parity（已完成，`9.129`）** | `tools/triage-parity.mjs`（进 `pnpm check` 的 `guard:triage`）+ `tools/triage-table.json` 快照 + 八条变异测试 | 已发布数字的来源表与出货表**漂了 8 个字段**，其中五个方向让探针对缺陷**致盲**（探针 `\bALT\b` vs 产品 `alt` + `/i` → 产品把 "the alt attribute on the logo" 判成健康事实，探针看不见）；对账后重跑 `p04`/`p05`/`p06-policy-scale`，**全部数字复现不变** | 修到 0 差异并加三道比对（shipped↔快照 逐字段含顺序、mirror↔shipped、缺席 `SKIPPED` 且禁止说 agree）；顺带修好两张真实规则缺陷：`alt` 过匹配（误判私有）、IBAN/具名贷款（那唯一一条泄漏现在被抓住） |
 | **P0-false-share-census（已完成，`9.130`）** | `tools/extract-user-turns.py` + `tools/triage-publish-census.mjs`（退出码即判据）+ `tools/triage-publications-adjudicated.json`（211 条判词）+ 六条测试 | 门此前缺的是**分母**：60 条只有 12 条私有行（0/12 → 24.2%），persona 语料发布规则从不触发（0/1,467 是对没跑起来的机制做上界），3,000 条标识符语料分母是事实不是发布。从本项目自己的 artifact 抽出 **47,927** 条真实 user 语句，出货表发布 **211 条（0.44%）**，逐条读 | 修补前 **20/211 = 9.48%（上界 14.19%）门红**；只增私有规则修 6 处词汇后 **0/189 = 1.99% 门绿**。**代价如实记**：coverage 在 60 条上曾显示 31.7% → 33.3%，persona 上 29.2% → 30.0%，但复查发现那 1 行是 `gym` 把供应商的 "climbing walls … a bouldering gym needs"（金标 shared）判成私有造成的 —— 删掉 `gym` 与同形状的 `bike` 后回到 **19/60 = 31.7%**、persona **29.5%**，即**普查买到的是 false-share 9.48% → 0，不是覆盖率** |
-| **P1-judge-audit（已登记，未做，`14.2.1`）** | 把 N 条「话题相关但答案错误」的回答喂给本仓 judge，测误接受率 | 公开审计：LoCoMo 金标 1,540 题里约 99 处（6.4%）可致评分错误；标准裁判（gpt-4o-mini + 原 prompt）接受了 **62.81%** 的错但切题回答 | 若本仓 judge 的误接受率同量级，则所有能力项都要重标，而不只是 MR；不需要新配额，回答已在 artifact 里 |
+| **P1-judge-audit（仪器已完成，读数待派发，`9.131` / §13.182）** | `packages/cortex-eval/src/judge-audit.ts`（`planAudit` + `summariseAudit`，15 条测试）+ `tools/judge-audit.mjs`（`--plan-only` 无需 key）+ `.github/workflows/judge-audit.yml` + 5 条工具测试 | 公开审计：LoCoMo 金标 1,540 题里约 99 处（6.4%）可致评分错误；标准裁判（gpt-4o-mini + 原 prompt）接受了 **62.81%** 的错但切题回答。本仓从不曾量过自己的裁判 | **判据已成代码**：只取 judge 已接受的回答（被拒的无法产生误接受），三种「构造性错误」扰动（`number-swap` / `entity-swap` / `cross-gold`），两条**每个用例都跑**的不变式（金标被摧毁、引入的 token 在模型读过的对话里一次都没出现），外加**对照**（同一批未扰动回答重判，因为「永远说不」的裁判会拿到 0%）。门：Wilson 上界 ≤5%，因为 5% 已大于本轮要分辨的 1.7 点。已在真产物上抓到两个会**虚增**误接受率的缺陷：金标出现两次（`75499fd8`）、单字符金标 `"3"` 让 `"34".includes("3")` 成立（`3a704032`） |
 
 ## 14. 产品完成度与 SOTA 差距（每轮必报）
 
@@ -978,8 +978,10 @@ TR 0 / 10 / +2，ABS 0 / 0 / 0。而真正被处理的 34 道只买 2 卖 0，�
 
 **要 SOTA 必须先做三件事**，顺序由「改动能被谁的读数验证」决定：
 
-1. **把 MR 从 73.55% 抬到参考臂之上（≥ 103/121，同轮配对）**。这是唯一不需要外部对齐就能验证、且落后最多的一条。下一抽
-   （`41159983913`）先把仪器修对：turn id 已改为推导（`§9.127.4`），因为此前每一轮 prompt 都带随机 UUID，四轮从来不是同一份请求。
+1. **把 MR 从 73.55% 抬到参考臂之上（≥ 103/121，同轮配对）**。这是唯一不需要外部对齐就能验证、且落后最多的一条。仪器
+   已修对（`41159983913`，§9.131）：turn id 改为推导后 `promptVariants` **500/500 = 1**、四份 prompt 逐字节相同、缓存命中
+   **75.69%**、计费 **0.574×**。但同一份字节四轮跑出 MR **84–92（跨度 8）**，说明 2.2 点噪声**不是随机 id**，于是「单次重复」
+   的分辨率不足以判定 2 题——MR 首轮 84、均值 87.25，跨 16 题到参考臂。**下一个要修的是方差与裁判，不是提示词。**
 2. **与竞品同 harness 对跑**：把 Raw-RAG（87.5%，B）与 MemCog（92.5%，C）的管线搬进 Runner，用我们的 reader 与 judge 跑
    **双方数据集**，「我们比它低 N 点」才成为可复现的差而不是两个自报数的差。
 3. **在 2 成立之后**才谈超越。
