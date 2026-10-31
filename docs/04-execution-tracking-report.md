@@ -394,7 +394,8 @@ LongMemEval 的成绩由 `cortex-eval` 自己实现的独立系统产生。
 | 151 | **第三张重复声明表进了自动对账**：`TurnCutMarker` 联合（产品）对 `TURN_CUT_MARKERS`（臂）——臂认识而产品不认识的名字会被接受、写进产物、然后**静默渲染**，这是任何数字都看不见的方向；另加「控制可命名」与「默认值必须是表成员」两条 | E1 | `test_ask_table_parity.py`（8 → 11 条，全绿） | 读源码文本；只覆盖名字集合，不覆盖行为 | §9.136.3 |
 | 152 | **账单按臂拆分**：`usageBySide` 在每条 `answer*` 前后取进程账本差值（`finally` 里加，因为抛错的调用**已经发出去并计费**），`residual = total − baseline − feature` 由定义得到而非调用点打标 ⇒ `baseline + feature + residual === total` 恒真，渲染成一行 `Attribution closes: yes`，不让读者自己加三列；`minusUsage` 对负数**报错而非截断**，渲染侧同步给出 `SPLIT UNAVAILABLE` | E1 | `usage-by-side.ts` / `system-mirror.ts` 各 100/100/100/100；`usage-by-side.test.ts` 12 条（含用注入 `fetchFn` 的真适配器，非 mock 自有代码） | 只覆盖 completion，embedding 端点不在该账本；无货币列（本仓无价目表） | §13.189 / §9.137.1 |
 | 153 | **测试第一次失败就是文档**：stub 用 OpenAI 字段名 `prompt_tokens_details.cached_tokens` 报告缓存，实际 `parseUsage` 读的是 `prompt_cache_hit_tokens`，于是缓存归因读出 0 —— 失败的那一行把「哪一侧花了多少」与「缓存省了多少」分成两个必须分别验证的事实 | E1 | 同上（首跑 `cacheHitPromptTokens` 期望 15 实得 0） | — | §9.137.2 |
-
+| 154 | **弃权规则此前只能看见整道题**：shipped 的块靠「若没有证据支持一个答案」弃权 —— 对**整道题**的谓词，而半道题的答案满足它（证据确实支持「多少株番茄」）。`operand-gap` 把块的**收尾行替换**成一句同时承载「每一部分」与 token 的规则（`withReplacedClose` 的第二次使用；第一次的读数 `39035438120` 证明插在收尾行之上的规则会输给它） | E1 | `prompt-operand-gap.test.ts` 7 条（含「只动最后一行」「其余五行逐字节相等」「默认运行字节不变」）；`ask-changes.test.ts` 29 → 31 由数据驱动循环自动覆盖新值 | 只断言行数、逐行相等与三个必须出现的要素，不冻结措辞 | §13.190.2 / §9.138.2 |
+| 155 | **单变量在这里是构造出来的**：`reach` 与 `change set` 重合在**一条**路由上（弃权路由是唯一读该 contract 的路由），于是 MR/IE/KU/TR 不是「需要检查的控制」而是**这个 ask 摸不到的 prompt**；截断标记挂在 cap 上、cap 到达集不含弃权路由，所以两次运行的 ABS prompt 都不带标记 | E1 | `ask-changes.test.ts` 渲染六条路由 × 两种问形、对着 `ASK_CHANGES` 判等；臂侧 `bench-memory-arm.test.ts` 184 条断言 `askRoutes === ['abstention']` 与产物渲染 | MR 在两次运行间**不可读**（两个 ask），本登记不读 MR | §13.190.4 / §9.138.3 |
 ---
 
 ## 7. 未取证缺口
@@ -11537,3 +11538,82 @@ stub 按 OpenAI 的字段名报告缓存（`prompt_tokens_details.cached_tokens`
 3. **逐题成本**：累加器按臂，不按题。逐题账本会是产物里的第二张表、第二处会漂的算术，而「省哪一边」
    才是这一步要回答的问题。
 
+### §9.138 弃权规则此前只能看见整道题：`operand-gap`，以及它只对着的那一道题
+
+**2026-10-31，实现完成并派发（零新读数）。** 产品侧 `EvidenceAsk` 增 `'operand-gap'`，
+`ASK_ROUTES` 与 `ASK_CHANGES` 都是 `['abstention']`、`ASK_CONTROLS` 是 `'route'`，新增常量
+`OPERAND_GAP_ABSTENTION_INSTRUCTION`（把 shipped 的弃权块**收尾行替换**，用 `withReplacedClose`）；
+臂侧 `ASK_ROUTES` 增一行（`readAsk` 校验的就是它）。账目：`prompt-operand-gap.test.ts` **7 条**、
+`ask-changes.test.ts` 29 → **31**（数据驱动的循环自己把新值捡起来，所以 reach 与 change set 是**对着登记**
+断言的，不是对着这份测试）、`bench-memory-arm.test.ts` 183 → **184**。`pnpm check` EXIT=0
+（core 820 / storage 116 / ai 273 / eval 2,575 / memory 747；`cortex-memory` 语句·分支·函数·行
+**100/100/100/100**；docs:crosscheck 52/55；prettier 全过）。登记 `§13.190`，派发 **`41188431321`**。
+
+#### §9.138.1 失败是产品缺陷，而六道同形题就是控制
+
+`6456829e_abs` 问「我一开始种了多少株番茄和辣椒」，金标是**拒答**：证据里有五株番茄，一次都没提辣椒。
+本臂在每一次运行的每一次重复里都答 `5` —— 对**半道题**的正确计数 —— 而参照臂弃权。于是 ABS 每轮
+29/30，参照臂每轮 30/30。
+
+人口不是一道题。同样三十道里有**六道同形**（一个操作数在场、一个缺席、金标用几乎同样的句子说明），
+六道全部正确弃权：`edced276_abs`（Hawaii 与 Seattle）、`e5ba910e_abs`（耳机与 iPad）、
+`gpt4_70e84552_abs`（修栅栏与买牛）、`gpt4_c27434e8_abs`（Ferrari 与 Porsche）、
+`gpt4_fe651585_abs`（Tom 与 Alex）、`80ec1f4f_abs`（博物馆或画廊）。**七次里做对六次的机制不是能力上限**，
+所以失败在**这一道题的 prompt**里，而存活的两条解释是「读者愿意为半证据的计数题返回一个数字」与「块的规则本身」。
+
+#### §9.138.2 换的是收尾句，不是它上面加一句
+
+shipped 的块靠「**若没有证据支持一个答案**，回复 `INSUFFICIENT_EVIDENCE`」弃权 —— 这是对**整道题**的谓词，
+而半道答案满足它：证据确实支持「多少株番茄」这个答案，读者读到的正是这句，而且它字面上为真。
+**「每一部分都在」不是这句的限定语，是另一个谓词**，所以它必须**是**那条判定句，而不是靠近它的一句。
+
+位置论据是**测出来的**，不是主张的：`§13.55` 把规则**插在**收尾行之上（理由正是「例外应紧邻它所例外的规则」），
+运行 `39035438120` 的 delta 与上一次一致，而它继承的 28 道 MR 弃权里 21 道再次弃权 —— 其中 **12 道手里拿着
+非空的 Step 1 列表**。`withReplacedClose` 就是为这次读数写的；`operand-gap` 是它的第**二**次使用：
+把块的最后一句 `Otherwise reply with the answer alone.` 换成一句同时承载两半的规则 —— *只有证据支持
+**每一部分**时才只回答案；一道题点了好几样东西时，只有证据全都提到才可答；某一部分缺失、或题目要一个
+「只有部分被说明」的合计，就回复该 token*。
+
+块的其余部分一字未动，包括上面那句 token 规则：单操作数缺失的题**同时**按旧理由与新理由弃权。
+
+#### §9.138.3 这一次「单变量」是构造出来的，不是承诺出来的
+
+`reach` 与 `change set` 重合在**同一条路由**上 —— 这是此前任何一个 ask 都没做到的：弃权路由是**唯一**读
+`CONTRACT_INSTRUCTIONS.abstention` 的路由，所以 MR/IE/KU/TR **按构造**读 shipped 块，它们不是「需要检查的
+控制」，而是**这个 ask 无法触及的 prompt**。
+
+派发 `41188431321` 的负载逐字段抄自 `41185512391`，唯一变化是 `ask`（`operands` → `operand-gap`），
+于是比较是**逐能力**的，每一行都能在产物里查：
+
+| 能力 | 路由 | 控制 `41185512391` 读 | 本运行读 | 可读吗 |
+| --- | --- | --- | --- | --- |
+| **ABS** | abstention | shipped 块 | shipped 块，收尾行被替换 | **可读 —— 一个变量** |
+| IE | flat | shipped 块 | shipped 块 | 可读 —— prompt 必须逐字节相等 |
+| KU | knowledge-update | shipped 块 | shipped 块 | 可读 —— 逐字节相等 |
+| TR | temporal | shipped 块 | shipped 块 | 可读 —— 逐字节相等 |
+| MR | multi-session | 7 道推导题读 `operands` 块 | shipped 块 | **不可读** —— 两个 ask，本登记不读 MR |
+
+截断标记不进这个比较：`turnCutMarker` 挂在 cap 上，两次运行的 cap 到达集都是 `multi-session,temporal`，
+弃权路由在**到达集之外**，所以两次运行的 ABS prompt 都不带标记，它们之间的唯一差别就是被替换的那一行。
+
+**判据因此是单向的**：ABS 的 30 道金标**全是弃权**，这个处理能丢分的唯一方式是把一次正确的弃权变成回答。
+所以预测落在**一道题**上而不是落在头条上：`6456829e_abs` 在 feature 臂的四次重复里全部弃权、其余 29 道
+继续弃权、ABS 每轮 **30/30**、IE/KU/TR 的 prompt 与 `41185512391` **逐题逐字节相等**（这是把 reach 表
+拿到产物上对账，而不是拿它对自己对账）。
+
+**否证条件**：`6456829e_abs` 再次作答 ⇒ 「每一部分」这句不是那个变量、链条的散文那一半是错的，下一个候选
+是检索侧（§9.138.4 第 1 项）；或任何在控制里弃权的 ABS 题在这里作答；或 IE/KU/TR 里有任何一道 prompt
+字节动了 ⇒ reach 表不是渲染器在做的事。
+
+#### §9.138.4 它不修的那一半，以及一个必须记下的混杂
+
+1. **检索侧**。归档运行的读数把窗口量成 **64 行提到番茄、0 行提到辣椒**：扩展查询把两个操作数**融合**成
+   一个短语（`["tomatoes and chili peppers", "initially plant", "how many plants"]`），融合短语只能被
+   **在场**那个操作数满足，而它拉来的六个会话密到看起来像完整证据。把它**分解**成每个操作数一个短语是
+   另一层上的处理（对照 `gpt4_c27434e8_abs` 就分解了：`["Ferrari model", "Porsche 991 Turbo S model"]`），
+   一次运行买不了两层，`§13.104` 就是「打包改 prompt」读不出来的记录。
+2. **参照臂也带着的那句词表**（和、差、平均、百分比、经过时间、日期）。加上它就是一次两变的运行 ——
+   谓词 + 词表 —— 所以它登记为**这句谓词不奏效时的下一步**。
+3. **「数量题 vs 排序题」的混杂**。`6456829e_abs` 是 `how many`；六道控制里除 `80ec1f4f_abs` 外都是
+   `which … first` 或合计，七道里没有一道**既分解扩展又要一个计数**。所以这里的零结果**不能**读成
+   「问题类型解释被排除」，它是被记下的混杂，不是被解决的混杂。
