@@ -12169,3 +12169,92 @@ const shape = options.ask === 'operands' ? classifyQuestionShape(question) : und
 - **否证条件**：`IE` 不回到 88 ± 2 ⇒ IE 的损失不是 reader 的简短，而是它对 `flat` 路由 prompt 做了别的事，开关装错了层。
 - **为什么这是产品增量而不是第五次实验**：`thinking` 是一个开关，两个状态已在同一批题上各测一次；再派一次 220 题是
   把同一件事测第三次。
+
+---
+
+### §9.149 开关落地了，而它没有花掉任何一个 input
+
+`§9.148.4` 登记了处置办法，`§13.197.4` 记录了它必须在什么约束下建成：**派发面 24/25 已用满**，所以
+`cortex_memory_thinking_routes` 这个 input 不存在，状态只能进已有的那个值。这一节是落地本身。它是**产品增量**，
+不是第五次探针——两个状态已在同一批 220 题上各测一次，再派一次就是把同一件事测第三次。
+
+#### §9.149.1 语法：一个形式，三种拒绝
+
+`DEEPSEEK_THINKING` 保留它一直有的两个词，增加一个形式：
+
+| 值 | 到达范围 | 构建的 reader | 产物行 |
+| --- | --- | --- | --- |
+| `''`（未填）、`disabled`、`off`、`false` | 全路由 `disabled` | 一个 | `/thinking=disabled` |
+| `enabled`、`on`、`true` | 全路由 `enabled` | 一个 | `/thinking=enabled` |
+| `multi-session+temporal`（任意非空路由列表） | **这些**路由 `enabled`，其余 `disabled` | 两个：base 为 `disabled`，命名路由共享同一个作用域 client | `/thinking=enabled on multi-session+temporal` |
+
+路由列表**只能拼写 `enabled`**。语法里**没有"这些关、别处开"的形式**，这是有意的：存在的那个状态是 `§13.197`
+量出理由的那个，而能表达反方向的语法就等于给人一条路去派发一个没有注册覆盖的组合。加它是一行的事，撤回一次
+已派发的运行不是。
+
+三种值被拒绝，每一条都是为**真实会犯的错**写的，不是为对称：
+
+| 拒绝 | 为什么是最可能的错 | 消息说了什么 |
+| --- | --- | --- |
+| 不是路由的名字（`multi-session+multi-sesion`） | 六条路由里拼错一条，跑出来的数与"六条全开"完全一致 | 点出那个 token，并列出六个合法名字 |
+| `multi-session,temporal` | 相邻的两个 reach 输入（`cortex_memory_max_turn_chars_routes`、`cortex_memory_evidence_roles_routes`）都是逗号分隔 | 说明分隔符是 `+`，以及被静默读成一条路由会让处理只落在被派发题量的六分之一上 |
+| `all` | 同样两个输入用 `all` 表示"全路由"，是人第一个会伸手去拿的词 | 说明全路由写作 `enabled`，以及为什么：`all` 只说了范围没说模式 |
+
+空段（`multi-session+`、`+temporal`、`a++b`）与重复路由按与 cap reach 相同的原则拒绝：丢掉一段会让处理落在比
+值所命名的更少的路由上，而把重复的路由印回产物会让记录声称一个运行并没有的列表。
+
+#### §9.149.2 base 是 `disabled`，这就是整个处理
+
+map 永远建在 **`disabled`** 的 base 上。路由列表没有命名的四条，恰好就是 `enabled` 下**一分没丢**的四条——以及
+`IE`，它丢了十六题。一个先在 `enabled` 建 base、再把两条路由映到 `enabled` 的配对，会把处理施加到全部六条，而
+产物只报两条：那就是换了名字的 `thinking: enabled` 臂。
+
+同一条推理在单读者工厂里产生的是**拒绝而不是回退**。`createLlmFromEnv` 现在对路由列表**抛错**，因为它的契约是
+"一个 reader 服务全部路由"，而唯一能"照顾"列表的办法是替调用者挑一个模式。那里静默走 `disabled`，会让运行用着
+base reader，而 `resolveReaderIdentity` 仍写着 `enabled on multi-session+temporal`——产物描述了一个运行没有施加的
+配置，正是 `§13.110` 的 `40698883428` 失败换到新轴上。
+
+**一个 client 服务全部命名路由**，不是每条一个：两个 client 就是两个连接池、两个用量计数器服务同一个处理，产物的
+usage 块会变成一段从未存在过的分部之和。
+
+#### §9.149.3 断言了什么，以及为什么有两条去读 socket
+
+`thinking-reach.test.ts`（18 条）覆盖语法、identity 与配对：
+
+- 上面三种拒绝，每一条都断言消息的**理由**（那个 token、分隔符、六个名字）。派发不是免费的重复动作，一条不说明
+  出错输入的报错会把操作员送回一个会过期的 job log；
+- reach 的顺序是操作员写的顺序，**不排序**：产物把值印回去，而"规范化"与"记录"是两个不同的声明；
+- 六条路由各自单独可用，且这一份六名字表被就地断言——产品 union 里新增、而这里没跟上的路由，会变成一条臂**静默**
+  无法施加 thinking 的路由；
+- `createReadersFromEnv` 在值不命名路由时只建**一个** reader（每个存档产物都是这样），命名时恰好两个对象，且
+  map 的两个条目**是同一个对象**、base 是另一个。
+
+最后两条是结构断言，而结构并不是处理所依赖的性质：把 base 与作用域 client 对调的配对会满足上面每一条，同时把
+`IE` 的十六题白白买回来。所以两个 client 被赶到本地 HTTP 服务器上、读它们的请求体：base 上是
+`{type: 'disabled'}`、映射路由上是 `{type: 'enabled'}`，而钉住的 `TEMPERATURE` 在**两个**请求体上都出现——第二个
+构造点正是温度包装会丢失的地方（`§13.119`）。
+
+`reader-identity.test.ts` 只加了四条断言而不是新文件：identity 在两个既有词上带 `thinkingRoutes: undefined`
+（是缺省而不是 `[]`，存档渲染才逐字节不变）、作用域 identity 渲染出
+`/thinking=enabled on multi-session+temporal/temp=default`、空 reach（解析器产不出、但重放的产物可能带着）渲染成
+平凡模式而不是一个后面没东西的 `on `、以及一个解析不了的 base URL 仍能解析出 identity（`hostOf` 的回退分支，
+identity 不是校验）。最后这条让 `llm-factory.ts` 回到 **100/100/100/100**。
+
+#### §9.149.4 没做什么，以及第一次派发它会检验什么
+
+**这一节不伴随任何运行。** `§13.197.3` 固定的预测一字未动：
+
+| 能力 | disabled 臂 | enabled 臂 | 登记预测 | 规则 |
+| --- | ---: | ---: | ---: | --- |
+| `TR` | 27 | 31 | **31** | 四题全得、零丢——开关存在的全部理由 |
+| `MR` | 23 | 24 | **24** | `enabled` 下 +1，保留 |
+| `KU` | 29 | 31 | **29** | `enabled` 下的 +2 **事前没预测**，不认领 |
+| `IE` | **88** | 74 | **88** | 不回到 **88 ± 2** 即否证：那说明 IE 的损失不是 reader 简短，而是对 `flat` 路由 prompt 做了别的事，开关装错了层 |
+| `ABS` | 29 | 28 | **29** | `enabled` 下 −1；转成弃权的 `6456829e_abs` 正是 `§9.145` 为它建的题 |
+| 集总 | 196 | 188 | **201 / 220（91.36%）** | 比好的一条臂 +5，比 enabled 臂 +13 |
+
+`§13.197` 那一对有一个性质，决定这张表怎么读，而那一节没有写出来：**两侧都跑在 `thinking: enabled`**——
+`run-ablation.ts` 用同一个 `createLlmFromEnv` 构建参考管道——所以在 enabled 臂里**基线也动了**。处理侧逐能力的数
+只归属于处理侧（两侧不共享 answer cache：`answerCache` 是 `NaturalLanguageMemorySystem` 的，`CortexMemory` 没有被
+给到它），这才使上表是关于处理的陈述；但集总 `196 → 188`**不是**出厂配置下的"处理 vs 基线"差，而按路由的运行是
+第一次让基线回到出厂 reader、同时处理侧带着处理的运行。那是产品会出厂的配置，也是第一次能读开关自己那份声明的派发。
