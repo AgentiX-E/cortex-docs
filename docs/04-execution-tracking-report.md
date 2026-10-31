@@ -387,6 +387,8 @@ LongMemEval 的成绩由 `cortex-eval` 自己实现的独立系统产生。
 | 144 | **十七道逐题成表**（差一 6 / 弃答 5 / 聚合 4 / 其他 2）；**五道差一是少数、两道是多数**（`2e6d26dc` 5→6、`a9f6b44c` 2→4）⇒ 单向「更愿计入」的修复净收益**最多三道** | E1 | `paired-flip-reading.json#reading.MR.durableMiss` + `mr-failure-census` 的分类器 | 分类读字符串，继承其盲区 | 同上 §9.135.5 |
 | 145 | **两个缺陷，都不是测试写出来的**：① 上一轮点名的「下一步 = 派发 `PREREG-MR-SESSION-CHANNEL`」——该文件已有 §6 Result（`40498191604`，MR 83/121，P2 否证 13 题），**一个带结果小节的登记不是登记**；② `feature.metrics.correct` 是**第 0 轮**（419 of 419/417/425/427）而**无字段记录**，工具因此在所有数字之上先印这一句 | E1 | `PREREG-MR-SESSION-CHANNEL.md` §6 + 产物 `ablation.featureCorrectByRun` | 只影响读数口径，不改任何已发布数字 | 同上 §9.135.1/§9.135.4 |
 | 146 | **MR 之外唯一的确定性缺陷**：ABS 每轮 29/30 对参照臂每轮 30/30，那一道 `6456829e_abs` 金标 `None`、四次全答 `5 tomato plants`；`ask: operands` 的到达范围只有 `multi-session`（`prompt.ts` reach 表一条），**abstention 路由不在其视野内** | E1 | 产物逐题 + `packages/cortex-memory/src/prompt.ts:1231` | 单题人口，收益 +1 题 | 同上 §9.135.6 |
+| 147 | **五道稳定弃答全部是「证据不在」**（预测登记为「至少三道」→ 五道全中）：`a4996e51` 的轮次在 `maxTurnChars` 处**断在句中**（下一轮问「how to phrase my work hours」）；`d905b33f` 只有 Zara 的 `20%`、`d6062bb9` 只有一个视频的 `1,456 views`、`60bf93ed` 有到达日没有购买日、`c18a7dc8` 的 `college` 只出现在题面里。**两道含金标数字的「诱饵」**（`20%` 牛仔裤、`5 days a week` 通勤）⇒ 数字计数会把它们误报成阅读失败，检查必须带上下文 | E1 | 产物 `ablation.featurePromptTexts` 逐题读上下文 | 单产物、五题人口 | §9.135.9 / `§13.187.6C` |  
+| 148 | **静默截断是产品缺陷**：`contentFor → truncateCodePointSafe` 切在 `maxTurnChars` 且**不加标记**，读者拿到没有下文的句子，而契约要求缺操作数时弃答 ⇒ **截断制造拒绝**。本轮不修（`prompt-turn-cap.test.ts` 保护归档 prompt 的字节可复现），登记为默认 `'none'` 的 `turnCutMarker` 选项 + 五个接线点 + 预测 | E1 | 同上 + `packages/cortex-memory/src/prompt.ts:2542` | 未修，未派发；单题直接证据 | §9.135.9 / `§13.187.6D` |
 
 ---
 
@@ -11387,6 +11389,34 @@ ABS 每轮都是 29/30，而参照臂每轮都是 30/30，那一道是 `6456829e
 `1,998`），一道是 `7`。其中 `d905b33f` 与 `c18a7dc8` 正是 operands 那个 ask 写的时候点名的两道
 （`§13.166`），而它在两者身上仍然弃答。预测：在已存的 `featurePromptTexts` 里查金标自己的数字，
 **至少三道查不到**。否证条件：五道全都能查到——那会把这一类从检索挪到阅读。
+
+#### §9.135.9 五道弃答不是「拒绝」，是「证据不在」——其中一道是静默截断
+
+`§9.135.7C` 登记的免费复核是「在已存的 `featurePromptTexts` 里查金标的数字」。**它五道全中**，而它
+差点被读错的方式才是发现：五道里有**两道**含金标自己的数字，但出现在**不相关的句子**里——问书的折扣，
+prompt 里是 Zara 牛仔裤的 `20%`；问包裹几天到，prompt 里是 `I commute to work 5 days a week`。
+**一个只会数数字的仪器会把这两道报成阅读失败。** 所以这条检查必须**带上下文**，而不是数计数。
+
+于是**弃答这一类在稳定子集上是检索类**，这与 operands 那个 ask 当初的立论（「10 道 MR 弃答里 7 道的证据
+陈述了操作数」）在稳定子集上**不成立**。
+
+**而其中一道不是「找不到」，是缺陷。** `a4996e51` 的那一轮在 `maxTurnChars` 处**正好断在这里**：
+
+```
+... analyzing engagement metrics. During peak campaign seasons, I increase my work hours
+```
+
+下一轮同一会话里用户接着问「how to phrase my work hours during peak campaign seasons」——语料自己在确认
+那个事实就在被切掉的尾巴里。`contentFor` 走 `truncateCodePointSafe`，**它不加任何标记**，于是读者拿到的
+是一个**没有下文的句子**，而 `enumerated` / `operands` 的契约要求它在缺操作数时弃答：**截断制造了拒绝。**
+
+这同时是产品缺陷，与基准无关：一个把句子切一半、且不告诉用户后面还有内容的内存助手，错的方式和
+**被截断的引文**一样。
+
+**本轮不修，且是刻意的**：`prompt-turn-cap.test.ts` 保护的是**相反**的不变量——「每一个归档 prompt 都
+必须能从代码复现」。所以标记不能是对 `truncateCodePointSafe` 的静默修改，只能是一个**默认取当前字节**的
+选项，正如 `maxTurnChars` 自己就是默认缺省。设计连同五个接线点与预测已登记（`§13.187.6D`），下一轮实现
+而不是重新发现。
 
 #### §9.135.8 它不能说的事
 
