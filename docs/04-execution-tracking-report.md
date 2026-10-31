@@ -389,6 +389,9 @@ LongMemEval 的成绩由 `cortex-eval` 自己实现的独立系统产生。
 | 146 | **MR 之外唯一的确定性缺陷**：ABS 每轮 29/30 对参照臂每轮 30/30，那一道 `6456829e_abs` 金标 `None`、四次全答 `5 tomato plants`；`ask: operands` 的到达范围只有 `multi-session`（`prompt.ts` reach 表一条），**abstention 路由不在其视野内** | E1 | 产物逐题 + `packages/cortex-memory/src/prompt.ts:1231` | 单题人口，收益 +1 题 | 同上 §9.135.6 |
 | 147 | **五道稳定弃答全部是「证据不在」**（预测登记为「至少三道」→ 五道全中）：`a4996e51` 的轮次在 `maxTurnChars` 处**断在句中**（下一轮问「how to phrase my work hours」）；`d905b33f` 只有 Zara 的 `20%`、`d6062bb9` 只有一个视频的 `1,456 views`、`60bf93ed` 有到达日没有购买日、`c18a7dc8` 的 `college` 只出现在题面里。**两道含金标数字的「诱饵」**（`20%` 牛仔裤、`5 days a week` 通勤）⇒ 数字计数会把它们误报成阅读失败，检查必须带上下文 | E1 | 产物 `ablation.featurePromptTexts` 逐题读上下文 | 单产物、五题人口 | §9.135.9 / `§13.187.6C` |  
 | 148 | **静默截断是产品缺陷**：`contentFor → truncateCodePointSafe` 切在 `maxTurnChars` 且**不加标记**，读者拿到没有下文的句子，而契约要求缺操作数时弃答 ⇒ **截断制造拒绝**。本轮不修（`prompt-turn-cap.test.ts` 保护归档 prompt 的字节可复现），登记为默认 `'none'` 的 `turnCutMarker` 选项 + 五个接线点 + 预测 | E1 | 同上 + `packages/cortex-memory/src/prompt.ts:2542` | 未修，未派发；单题直接证据 | §9.135.9 / `§13.187.6D` |
+| 149 | **截断标记落地为 cap 值的一部分**：`PromptOptions.turnCutMarker`（默认 `'none'`）+ `cutWithMarker`（切到 `maxChars − 1`、低代理退一位、窗口末 20% 内退到词边界、`trimEnd`、补 `…`）；臂侧语法 `<width>:<ellipsis\|none>`。**这一条推翻了 `§13.187.6D` 自己写的接线方式**：本 workflow 声明 **24/25** 个 dispatch 输入，`test_dispatch_inputs.py` **禁止**贴着上限，所以「新增一个 `turn_cut_marker` 输入」在本仓库是**规则不允许**的接线 | E1 | `test_dispatch_inputs.py::test_no_workflow_sits_at_the_input_ceiling`（24 < 25） | 复合语法只存在于派发边界；产物仍写两个独立字段 | §13.188.3 / §9.136.2 |
+| 150 | **marker 花 cap 自己的单位，不额外占**：切到 `maxChars − 1` 再补 `…` ⇒ 未截断 turn 与未截断 prompt **一字节不变**、同房间容纳的 turn 数**不变**（40×600 字符在 4,000 房间里两种配置都载入同样多）。三个退化状态各有断言：无 cap（无处可标）、turn ≤ cap（没切）、cap 0（两条路径都渲染空文本，marker 不得占据整条内容） | E1 | `prompt-turn-cut-marker.test.ts` 12 条；`prompt.ts` 语句/分支/函数/行 **100/100/100/100** | 只在 cap 确实切断时可见；prompt 级 `fitToBudget` 裁剪**不在范围内**（它花房间最后几个字符） | §13.188.2 / §13.188.5 |
+| 151 | **第三张重复声明表进了自动对账**：`TurnCutMarker` 联合（产品）对 `TURN_CUT_MARKERS`（臂）——臂认识而产品不认识的名字会被接受、写进产物、然后**静默渲染**，这是任何数字都看不见的方向；另加「控制可命名」与「默认值必须是表成员」两条 | E1 | `test_ask_table_parity.py`（8 → 11 条，全绿） | 读源码文本；只覆盖名字集合，不覆盖行为 | §9.136.3 |
 
 ---
 
@@ -11428,3 +11431,68 @@ prompt 里是 Zara 牛仔裤的 `20%`；问包裹几天到，prompt 里是 `I co
    数字拼成词的，只读句中第一个数字。
 4. **`feature.metrics.correct` 是第 0 轮**（419 of 419/417/425/427），而**没有任何字段记录这件事**。
    工具因此在所有数字之上先印这一句。
+
+### §9.136 截断现在会说出来：一个产品缺陷的修复，以及登记里那一条接线被自己的规则推翻
+
+**2026-10-31，零新派发。** 产品 `packages/cortex-memory/src/prompt.ts`（`TurnCutMarker`、
+`cutWithMarker`、`contentFor` 三参数化）；转发 `types.ts` + `memory.ts#promptOptions`（**只在 cap
+到达的路由**转发）；臂 `bench-memory-arm.ts`（`readTurnCap`、`TURN_CUT_MARKERS`）与
+`bench/run-ablation.ts`；产物 `memoryArmConfig.turnCutMarker` 与配置行 `turnCutMarker=`；
+账目 `prompt-turn-cut-marker.test.ts`（12）、`bench-memory-arm.test.ts`（+10）、
+`test_ask_table_parity.py`（+3）。登记 `§13.188`，计划行 `P0-turn-cut-marker` 由「已登记未派发」
+改为「已完成」。
+
+#### §9.136.1 修的是产品缺陷，不是基准缺陷
+
+`§9.135.9` 把 `a4996e51` 读成**截断制造拒绝**：那一轮的 prompt 停在
+`... During peak campaign seasons, I increase my work hours`，下一轮同一会话问「how to phrase my work
+hours」。这与基准无关——**任何**用户拿到半句引文都会得到同一个答复（契约要求缺操作数时弃答），
+而半句引文之所以是半句，是因为 `truncateCodePointSafe` 只切、不说。修复因此落在渲染层，且**默认关闭**：
+`prompt-turn-cap.test.ts` 保护的是「每个归档 prompt 都能从代码复现」，一个默认开启的标记会让
+每一次带 cap 的派发都与其历史读数不可比。
+
+#### §9.136.2 登记的接线方式被仓库自己的规则推翻（本轮第二次「登记先行」抓到东西）
+
+`§13.187.6D` 写的是「workflow 输入 `turn_cut_marker`」。实现到那一步才发现：本 workflow 声明
+**24/25** 个 `workflow_dispatch` 输入，而 `test_dispatch_inputs.py` **明文禁止**贴着上限（理由写在
+测试自己的 docstring 里：贴着上限的 workflow 距离不可派发只差一次登记）。于是标记改成 cap 值的**后缀**：
+
+| 值 | 含义 |
+| --- | --- |
+| 空 / `none` | 无 cap，即所有归档 |
+| `<width>` | cap，切了不说，即所有带 cap 的历史运行 |
+| `<width>:ellipsis` | cap，切处补 `…` |
+| `<width>:none` | 与 `<width>` 同状态，但可被登记点名 |
+
+这不是妥协：**没有 cap 的标记标记的是一个不会发生的截断**，而语法让这个状态**不可表达**。先写的运行时
+守卫（`assertMarkerNeedsCap`）因此被**删除**，连同它的三条测试——不可达状态不需要守卫，这是本仓
+「未覆盖分支通常意味着到达不了」那一条的第二次应用。复合语法只存在于派发边界；产物里
+`maxTurnChars` 与 `turnCutMarker` 是两个字段，读产物的人不必把它拆回去。
+
+#### §9.136.3 三个退化状态，各自是被断言的不变量
+
+| 状态 | 断言 | 为什么它必须不变 |
+| --- | --- | --- |
+| 无 cap | 与当前字节**逐字节相同** | 无截断可标记 |
+| turn ≤ cap | 与当前字节**逐字节相同**、无 `…` | 标记一段没被截断的文本 = 断言一次没发生的截断 |
+| cap 0 | 与无标记路径同样渲染空内容 | 否则 `…` 会占据整条内容，读起来像「展示过」 |
+
+外加两条算术不变量：marker 花 cap 自己的 1 个单位（即**不越界**），以及同房间容纳的 turn 数**不变**
+（40×600 字符、4,000 字符房间，两种配置载入数相同）——后者正是 cap 存在的理由，一个让容量变小的标记
+会把治疗变成副作用。
+
+覆盖面：`prompt.ts` 语句/分支/函数/行 **100/100/100/100**（`cortex-memory` 全包 100/100/100/100，
+737 条测试），`cortex-eval` 2,559 条、全仓 `pnpm check` 绿（含 `docs:crosscheck` 52/55、`census`、
+`guard:*`、`acceptance`）。新写的分支第一次跑就露出一个未覆盖行——`maxChars <= 0` 的守卫——补的是
+**测试**而不是删守卫，因为 `maxTurnChars: 0` 在本包 API 上仍可表达（臂拒绝它，产品不拒绝）。
+
+#### §9.136.4 下一步，按判据而非按直觉排序
+
+1. **派发 `400:ellipsis` 对 `400`**（`§13.188.4`）：按**掩码**读，判据是「五道稳定弃答里至少一道被
+   答出、其余四道不动、未截断 prompt 一字节不变」。移动 ≥3 道或丢领先即视为「标记不是那个变量」。
+2. **`P0-abs-operand`**：abstention 路由接缺操作数检查，ABS 29/30 → 30/30，其余四能力逐字节不动。
+   这是 MR 之外**唯一**已定位的确定性缺陷，收益 +1 题且判据干净。
+3. **竞品同 harness 对跑**（用户要求 7）：把 Raw-RAG（87.5%，B）与 MemCog（92.5%，C）的实现搬进
+   Runner，跑双方数据集——公开数字不能当作比较，只有同一 LLM、同一 500 题、同一裁判下的数字才能进
+   SOTA 表。
+
