@@ -23,7 +23,7 @@
  *
  * ## Why three user policies and not one
  *
- * The rule layer only decides 26.7% of candidates; the other 73% become cards. So the boundary
+ * The rule layer only decides 31.7% of candidates; the other 68% become cards. So the boundary
  * a real user gets depends on *what they do with the queue*, and a single number would hide
  * that. Three policies bracket the space:
  *
@@ -206,10 +206,21 @@ check(
   () => unguarded.threw === false && unguarded.leak === 1,
   `guard off: leak ${unguarded.leak}/1 -- this is what the guard buys`,
 );
+// The A4 row used to assert `leak > 0`, and it passed because three of the twelve gold-private rows
+// were deferred. Widening `health` (the false-share census, docs/04 section 9.130) made the rules
+// decide all twelve, so the ablation now has nothing left to move *on these sixty rows* and the
+// assertion fails -- correctly. The fix is not to delete the row: it is to assert the precondition,
+// so that a rule which later stops deciding a private row flips this back to red and the ablation
+// has to be re-read. The claim itself moves to the population where deferrals are load-bearing, and
+// that number is measured, not asserted here: 40,822 of 47,927 utterances publish under
+// `defer-shared` against 189 under the shipped policy (node tools/triage-publish-census.mjs
+// --corpus <turns.json> --defer-shared, in the cortex repo).
+const deferredPrivate = rows.filter((row) => row.gold === 'private' && row.scope === 'defer').length;
 check(
-  'defer-shared leaks, so the defer default is load-bearing',
-  () => byPolicy['defer-shared'].leak > 0,
-  `leak ${byPolicy['defer-shared'].leak}/${GOLD_PRIVATE} (A4 ablation: one line moved)`,
+  'the A4 ablation is silent here, because no private row is deferred any more',
+  () => deferredPrivate === 0 && byPolicy['defer-shared'].leak === 0,
+  `deferred-private ${deferredPrivate}; A4 leak ${byPolicy['defer-shared'].leak}/${GOLD_PRIVATE} ` +
+    '-- the ablation moved to the 47,927-row census, where it publishes 40,822 (85.18%)',
 );
 check(
   'no-triage leaks everything, so the rule layer is load-bearing',

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-22T15:35:52.208Z",
+  "generatedAt": "2026-10-31T04:36:00.654Z",
   "source": "facebookresearch/CIMemories data/data_openai_gpt-oss-120b.json",
   "corpus": {
     "personas": 10,
@@ -27,17 +27,17 @@
     "n": 1467,
     "leak": 0,
     "leakUpper": 0.002611742276950888,
-    "coverage": 0.29175187457396046,
+    "coverage": 0.2951601908657123,
     "coverageInterval": [
-      0.2690585701921232,
-      0.3155329598223396
+      0.2723792027143291,
+      0.3190111565961327
     ]
   },
   "forced": {
     "n": 1059,
     "leak": 0,
     "leakUpper": 0.003614329106954978,
-    "coverage": 0.3550519357884797
+    "coverage": 0.3578847969782814
   },
   "byDomain": [
     {
@@ -53,8 +53,8 @@
       "n": 151,
       "leak": 0,
       "leak upper": "2.5%",
-      "coverage": "19.2%",
-      "top rule": "defer: 122"
+      "coverage": "19.9%",
+      "top rule": "defer: 121"
     },
     {
       "domain": "finance",
@@ -85,8 +85,8 @@
       "n": 151,
       "leak": 0,
       "leak upper": "2.5%",
-      "coverage": "33.8%",
-      "top rule": "defer: 100"
+      "coverage": "34.4%",
+      "top rule": "defer: 99"
     },
     {
       "domain": "legal",
@@ -101,8 +101,8 @@
       "n": 151,
       "leak": 0,
       "leak upper": "2.5%",
-      "coverage": "43.7%",
-      "top rule": "defer: 85"
+      "coverage": "44.4%",
+      "top rule": "defer: 84"
     },
     {
       "domain": "relationships",
@@ -117,8 +117,8 @@
       "n": 150,
       "leak": 0,
       "leak upper": "2.5%",
-      "coverage": "20.0%",
-      "top rule": "defer: 120"
+      "coverage": "21.3%",
+      "top rule": "defer: 118"
     }
   ],
   "leakExamples": []

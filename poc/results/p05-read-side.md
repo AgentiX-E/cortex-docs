@@ -43,7 +43,7 @@ broken.
 | every assembled row says where it came from | PASS | origin label survives the two-store merge |
 | the guard fires on a private row injected into the shared store | PASS | ScopeViolation raised, no prompt launched |
 | without the guard the same injection reaches the window | PASS | guard off: leak 1/1 -- this is what the guard buys |
-| defer-shared leaks, so the defer default is load-bearing | FAIL | leak 0/12 (A4 ablation: one line moved) |
+| the A4 ablation is silent here, because no private row is deferred any more | PASS | deferred-private 0; A4 leak 0/12 -- the ablation moved to the 47,927-row census, where it publishes 40,822 (85.18%) |
 | no-triage leaks everything, so the rule layer is load-bearing | PASS | leak 12/12 (A1 ablation) |
 | a perfect confirmation buys completeness the rules cannot | PASS | reach 4/8 -> 8/8 |
 | the perfect-confirmation path still leaks nothing | PASS | confirming the right cards is sound at both ends |

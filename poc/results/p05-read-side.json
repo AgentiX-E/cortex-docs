@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-22T15:38:09.696Z",
+  "generatedAt": "2026-10-31T04:36:00.622Z",
   "corpus": {
     "rows": 60,
     "goldPrivate": 12,
@@ -96,9 +96,9 @@
       "detail": "guard off: leak 1/1 -- this is what the guard buys"
     },
     {
-      "check": "defer-shared leaks, so the defer default is load-bearing",
-      "result": "FAIL",
-      "detail": "leak 0/12 (A4 ablation: one line moved)"
+      "check": "the A4 ablation is silent here, because no private row is deferred any more",
+      "result": "PASS",
+      "detail": "deferred-private 0; A4 leak 0/12 -- the ablation moved to the 47,927-row census, where it publishes 40,822 (85.18%)"
     },
     {
       "check": "no-triage leaks everything, so the rule layer is load-bearing",

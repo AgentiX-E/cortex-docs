@@ -605,17 +605,25 @@ CIMemories 的三条实测 `[文献]`：
 
 | 序  | 规则            | 目标                    | 触发即终止                                                                        |
 | --- | --------------- | ----------------------- | --------------------------------------------------------------------------------- |
-| 1   | `credential`    | private（**且不建卡**） | 密钥/口令/token/私钥/SSN/PIN                                                      |
-| 2   | `strong-pii`    | private                 | 邮箱、电话、卡号、证件号、门牌地址                                                |
-| 3   | `money`         | private                 | 金额、收入、预算、债务、房租、付款                                                |
+| 1   | `credential`    | private（**且不建卡**） | 密钥/口令/token/私钥/SSN/PIN、CVV、钱包地址、助记词                                |
+| 2   | `strong-pii`    | private                 | 邮箱、电话、卡号、证件号、门牌地址、**账号**、**IBAN（关键词与形状）**             |
+| 3   | `money`         | private                 | 金额、收入、预算、债务、房租、付款、**具名贷款（home/auto/personal/… loan）**      |
 | 4   | `health`        | private                 | 诊断、用药、就诊、饮食限制、运动（含步行）、热量与摄入、体重、生理测量            |
 | 5   | `family`        | private                 | 家人与伴侣、纪念日                                                                |
 | 6   | `career-status` | private                 | 晋升、薪酬、离职、解雇、面试                                                      |
-| 7   | `third-party`   | private                 | 同事/上级/朋友/房东等人                                                           |
+| 7   | `third-party`   | private                 | 同事/上级/朋友/房东等人（**不含**医生——医生属 `health`，角色表里出现它是漂移）     |
 | 8   | `org-knowledge` | **shared**              | `our team`、`the project`、`the client`、roadmap、sprint、onboarding、deliverable |
 
 **私有一律先跑**，所以"看起来是组织知识、但提到了钱"的句子留在私有。这个顺序就是 fail-closed
 的全部论证，`[POC-4]` 测的就是它是否成立。
+
+三个加粗项是 2026-10-31 那轮对账补的，各有一条政策理由而不是一条语料理由：账号与 IBAN 是**按形式
+受监管的标识符**（与卡号同类），具名贷款是**债务**（即使句中没写金额），而医生是**医疗**而不是他人
+身份。补它们的是**两份实现的比对**，不是语料：`cortex-docs/poc/p04-triage-rules/rules.mjs` 与
+`packages/cortex-core/src/triage/rules.ts` 漂了 8 个字段，最深的一处让探针对产品缺陷**致盲**
+（探针写 `\bALT\b`，产品写 `alt` 且大小写不敏感，于是产品的"the alt attribute on the logo"被判
+成健康事实，而唯一指向已发布 coverage 的仪器看不见它）。对账后所有已发布数字**复现不变**，过程与
+读数见 04 §9.129。
 
 #### 5.3.1 顺序是论证，那就不能只是数组下标（实现第 5 步）
 
@@ -642,11 +650,26 @@ fail-closed 论证就反了，而任何一条单句测试都不会红 —— 只
 | --------------- | ------------------------------------- | ------------------------------------------- |
 | **false-share** | **0 / 12**，Wilson 95% 上界 **24.2%** | 安全方向；但 12 个样本给不出"低于 1%"的承诺 |
 | false-private   | 4 / 8                                 | 代价是用户多点一次，可恢复                  |
-| **coverage**    | **31.7%**                             | 规则只决定不到三分之一                      |
+| **coverage**    | **31.7%**                             | 规则只决定三分之一；其余进卡片              |
 | 三次一致率      | 90.0%                                 | 上下文，不是目标                            |
 | 10 轮重复       | **逐条一致**                          | 与模型的 25% 波动形成对照                   |
 
-**最重要的数字是 coverage。** 73% 的候选事实只能变成卡片，于是产品主界面是**卡片队列**，
+coverage 这一格曾经写过 **33.3%（20/60）**，那 20 分之 1 是错的，这条痕迹保留在文档里因为它比
+正确值有用：普查（04 §9.130）把发布规则放到 47,927 条真实 user 语句上，读出 20 条本应私有却被
+发布的句子（15 条运动/训练属于 health、3 条 `team lead`/`friends`、1 条 `siblings`、1 条职业发展），
+于是按政策补了那批词。补完 60 条上从 19 变成 20 —— 看起来是普查给自己挣回了覆盖率。
+**它不是。** 变动的那一行是 "I have a production facility on Poland that can produce high end
+climbing walls … a climbing or bouldering gym needs"，金标 **shared**（一个供应商在讲自己的生意），
+被新加的 `gym` 判成 health 私有；同一形状的第二个词是 `bike`（"bike trails"、"bike shops"、
+"I spent 300 dollars on a bike" —— 名词和购物，不是用户的运动）。两个词都删了，60 条回到
+**19/60 = 31.7%**，与普查前**一模一样**。
+
+所以普查买到的东西**不是覆盖率**：它买到的是 false-share 从 9.48% 降到 0（分母 211 → 189 次
+发布）。一个**规则变差时会上升**的数字不是指标 —— 这正是为什么这里同时钉住 private recall、
+false-share 和 false-private，而不是只钉一个总数。这条教训的机械形式写在
+`triage-rules.test.ts` 的 `an activity is private; the place that sells the equipment is not` 一节里。
+
+**最重要的数字是 coverage。** 三分之二的候选事实只能变成卡片，于是产品主界面是**卡片队列**，
 而不是"分类器准不准"。这条结论直接改了优化目标：
 
 - 上游**抽取要更少更准**（Mem0 的 selective extraction 报 80% token 削减、6 pp 精度损失 `[文献]`）；
@@ -666,8 +689,8 @@ with my colleagues … to **raise** funds for a local food bank"，把一次团�
 
 | 量       | 值                                                                                          | 读法                                                  |
 | -------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| coverage | **29.2%**（95% CI 26.9–31.6）                                                               | 与 60 条上的 31.7% 同量级                             |
-| 按领域   | finance 90.8%、mental_health 37.7%、housing 29.8%、employment 19.2%、health 11.3%（修补前） | `money` 规则在财务事实上一击即中；`health` 最弱       |
+| coverage | **29.5%**（95% CI 27.2–31.9）                                                               | 与 60 条上的 31.7% 同量级                             |
+| 按领域   | finance 91.4%、mental_health 44.4%、housing 34.4%、health 31.8%、schedule 21.3%、employment 19.9%、legal 15.2%、relationships 13.2%、general 12.1%、education 6.0% | `money` 在财务事实上一击即中；`health` 从 11.3%（vitals 修补前）走到 31.8%；education 只有 6.0%，是词表最薄的一格 |
 | leak     | **NOT MEASURED**                                                                            | 发布规则 `org-knowledge` **0/1,467 命中** —— 结构性零 |
 
 **这一轮抓到的真实缺陷**：健康规则对**生理测量**完全沉默 —— "blood pressure 138 over 86"、
