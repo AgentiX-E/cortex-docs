@@ -392,6 +392,8 @@ LongMemEval 的成绩由 `cortex-eval` 自己实现的独立系统产生。
 | 149 | **截断标记落地为 cap 值的一部分**：`PromptOptions.turnCutMarker`（默认 `'none'`）+ `cutWithMarker`（切到 `maxChars − 1`、低代理退一位、窗口末 20% 内退到词边界、`trimEnd`、补 `…`）；臂侧语法 `<width>:<ellipsis\|none>`。**这一条推翻了 `§13.187.6D` 自己写的接线方式**：本 workflow 声明 **24/25** 个 dispatch 输入，`test_dispatch_inputs.py` **禁止**贴着上限，所以「新增一个 `turn_cut_marker` 输入」在本仓库是**规则不允许**的接线 | E1 | `test_dispatch_inputs.py::test_no_workflow_sits_at_the_input_ceiling`（24 < 25） | 复合语法只存在于派发边界；产物仍写两个独立字段 | §13.188.3 / §9.136.2 |
 | 150 | **marker 花 cap 自己的单位，不额外占**：切到 `maxChars − 1` 再补 `…` ⇒ 未截断 turn 与未截断 prompt **一字节不变**、同房间容纳的 turn 数**不变**（40×600 字符在 4,000 房间里两种配置都载入同样多）。三个退化状态各有断言：无 cap（无处可标）、turn ≤ cap（没切）、cap 0（两条路径都渲染空文本，marker 不得占据整条内容） | E1 | `prompt-turn-cut-marker.test.ts` 12 条；`prompt.ts` 语句/分支/函数/行 **100/100/100/100** | 只在 cap 确实切断时可见；prompt 级 `fitToBudget` 裁剪**不在范围内**（它花房间最后几个字符） | §13.188.2 / §13.188.5 |
 | 151 | **第三张重复声明表进了自动对账**：`TurnCutMarker` 联合（产品）对 `TURN_CUT_MARKERS`（臂）——臂认识而产品不认识的名字会被接受、写进产物、然后**静默渲染**，这是任何数字都看不见的方向；另加「控制可命名」与「默认值必须是表成员」两条 | E1 | `test_ask_table_parity.py`（8 → 11 条，全绿） | 读源码文本；只覆盖名字集合，不覆盖行为 | §9.136.3 |
+| 152 | **账单按臂拆分**：`usageBySide` 在每条 `answer*` 前后取进程账本差值（`finally` 里加，因为抛错的调用**已经发出去并计费**），`residual = total − baseline − feature` 由定义得到而非调用点打标 ⇒ `baseline + feature + residual === total` 恒真，渲染成一行 `Attribution closes: yes`，不让读者自己加三列；`minusUsage` 对负数**报错而非截断**，渲染侧同步给出 `SPLIT UNAVAILABLE` | E1 | `usage-by-side.ts` / `system-mirror.ts` 各 100/100/100/100；`usage-by-side.test.ts` 12 条（含用注入 `fetchFn` 的真适配器，非 mock 自有代码） | 只覆盖 completion，embedding 端点不在该账本；无货币列（本仓无价目表） | §13.189 / §9.137.1 |
+| 153 | **测试第一次失败就是文档**：stub 用 OpenAI 字段名 `prompt_tokens_details.cached_tokens` 报告缓存，实际 `parseUsage` 读的是 `prompt_cache_hit_tokens`，于是缓存归因读出 0 —— 失败的那一行把「哪一侧花了多少」与「缓存省了多少」分成两个必须分别验证的事实 | E1 | 同上（首跑 `cacheHitPromptTokens` 期望 15 实得 0） | — | §9.137.2 |
 
 ---
 
@@ -11495,4 +11497,43 @@ hours」。这与基准无关——**任何**用户拿到半句引文都会得�
 3. **竞品同 harness 对跑**（用户要求 7）：把 Raw-RAG（87.5%，B）与 MemCog（92.5%，C）的实现搬进
    Runner，跑双方数据集——公开数字不能当作比较，只有同一 LLM、同一 500 题、同一裁判下的数字才能进
    SOTA 表。
+
+### §9.137 账单现在按臂拆开：Token 优化的第一步不是省，是知道谁在花
+
+**2026-10-31，仪器先行，零新派发。** `packages/cortex-eval/src/usage-by-side.ts`（`minusUsage`、
+`residualUsage`、`bothSides`、`traceUsage`）、`packages/cortex-eval/src/system-mirror.ts`
+（`mirrorMembers` 移出臂，两个包装器共用一份委派）、产物字段 `usageBySide` 与 spend 小节里的
+按臂表。账目 `usage-by-side.test.ts`（12 条）与 `system-mirror.test.ts`（3 条），两个新文件
+语句/分支/函数/行均 **100%**。登记 `§13.189`。
+
+#### §9.137.1 它回答的是「该省哪里」，不是「省了多少」
+
+产物此前只有 `llmUsage` 一个总数：`41159983913` 是 **50,736,848** prompt tokens / **5,670** 次调用，
+其中 **38,402,551（75.69%）来自前缀缓存**。这个数字能说明「很贵」，不能说明「谁贵」——窗口 96,000
+字符的 feature 臂、窗口小得多的参照臂、以及每道题都要跑一次的裁判，三者混在一个数里。所以任何
+Token 工作都缺一个前提：**改动省下来的那部分，属于哪一边**。
+
+拆分取在每条 `answer*` 的**前后差值**上（账本本身是进程级、只增的，`cortex-ai/src/usage.ts` 为它写过
+理由），差值在 `finally` 里累加——**抛错的调用也已经发出去并计费**，跳过它会让一条失败的臂看起来便宜。
+剩下的部分定义为 `residual = total − baseline − feature`，于是「裁判 + 短语生成 + 启动」**由定义命名**，
+不需要每个调用点记得打标；闭包 `baseline + feature + residual === total` 因此恒真，渲染成
+`Attribution closes: yes` 一行，而不是把三列留给读者相加。
+
+`minusUsage` 对负数**报错**而不是截断到 0：部分大于整体说明两次快照不是同一个账本，截断后的 0 会读成
+「这一边一分没花」，与实际正好相反。
+
+#### §9.137.2 第一次跑的失败就是文档
+
+stub 按 OpenAI 的字段名报告缓存（`prompt_tokens_details.cached_tokens`），而 `parseUsage` 读的是
+`prompt_cache_hit_tokens`（DeepSeek 的字段名），于是缓存归因读出 **0** 而 prompt 归因正确。
+失败的正是缓存那一行，它把两件必须**分别**验证的事分开：一侧花了多少 token，与缓存替他省了多少。
+两件事都对，才谈得上「在不降指标的前提下省 Token」。
+
+#### §9.137.3 它不测量的三件事
+
+1. **货币**：本仓没有价目表，列是 token。
+2. **embedding 调用**：`llmUsage` 只统计经适配器的 completion，embedding 是另一个端点、不在这个账本里
+   —— 所以「闭包成立」是关于 completion 的断言，不是关于整张发票的。
+3. **逐题成本**：累加器按臂，不按题。逐题账本会是产物里的第二张表、第二处会漂的算术，而「省哪一边」
+   才是这一步要回答的问题。
 
