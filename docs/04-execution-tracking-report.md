@@ -12765,3 +12765,22 @@ MR/TR 是读者问题。**
 `§13.203` 找到的那种漂移，两边同向过期就永远绿。
 
 对 `41222844945` 自比对冒烟：**8 题全 held、守卫 3 题全 held、0 转化 0 变差**，正是一次空配对该给出的读数。
+
+#### §9.155.6 派发与读数路径
+
+已派发 **`41259622431`**：500 题 × 4 轮、96,000 字符、`400:ellipsis`、`thinking=multi-session+temporal`，与在跑的
+`41254359622` **只差 `ask` 一个字段**（`operands+operand-gap` → `candidates`）。落地后按顺序读：
+
+```bash
+# 1) 配置漂移：只允许 ask 一项，且必须点名
+python3 tools/readout-arm-run.py <artifact> --config <41254359622-artifact> --treatment ask
+# 2) 这一对自己的噪声底
+python3 tools/readout-arm-run.py <artifact> --null <41254359622-artifact>
+# 3) 注册总体：8 道下限 4、守卫 3 道上限 1，逐题打印
+python3 tools/readout-arm-run.py <artifact> \
+  --population tools/populations/mr-screen.json \
+  --control <41254359622-artifact>
+```
+
+第三步的退出码就是判据：`0` = 两条门槛都成立（`candidates` 在这条轴上被采纳），`1` = 注册被否证（`§13.205.6` 已点名
+下一个候选是**排序侧过滤**而不是 ask）。
