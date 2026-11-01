@@ -3639,3 +3639,40 @@ unrun   算不出来——报告，但永不当作通过
 `cortex-eval/src/ledger.ts` 输出 `{bought: string[], sold: string[], kept: string[]}`，
 按 `questionId` 对齐任意两次运行，使"S-1 买下的 7 题里，有 5 题 S-5 也买下了"成为一条可打印的句子。
 这是下一个 P1 仪器增量，判据：两份运行台账的 bought ∪ sold 必须等于总 Δ（否则有题被重复计入）。
+
+#### 14.5.5 已发货：产物点名它读的那份文件（`datasetFingerprint`）
+
+上面三节讲的都是"改动的记账"，这一节是**输入的记账**，而且它是这几节里唯一一条**已经发货**的。
+
+`AblationReport` 里一直有 `dataset: "longmemeval"` 和 `questionCount: 500`。前者是**名字**，后者是
+**样本量**，两者都不说读了哪一份字节。而 workflow 取这份数据的方式是
+`longmemeval-cleaned/resolve/main/longmemeval_s_cleaned.json`——`resolve/main` 是**可变指针**，
+上游改一个字节，同名的两次运行就是两个总体。于是一个分数是 (流水线, 文件) 的属性，本仓只写了前一半。
+
+现在的实现与三个刻意的取舍：
+
+| 层 | 位置 | 内容 |
+| --- | --- | --- |
+| 摘要 | `cortex-eval/src/dataset-fingerprint.ts` | `fingerprintBytes(Uint8Array) → "sha256:<64 hex>"` |
+| 报告 | `report.ts` | `datasetFingerprint?` 进 report 与 `AblationReportOptions`；Markdown 里渲染在数据集名**正下方** |
+| 臂 | `bench-memory-arm.ts` | 从入口点转发——臂拿到的是**已解析**的数据集，字节在它被调用前就没了 |
+| 入口 | `cortex-memory/bench/run-ablation.ts` | **只读一次**：同一份 buffer 既解析成题目也算摘要；日志里连文件名实例数与采样后题数一起打印 |
+| 测试 | 8 + 3 条 | FIPS 向量、字节而非字符串、文件同一性、缺席渲染为缺席、JSON 往返 |
+
+**取舍一：一次读，不做两次。** 没有 `fingerprintDatasetFile(path)`。入口点本来就要读这份文件去解析
+JSON，再为摘要读第二遍 110 MB，是让"摘要来自第一次读、题目来自第二次读"成为可能的写法；导出普查
+（`tools/export-census.mjs`）把那个没人调用的导出判成 orphan，判对了，所以它被删掉而不是被塞进基线。
+
+**取舍二：哈希字节，不哈希解码后的字符串。** `readFileSync(path, 'utf8')` 再哈希字符串，会把每一段
+非法字节序列都映射成 U+FFFD，于是两份不同的坏文件**碰撞**。一个碰撞集包含"任意两份畸形文件"的指纹
+不是指纹。
+
+**取舍三：缺席就是缺席。** 代码里构造的数据集（`longmemeval-mini`）没有文件，字段**不出现**而不是空
+字符串——"没读文件"与"字段之前就存在"必须是不同的字节。这条规则与 `abstentionReasons` 对 census
+用的是同一条。
+
+**它买不到什么，写在实现旁边而不是写在附录里：** 十七份已归档产物**永远不会有摘要**，包括 89.80%
+那份 headline——摘要不可能从分数反推，所以本仓任何历史数字都无法回溯到产生它的文件。而**拒绝**没有
+实现：Haki 的 harness 校验后拒绝运行，本仓现在只记录不拒绝，因为钉住的期望值必须从文件上取，而环境
+里没有那个文件。顺序因此是**先记录、再在拿到真摘要之后拒绝**，而在这个顺序里，一次真的不一致会
+**在产物里可见**，而不是拦住运行。
