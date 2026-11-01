@@ -14071,3 +14071,28 @@ TR 变动 **< 3**、四跑极差 **≤ 2 pp**；**一次派发**。
 方便函数"这种无成本扩张，处理方式是**删掉导出**而不是往基线里加一行。`cortex-eval` 覆盖
 **99.43 / 98.00 / 99.77 / 99.63**，新模块 **100 / 100 / 100 / 100**，`report.ts`
 98.55 / 95.37 / 100 / 98.49（三个未覆行是既有的，不在本次改动里）。
+
+### §9.167 复核 §13.207：三条读数都复现，而其中一条的措辞依赖一个没写下来的 flag
+
+产物被重新下载（`13070701774`、`13074125137`，各 39.85 MB），三条读数**逐字复现**：
+
+| 判据 | 命令 | 结果 |
+| --- | --- | --- |
+| 配置差异 | `readout-arm-run.py RUN --config CONTROL --treatment ask` | 31 同 / 2 差（`ask`、`askRoutes`），均为 declared |
+| 逐题字节 | `readout-arm-run.py RUN --null CONTROL` | **349/500 逐字节相同**，151 不同 = `{'ABS': 30, 'MR': 121}`；同层 +1.25 对声带 6.31 |
+| 总体判据 | `readout-arm-run.py RUN --population tools/populations/mr-screen.json --control CONTROL` | converts **0/8**（bar 4）、guard 2/83（上限 4）、`EXIT=1` |
+
+**但第一条的结论只属于那条命令。** 去掉 `--treatment ask` 后，同一个工具对**同一对字节**给出的判词
+是"2 个字段不同、0 个 declared、**读数据不可归因**"。所以 §13.207 那句 *"every one of them is
+declared"* 是**命令的性质**，不是产物的性质——一个只跑 `--config` 的读者会得出相反结论。命令因此
+进入记录。
+
+**而省略号藏掉了第二个效应。** `askRoutes` 的完整差异是
+`["multi-session","flat","temporal","abstention"] → ["multi-session","flat","temporal"]`：
+`abstention` **消失**。所以 `--null` 报的那 30 道 ABS 差异不是"换了一个 ask"，而是**没有 ask 了**。
+处理其实有两个效应：MR 拿到新 ask，ABS 丢掉原来的那个。这既是一次真实的越界（只想覆盖 121 道 MR
+的屏幕，悄悄不再覆盖 30 道 ABS，而 +0.30 pt 的聚合读数看不出来），也是不采纳 `candidates` 的
+**第二个独立理由**。
+
+> 这一节的价值不在"复现了"，而在于：**复现时发现记录里少了一个限定词**。而那个限定词在别人写的
+> harness 里，通常就是"为什么他的数和我的数不一样"。
