@@ -12793,8 +12793,9 @@ python3 tools/readout-arm-run.py <artifact> \
 
 ### §9.156 六个 Dependabot alert：修完，并撞出三处"升级不会告诉你"的变化
 
-在等 `41254359622` / `41259622431` 落地的窗口里清掉了跟踪列表上唯一与实验无关的红点：**六个开着的
-Dependabot alert，全部落在 `pnpm-lock.yaml`，全部是 `development` scope**。清的过程比预期有信息量——升级
+在等 `41254359622` / `41259622431` 落地的窗口里清掉了跟踪列表上唯一与实验无关的红点：**开着的
+Dependabot alert，全部落在 `pnpm-lock.yaml`，全部是 `development` scope**。第一批六个，第一批关闭后
+GitHub 用新 lockfile 重算依赖图，又报出第二批两个（`§9.156.8`），最终八条全清。清的过程比预期有信息量——升级
 本身是三行改动，而它同时改掉了三件**没有任何测试会自己报出来**的事，其中一件已经在这棵树上留下了残留文件。
 
 #### §9.156.1 六个 alert 与它们的真实下限
@@ -12907,8 +12908,8 @@ export function pipedCensusGateProbe(value: number): number
 
 #### §9.156.6 守卫：范围而不是地板
 
-`tools/dependency-advisories.json` 存下六行（公告区间逐字保留），`tools/__tests__/test_dependency_advisories.py`
-（15 条）解析 `pnpm-lock.yaml` 并断言没有任何解析版本落在这些区间内。
+`tools/dependency-advisories.json` 存下**八行**（公告区间逐字保留；第一批六行 + `§9.156.8` 的第二批两行），
+`tools/__tests__/test_dependency_advisories.py`（17 条）解析 `pnpm-lock.yaml` 并断言没有任何解析版本落在这些区间内。
 
 值得辩护的设计决定是**存区间而不是存地板**。"不低于修复版"是人手算的规则，而它在可判定的意义上就是错的：
 `source-map-js >= 1.0.0, < 1.2.2` 对 0.9 什么都没说，`brace-expansion < 1.1.21` 对 5.0.12 这条完全不同的线也
@@ -12934,3 +12935,47 @@ export function pipedCensusGateProbe(value: number): number
 
 **不把五个"100%"改回旧数字。** 它们是被一个已被取代的仪器测出来的；配置里的数字现在是这个仪器的读数，差异被记录
 而不是被"调宽阈值"吸收。
+
+#### §9.156.8 第二波：两个"关掉之后才出现"的告警，其中一个只能靠 override
+
+前六个在 02:17:25–02:17:27Z 全部转为 `fixed`。同一次重算又报出两条新的：
+
+| # | 包 | 公告 | 区间 | 修复版 | 手段 |
+| --- | --- | --- | --- | --- | --- |
+| 8 | `minimatch` | GHSA-g3hv-75wg-m249 | `< 11.0.1` | 11.0.1 | **override** |
+| 7 | `moment` | GHSA-4p3w-j4w9-5jqw | `>= 2.29.2, < 2.31.0` | 2.31.0 | 范围内 |
+
+`moment` 来自 `pg-mem@3.0.14` 的 `^2.27.0`，`pnpm update moment -r` 直接到 2.31.0，与前四条同类。
+
+`minimatch` 不同，而且**不是本仓的问题而是生态的问题**：补丁只有 11，而所有需要它的包声明的范围都到不了 11——
+`eslint@9.39.5` 要 `^3.1.2`、`@eslint/eslintrc@3.3.6` 要 `^3.1.5`、`@eslint/config-array@0.21.2` 要 `^10.2.4`、
+`@typescript-eslint/typescript-estree` 要 `^10.2.6`。连当前大版本 `eslint@10.14.0` 也仍然依赖 `minimatch ^10.2.6`，
+所以范围内升级不存在。于是本仓有了**唯一一条 `pnpm.overrides`**（`minimatch: ^11.0.1`）。
+
+override 是"一个包在它自己依赖方声明的范围之外仍能工作"的主张，所以主张先被测量：
+
+- **可能怎么坏**：v3 导出可调用函数（`module.exports = minimatch`），10/11 只导出命名绑定；写成
+  `require('minimatch')(path, pattern)` 的调用方会 `TypeError: not a function`。读本树里两个真正的消费者，
+  它们都取类：`eslint/lib/eslint/eslint-helpers.js` 里 `const Minimatch = minimatch.Minimatch`，
+  `@eslint/eslintrc/dist/eslintrc.cjs` 里 `_interopDefaultLegacy(minimatch)` 之后 `const { Minimatch } = …`，
+  然后 `new Minimatch(pattern, opts)`——每一代都有。
+- **真正看不见的风险是 glob 语义**：`eslint.config.js` 的 `ignores: ['**/dist/**', '**/coverage/**',
+  '**/node_modules/**']` 正是走 minimatch 的三个模式，`**` 或 `dot` 的处理一变，就会在**全绿**的情况下
+  悄悄少 lint 或多 lint 一批文件。所以比的是**集合**不是数量：
+
+| | minimatch 3.1.5 | minimatch 11.0.3 |
+| --- | --- | --- |
+| 五个包 `eslint src --format json` | 366 文件 / 0 error | 366 文件 / 0 error |
+| 排序后的绝对路径清单 | — | **逐字节相同**（`diff` 为空） |
+
+比法是：去掉 override、重装、取清单；加回 override、重装、再取清单——同一台机器、同一棵树、只动一个变量。
+随后 `pnpm check` 在新版本上整条绿，所以 override 在门**之内**而不是门旁边。
+
+**仍未证明的**：eslint 内部走 minimatch 而本仓永远走不到的路径（`--stdin-filename` 匹配、带否定模式的
+`overrideConfig`、`file-enumerator` 的缓存）。缓解是 lint 在这里只是测试期工具、只跑本仓自己的配置；而另一条路
+（留在 minimatch 3）是留着一个中等公告且范围内无解，对一个只被 lint 用到、不进交付物的依赖来说，那是更差的交易。
+
+**写这条守卫时踩到的那个坑值得记下来**：第一版测试用 `"override" in fixedBy` 找那条唯一的 override，结果匹配到了
+四条写着"no override"的行——**对散文做子串搜索，读到的正是它想读到的安慰**。改成数据里有 `mechanism` 字段
+（`in-range` / `override`）、测试读字段、把第二行改成 override 必须动一个字面量。这是同一类缺陷的第六个形态，
+也是这一节里唯一一处"我自己的判据也不可失败"的例子，所以留在文档里而不是悄悄改掉。
