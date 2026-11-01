@@ -3319,6 +3319,75 @@ Portability*, arXiv:2609.05339（2026-09-04，18 页，under review）**：同�
 「可交换预测」「锁存后的累计概率」五项，缺一项则该读数不得被引用。
 
 
+#### 十二、预算与超时是两个尺度，而评测循环是串行的
+
+第 9.2 节给了守门器的容差；这一节给的是**让评测能结束**的那套约束。两者的缺陷是同一个形状：一条保护
+规则，其安全性来自失败从未发生，而不是规则本身足够。
+
+**读数。** 一次派发是 `2 arms × 4 repetitions = 8` 个 pass × 500 题 = **4000 次 reader 调用**：
+
+| run | 配置 | 墙钟 | 每 pass | 每次调用 |
+| --- | --- | --- | --- | --- |
+| `41222844945` | 96k，thinking 关 | 117.5 min | 14.7 | 1.76 s |
+| `41203245999` | 48k，thinking 关 | 122.6 min | 15.3 | 1.84 s |
+| `41254359622` | 96k，thinking 开三路由 | 305.9 min | 38.2 | 4.59 s |
+| `41259622431` | 同上 + `candidates` | 334.8 min | 41.9 | 5.02 s |
+
+thinking 值 **2.60×**，candidate 臂再 **2.85×**。按 5.0 s/调用算，本地流水线占墙钟**不到 1%**
+——这不是实现问题，是供应商往返时间。**任何本地优化都已在噪声以下，唯一杠杆是在途请求数。**
+
+**缺陷：预算是 per-pass，而失败是 per-run。** 原 `budgetMs` 语义为「每个 pass 的墙钟上限」，
+`evaluateWithScorerDetailed` 每次调用重新计时。于是 8 个 pass 允许 `8 × 90 + 1 = 721` 分钟，
+而 job 在 350 分钟被杀：**内层上限是外层的 2.06 倍，任何「job 杀 run」的时序下预算都不会触发**。
+`41259622431` 收在 334.8 分钟、余量 15 分钟，而 job 超时会连带杀掉 `if: always()` 的 artifact
+上传与错误日志——下一次慢 5% 的那一抽产出的是**零**，不是慢。
+
+**修法：改单位，不改数字。**
+
+| 方案 | 数值 | 结果 |
+| --- | --- | --- |
+| 调小 per-pass 预算至能触发 | `(350-1)/8 = 43.6` | **否决**：工作正常的 pass 已要 41.85，差一跳，等于拿「丢一次」换「假失败」 |
+| 预算改为**整次 run 的截止时刻** | `340 + 1 = 341 ≤ 360` | **采纳**：先失败的是留证据的那个 |
+
+实现是一个截止时刻加一个函数：
+
+```ts
+const deadline = options.budgetMs === undefined ? undefined : performance.now() + options.budgetMs;
+const remaining = (): number | undefined =>
+  deadline === undefined ? undefined : Math.max(0, deadline - performance.now());
+```
+
+四个调用点由 `options.budgetMs` 改为 `remaining()`。**夹到 0 而不是允许负数**：`evaluateWithScorerDetailed`
+比较 `elapsed > budgetMs`，负上限会让第一次比较就为真，把失败报到一道从未被尝试的题上；夹到 0 仍然在
+第二次调用触发，于是首个问题仍会执行，部分 artifact 还能指名它死在第几个 pass。
+
+**新增仪器。** `tools/job-budget.py` 从 workflow 文件里读出两个上限并回答内层能否先触发。它必须同时支持
+两种 scope，否则读不懂自己解释的那批归档：
+
+| scope | 内层上限 | 本仓取值 | 能否触发 |
+| --- | --- | --- | --- |
+| `pass`（历史） | `8 × 90 + 1 = 721` | job 350 | **否**（2.06×） |
+| `run`（现行） | `340 + 1 = 341` | job 360 | **是** |
+
+**为什么并发的 8× 打不开。** `runBenchmark` 在调用之后从同一对象读五个量
+（`lastRawOutput` / `lastRetrievedContext` / `lastPromptEvidenceChars` / `lastAdmittedEvidence` /
+`lastPromptText`），而 `answer` 在一次调用内会多次写这些单槽。并发之下槽属于最后写入者，A 题的记录会
+带上 B 题的 prompt，**且不抛错**。修法只能是让 trace 随返回值一起回来（`answerWithTrace`），再把侧信道
+**删除**；锁与「await 后立刻读」的约定都不成立。验收判据：同配置 concurrency 1 vs c，60 题逐题字节一致。
+
+**不变量与判据。**
+
+| 组件 | 位置 | 不变量 | 判据 |
+| --- | --- | --- | --- |
+| `budgetMs` | `packages/cortex-eval/src/ablation.ts` | 一个截止时刻被所有 pass 共享；剩余永不小于 0 | 5 条测试；`ablation.ts` 语句 100% |
+| `job-budget.py` | `tools/job-budget.py` | 两种 scope 都要能描述；读不到就退出 2 | 31 测试，含本仓 workflow 的回归断言 |
+| workflow | `benchmark-cortex-memory.yml` | 内层先于外层失败 | `job-budget.py` 必须 exit 0 |
+
+**为什么不在这一层抄 lm-evaluation-harness 的响应缓存。** 在 `temperature: 0` 下缓存第二个
+repetition 的响应，会让 artifact **无法区分确定性 reader 与重放**——而四次重复存在的唯一理由是回答
+那个问题（`40722772896` 的四个总分 407 / 414.5 / 414.5 / 423）。缓存改变被测对象，不是性能开关。
+
+
 ## 10. 端侧推理
 
 | 运行时                          | 形态                                         | 关键限制                                                                             | 出处     |
