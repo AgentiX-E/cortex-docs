@@ -3157,6 +3157,118 @@ async #consult(prompt: string, route: TurnCapRoute): Promise<Answer> {
 **单位不能合并**：守门器的窗口是调用，census 的分母是问题。§13.107 的教训是"一个器物的单位换了，而 artifact
 里没有任何字段说分母变了"。
 
+#### 八、探针集的第一版是错的，而生产数据免费证明了这一点
+
+上一节说「12 条探针全部只测适配、不测能力」。这个方向没错，**但第一版探针里有四条测的是风格**：
+
+| 探针 | 第一版的判据 | 生产数据 |
+| --- | --- | --- |
+| `format-label` | 回复必须带 `Answer:` 标签 | **500 次调用里 0 次带标签** |
+| `format-single-line` | 回复必须单行 | **500 次里 161 次多行** |
+| 二者都是必过项 | 失败即判 `minimal` | 该 run 得分 **90.45%**（451/500） |
+
+也就是说，**这组探针会把本 campaign 得分最高的那个 reader 判成不可用**。这不是保守，是拿
+prompt 的行文偏好当成了流水线的拒收条件——`parse.ts` 的接受集在弃权与 Step 标题之外几乎是恒等
+映射，它根本没有「必须有标签」这条规则。
+
+这是可移植性审计里第 2 条否证条件的自触发，且**零成本**：数据两天前就在磁盘上。
+
+修法写成一条规则而不是四个新字符串：
+
+> 一条探针只有在失败会让答案**读不出来**时才可以是必过项——解析为空、解析出的是证据块、或弃权
+> 被当成回答。失败只是让回复**不好看**的探针，标价的是产品不付的成本。
+
+于是 12 条变成：`answer-round-trip` / `answer-not-transcript`（答案保真）、`abstain-token` /
+`abstain-last-line`（弃权词表）、`step2-only` / `step2-obeyed`、`context-48k` / `context-tail`、
+`sample-repeat` / `sample-absent`、`latency-plain` / `latency-thinking`。**必过项仍是 6 条**，
+所以 `probe-budget.py` 的 `5 × 6 = 30 calls` 不变，测试把 6 这个数钉死，因为文档里那句话是运营
+者决策的依据。
+
+#### 九、守门器在真实调用序列上的读数，以及它看不见的三件事
+
+`tools/guard-window.py` 把守门器自己的窗口滑过一份 artifact 的调用流。四个信号里**只有一个能从
+artifact 读出来**：
+
+```
+derivable  1 of 4 guard signals
+  empty-completion          0 of 500 calls ( 0.000%)   windows fired   0 of 481 (  0.00%)
+not derivable from this artifact
+  parse-failed           the artifact stores the parse result, never a judgement about it
+  abstention-unrecognised needs a lexicon, and a lexicon is a guess until someone measures it
+  deadline-exceeded      the adapter raises it and no artifact field carries it
+```
+
+诚实的形式是**一条可读的答了、三条标成不可读**，而不是「四分之零触发」。可读的那条上是安静的：
+`empty-completion` 在 500 次调用里 0 次。
+
+反事实那一半才是本轮最有用的数字。artifact 里唯一长得像失败的逐题字段是弃权（`answer === null`）：
+
+| run | 弃权率 | 若计入信号，会触发的窗口 | 其中被判**正确**的 |
+| --- | --- | --- | --- |
+| `41254359622` | 32 / 500（6.40%） | **105 / 481（21.83%）** | **30 / 32** |
+| `41222844945` | 45 / 500（9.00%） | **136 / 481（28.27%）** | **30 / 45** |
+
+32 次弃权里 30 次是**对无证据问题的正确答案**。把弃权当失败，等于每小时因为「正确地弃权」四次
+降档。真正错的弃权只有 **2/500**，约为 `3/20` 那条线（4.22%）的十分之一。
+
+**还有一个此前没人注意到的事实：聚类。** 同样 32 个事件，成组成六地到达时触发 21.83% 的窗口，
+若调用可交换则只有 13.27%——**1.65 倍**。LongMemEval 按能力分组，无能力问题挨在一起。`3 of 20`
+是关于**比率**的陈述，而它作用在**序列**上。
+
+这是设计发现而不是 bug，但它给下一轮派了两件事：①按 archive 自己的排布校准，而不是按 `p` 校准
+（`guard-window.py` 使这件事可做，4.22% 这个数不是）；②`abstention-unrecognised` 默认关闭——设计
+本来就如此，现在这一行（21.83%）给它标了价。
+
+#### 十、embedding 是比 reader 更硬的锁定，而这一节此前没提
+
+**Goyal & Ray, *Does Your Agent's Memory Survive a Model Upgrade? A Controlled Study of Memory
+Portability*, arXiv:2609.05339（2026-09-04，18 页，under review）**：同一段历史四种存法、48 段合成
+历史、随机答案码、**精确打分且全程无 LLM judge**、两个 <10B 开源模型、双向换模型：
+
+| 存法 | 换 writer 后的准确率 |
+| --- | --- |
+| 固定 schema 知识图 | **+0.0004 ± 0.0020**（不确定度是效应的五倍） |
+| 模型压缩笔记 | **+9.91 或 −13.28**，取决于方向 |
+| RAG 全量重嵌 | 可得 **+11.90** |
+| RAG 50/50 混合索引 | **+4.96**——大部分收益被放弃，而每次调用都成功 |
+
+三条与本设计的直接关系：
+
+1. **本设计是方向盲的，而方向是主导变量。** `classifyPortability` 只分类一个 reader，从不比较
+   A→B 与 B→A；同一份存储一个方向 +10、另一个方向 −13。这与上一轮仓内测到的 +23.50 / §13.197 的
+   −12 是同一现象的两次独立观测。**这是设计缺口，不是措辞差异。**
+2. **embedding 空间是比 reader 更硬的锁定。** cortex 是 RAG 形状（证据检索进 prompt），出厂
+   Zhipu `embedding-3`，无凭据时静默退化到 hash。那正是 50/50 混合索引的情形。cortex **在字段上
+   领先**：`EmbeddingProvenance` 已记录 `provider/model/dimensions/preflight`，其文档字符串早一年
+   写出了这项研究的论点（「两个确定性但互不兼容的 embedding 之间的静默替换在下游每个数字里都不可
+   见」）。**在量级上落后**：没有人测过 cortex 自己这套存储的全量 vs 部分迁移；矩阵每一行描述的都
+   是 reader，没有一行描述 embedding。**reader 可移植性只是可移植性较小的一半。**
+3. **judge 是任何「通过 judge 测出来的换模型效应」的上界。** cortex 的第一档打分是精确匹配（与
+   该研究同一选择），第二档才是 judge，而 judge 的重复审计给出**同输入翻转 11–14%**（六家 judge、
+   三家 provider、29 个任务，跨代未改善）、同日 Spearman **0.400 对 0.90 的预注册门槛**、次日重放
+   0.78 对 0.99、**四家 provider 无一家达到 0.99**。cortex 自测同 prompt 翻转 **4.8%**
+   （§13.194.4），比这些数字好，正是因为第一档不是 judge——但**任何通过第二档读出的换模型效应，
+   都继承 judge 的那 11–14%。**
+
+对手侧的唯一同类机制是 **LiteLLM 的 health-check routing**：后台循环探活、把失败节点移出池子、按
+错误类给 `allowed_fails_policy`，并且——关键——**冷却结束自动放回**。两点差异就是本设计的全部理由：
+
+| | LiteLLM | `DegradationGuard` |
+| --- | --- | --- |
+| 看什么 | 存活：401/404/5xx、超时、`max_tokens=1` 完形 | 合规：空答案、回声、无法识别的弃权 |
+| 能得出什么 | 这个端点挂了 | 这个 reader 产不出解析器要读的东西 |
+| 恢复 | 冷却后自动 | **按构造没有** |
+
+它的双向恢复对它的问法是对的，对本设计是错的：冷却到期只说明端点又答了，而本设计要说的
+是**这个 reader 的输出又变得可读了**，四个信号里没有一个能说这件事。它还有
+`health_check_ignore_transient_errors` 对 429/408——与 `3 of 20` 的下限是同一个洞察，只是用在
+可用性而不是合规性上。
+
+**它还是一个缺口的名字**：Datasumi 的结构化输出taxonomy 有八态（`valid` / `schema_invalid` /
+`malformed_json` / `provider_refusal` / `content_filtered` / `truncated` /
+`tool_call_instead_of_result` / `timeout`），其中 **`truncated` 不在本设计的四个信号里**，而
+「在输出上限被截断、但早期已有可解析答案」正是会静默扣分的那一种。
+
 ## 10. 端侧推理
 
 | 运行时                          | 形态                                         | 关键限制                                                                             | 出处     |
