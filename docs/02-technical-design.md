@@ -3025,6 +3025,138 @@ holdout，因为**没有任何东西被挑选**。
 
 ---
 
+### 9.2 模型可移植性：分类、配置、单向降档，三层都不做搜索
+
+§9.1 回答的是"要不要让参数自己进化"。这一节回答它背后的真需求：**用户拿自己的 LLM 来，cortex 的
+行为怎么保证不变差、且不要求用户先跑一遍测评**。结论是四层机制，其中三层不依赖任何未测量量。
+
+#### 一、模块布局与依赖分层
+
+```
+packages/cortex-eval/src/model-portability.ts     ← 分类器 + 矩阵 + 守门器（纯函数，零依赖）
+packages/cortex-eval/src/index.ts                 ← 公共面：15 个符号
+packages/cortex-ai/src/profile.ts                 ← 已有：reader 身份，无默认模型、无 fallback
+packages/cortex-memory/src/memory.ts#consult      ← P1 接线点：四个信号的产地
+tools/probe-budget.py                             ← 探针预算与可分性算子（退出码即判据）
+```
+
+`model-portability.ts` 放在 `cortex-eval` 而不是 `cortex-ai`，理由是它读的是**本仓已发表的代价**——
+每一条探针引用一个 §13 读数，每一个矩阵格引用一档预算或超时。它不是一个通用的 LLM 适配层，它是这份
+campaign 的证据在部署侧的投影。放进 `cortex-ai` 会让一个通用库依赖一个特定实验的结论。
+
+依赖方向保持不变：`cortex-eval → {cortex-ai, cortex-core}`，`cortex-memory → cortex-eval` 已存在，
+所以接线不需要新的依赖边。
+
+#### 二、分类器：必过子集，不是加权分
+
+```ts
+type CapabilityDimension =
+  | 'format-adherence' | 'abstention-lexicon' | 'step-discipline'
+  | 'context-window'   | 'sampling-stability' | 'latency-envelope';
+
+classifyPortability(report: readonly ProbeOutcome[]): Classification
+```
+
+`Classification` 是**判别联合**，不是 `{bucket, missing}`：
+
+```ts
+| { kind: 'verified';   bucket: PortabilityBucket; blocking: string[]; soft: string[] }
+| { kind: 'unverified'; missing: string[] }
+```
+
+三个设计决定：
+
+| 决定 | 理由 |
+| --- | --- |
+| **必过子集决定档位，不加权求和** | 加权分会让四个好维度盖住那一个让产品说出错误答案的维度。`format-label` 失败不是"80% 的 reader"，是"答案没落到计分器读的字段里" |
+| **`unverified` 不是第四档，是另一种结果** | 有档位就意味着 `configFor` 有一行可读，而"没问过"不该有配置。`configFor` 对它抛错，错误信息点名缺哪几条探针——那就是修复 |
+| **未知 id 忽略，重复 id 报错** | 探针器可以比分类器新（独立部署）；但一条探针两个结果意味着报告说不清观测到的是哪个，分类就会取决于数组顺序 |
+
+失败清单按 `CAPABILITY_PROBES` 顺序输出，不按报告顺序：同一组失败的两份报告必须打印得一样。
+
+#### 三、矩阵：三行，每格带证据等级
+
+```ts
+type ConfigCell<T> = { value: T; evidence: string; scope: EvidenceScope };
+type EvidenceScope = 'arithmetic' | 'measured-single-model';
+```
+
+**故意没有 `measured-cross-model`**：没有一格是跨模型验证过的。一个没有格子能携带的标签留在类型外面，
+比当占位符用诚实。未来某一格要声称跨模型证据，必须拓宽这个类型——而
+`model-portability.test.ts` 有一条断言钉住这个缺席，使拓宽不能是静默的。
+
+七个字段全部是**产品或评测里已经存在的旋钮**（`contextChars` / `promptContract` / `parseTolerance` /
+`abstentionLexicon` / `readerTimeoutMs` / `temperature` / `repetitions`）。矩阵里出现一个代码里没有的机制，
+那就是一份计划，而这份文件是用来替代计划的。
+
+两条不变量写成测试而不是留给 review：**档位变弱时预算不得变宽、超时不得变短**。这是两个争不动的方向。
+
+#### 四、守门器：单向，按 reader，固定平局顺序
+
+```ts
+class DegradationGuard {
+  observe(signal: DegradationSignal | undefined): void
+  get bucket(): PortabilityBucket      // 单调不增
+  get downgrades(): readonly Downgrade[]
+}
+```
+
+| 参数 | 值 | 理由 |
+| --- | --- | --- |
+| 窗口 | 20 次**调用** | 比率的分母是调用；分数 census 的分母是**问题**，两者不能合并（§13.107 已因此赔过一次：census 求和 2,968 对 2,000 题 roster） |
+| 触发 | 3 次 | 一次失败就降档会把 provider 抖动变成永久配置变更；没有下限的比率永不触发。15% 是本仓最大已发表分散（3.2%）的四到五倍 |
+| 方向 | 只降 | 升档需要测量，而守门器按构造看不见正确答案。自己判断"修好了"= 对着正在修的信号做优化（§9.1 拒绝的 L3，低一层） |
+| 粒度 | 每 reader | §13.197：路由双向不同（`TR` +4、`IE` −16）。全局窗口会让一条路由的失败给另一条降档 |
+| 平局 | `SIGNAL_ORDER` 固定 | 否则同样的 20 次调用会降同样的档而有不同的解释——数字对、账不对，而只有账可事后审计 |
+
+#### 五、预算算子：为什么"分类"和"测量"差 66 倍
+
+`tools/probe-budget.py` 三个函数：`p_majority_wrong`（精确二项）、`report_false_pass`、`repetitions_for`，
+以及两个判定：`separation(between, within)` 与 `net_gain(between, residual, false_pass)`。
+
+```
+5 repeats x 6 must-pass probes = 30 calls
+  per-probe error   0.001028
+  report false-pass 0.006151  (target 0.0200)
+  a benchmark of the same roster would be 500 x 4 = 2000 calls and would need ground truth
+```
+
+三条拒绝，退出码 `2`：`--between` 无 `--within`（默认 0 会把每个分类器都报成可分）、`--between` 无
+`--probes`（没定价的分类器是断言）、`--residual > --between`（意味着 guarded 行比什么都不做更糟，是矩阵
+缺陷而非 reader 属性）。不可达的 target 打印**地板**而不是上限。
+
+#### 六、判据必须活在消费它的产物里——本仓第五次同形
+
+`AUDIT-SCORING-RULE-AS-CONDITION.md` 的一般形式是：**只活在一份文档里、不活在消费这个数字的产物里的限定
+条件，会在第二个消费者那里丢失。** 这里的版本是：如果"分类器需要 `between > within`"只写在审计文档里，
+矩阵会照常被发布。
+
+所以它落在两个地方：`separation()` 是**唯一的入口**（`configFor` 不接受未分类结果，而分类结果要能用于部署
+必须先过 `separation`），以及 `PORTABILITY_MATRIX` 顶部那句"read the `evidence` field before changing its
+value"。前者是机制，后者是文档——而这一节记录的正是文档那一半在过去四次里都不够用。
+
+#### 七、接线点与已知陷阱
+
+P1 接线到 `#consult` 时要产出四个信号，而那里有一个本仓已经付过代价的陷阱：
+
+```ts
+async #consult(prompt: string, route: TurnCapRoute): Promise<Answer> {
+  const raw = await this.#readerFor(route).complete(prompt);
+  this.#lastRawOutput = raw;            // 原始文本已保留，信号可从它派生
+  return parseAnswer(raw);
+}
+```
+
+- `empty-completion` 可从 `raw.trim().length === 0` 直接判；
+- `deadline-exceeded` 由适配器抛出，不需要解析；
+- `parse-failed` 需要一条判定"解析不可信"的规则（例如输出含契约文本而答案取自末行），新规则必须有自己的
+  测试，因为它会成为降档依据；
+- `abstention-unrecognised` 需要词表，而词表是**猜**——所以它必须默认为 `false`（不产生信号），只在有人
+  测量过之后才打开。一个默认触发降档的词表会让守门器变成随机配置发生器。
+
+**单位不能合并**：守门器的窗口是调用，census 的分母是问题。§13.107 的教训是"一个器物的单位换了，而 artifact
+里没有任何字段说分母变了"。
+
 ## 10. 端侧推理
 
 | 运行时                          | 形态                                         | 关键限制                                                                             | 出处     |
