@@ -3775,3 +3775,121 @@ rack in my closet"）。
 本节的每一步都遵循同一条顺序：**先找不变式 → 再用不变式定位环节 → 再量候选改动的"触及对题数" →
 最后才决定发不发**。这个顺序的价值不在正确，而在于**它挡住了一次会掉分的派发**——如果按"§15.2 说有
 10 道该走 operand 契约"直接发，13 道对的题会跟着换契约，而聚合读数只能看到净值，看不出那是 13 换 6。
+
+---
+
+## 第十六节 后端是一个声明，不是一个从主机名猜出来的字段
+
+§15 的结论是"要动的是清单"。这一节处理**在这之前必须解决的一件更基础的事**：产物说不清是哪个后端
+答的，于是"换一个后端"这件事不可派发、不可复现、也不可比较。
+
+### 16.1 缺陷的形状：一个字段装了两种东西
+
+改动前的身份字段是这样算出来的：
+
+```ts
+const provider = /(^|\.)deepseek\.com$/i.test(hostOf(baseUrl)) ? 'deepseek' : 'openai-compatible';
+```
+
+读两遍就能看出问题：**同一个字段，对默认厂商返回的是厂商名，对其他所有厂商返回的是协议名。** 于是
+
+| 情形 | 字段值 | 这个值能区分什么 |
+| --- | --- | --- |
+| `api.deepseek.com` | `deepseek` | 能，但它就是默认值 |
+| `open.bigmodel.cn` | `openai-compatible` | 不能：任何 OpenAI 兼容服务都叫这个 |
+| `proxy.internal` | `openai-compatible` | 同上 |
+
+**取值域里唯一有信息量的那个值，只在"什么都没改"的时候出现。** 这不是覆盖不足，是取值本身不可比较。
+
+同时，凭据的变量名是**写死**的：
+
+```ts
+const apiKey = env['DEEPSEEK_API_KEY'];   // 无论 baseUrl 指向哪里
+```
+
+两条后果都能观测到：换一家必须把密钥塞进一个以第一家命名的变量；密钥缺失时的报错把人指向**错的那
+一家**。
+
+### 16.2 修法：把"声明的"和"到达的"拆成两个事实
+
+```ts
+interface ReaderProvider {
+  readonly id: ReaderProviderId;            // 声明的厂商：deepseek | zhipu | custom
+  readonly model: string;                   // 模型，与厂商同源解析
+  readonly baseUrl: string;                 // 解析出的端点
+  readonly credentialVariable: string;      // 凭据所在的变量名（即使为空也给出名字）
+  readonly endpoint: EndpointCheck;         // 'matches' | 'overridden' | 'none'
+}
+```
+
+四个设计决定，每个都能被否证：
+
+**（1）`endpoint` 是三态，不是布尔。** `'none'` 属于 `custom`——它对自己的端点**不作声明**，所以既没
+有东西可校验，也没有东西要报告。把它渲染成 `'overridden'` 会给每一次配置正确的自定义运行挂一条
+告警；而告警一旦常态出现，就再也没人看它。
+
+**（2）`credentialVariable` 在凭据缺失时仍返回值名。** 解析函数**不读凭据**（`requireKey` 才读），
+理由和 `resolveEmbeddingProvenance` 一样：产物身份也要在"正因为凭据是错的所以在跑"的路径上可用。
+但拒绝时必须点名——"找不到凭据"会让人翻遍环境变量，`ZHIPU_LLM_API_KEY is required (reader provider
+"zhipu")` 不会。为此变量表用**非空元组** `readonly [string, ...string[]]` 声明：这样"第一个元素一定
+存在"是类型事实，回退分支不需要 `?? '<字面量>'`，也就没有一条永远跑不到、要靠覆盖率报告解释的臂。
+
+**（3）`CORTEX_READER_*` 是通用覆盖，`ZHIPU_LLM_*` 是厂商自己的。** 两个都有，因为它们的用途不同：
+前者是用户不改代码扩展 factory 的入口，后者是该厂商的正式名字。**但不能复用 `ZHIPU_BASE_URL`**——
+那是**嵌入** factory 的端点变量，共用一个名字会让"只动嵌入"的派发悄悄把 reader 也搬走，而产物会显示
+两个后端同时变了，却只有一次意图。
+
+**（4）厂商名走 `model` 的取值，不新增输入。** 这条不是审美：
+
+```
+benchmark-cortex-memory.yml 声明 24 个 workflow_dispatch 输入
+tools/__tests__/test_dispatch_inputs.py::test_no_workflow_sits_at_the_input_ceiling
+    在 25 时报错
+```
+
+上限是 25，**而项目自检要求在 24**——留一格余量，让下一个轴不必在派发时和 API 吵。这是第三次被迫把
+状态塞进既有取值（§13.188 的 turn-cap 宽度、§13.197.4 的 thinking reach），第三次也是语法让它没有
+变成自由文本字段：
+
+| `model` 取值 | 厂商 | 模型 |
+| --- | --- | --- |
+| `deepseek-chat` | `deepseek` | `deepseek-chat` |
+| `zhipu:glm-4.6` | `zhipu` | `glm-4.6` |
+| `zhipu:` | `zhipu` | 该厂商默认 |
+| `custom:qwen2.5:7b` | `custom` | `qwen2.5:7b`（**按第一个冒号切**） |
+| `qwen2.5:7b` | — | **拒绝**，报错里给出 `custom:qwen2.5:7b` |
+
+最后一行是最值得写的那一行：`qwen2.5:7b` 看起来像厂商前缀，实际是 tag 分隔符。默默退回"当模型 id
+用"会产生一次**不可免费重跑**的错误运行，所以它抛，而且抛出的信息**教人怎么改**。
+
+### 16.3 向后兼容是一个可检验的性质，不是一句承诺
+
+未加前缀的取值解析为 `deepseek`，`deepseek` 隐含域包含 `api.deepseek.com`，于是**每一份已归档配置**
+都渲染成
+
+```
+reader=deepseek:<model>@api.deepseek.com/thinking=…/temp=…
+```
+
+——与改动前**逐字节相同**。`/endpoint=override` 只在声明与到达不一致时出现，而已归档运行没有这种
+情形。这条性质由三个测试钉住（默认身份、渲染行、`custom` 不挂告警），而不是靠"应该没问题"。
+
+### 16.4 顺手修掉的一处静默断裂
+
+`rerank-factory` 的 `llm` 后端把 `DEEPSEEK_MODEL` **原样**当模型 id 用。语法一生效，一次为 **reader**
+选了 `zhipu:glm-4.6` 的派发，会把 `zhipu:glm-4.6` 当模型 id 发给 **reranker** 的端点——在一个派发
+从未提及的阶段失败。它现在走 `readModelSelection`，也就是**同一个解析器**，两个写法都有测试。
+
+这条值得单独写的原因是它是"引入语法"这类改动的典型代价：**每一个读同一个变量的地方都必须跟着改**，
+而那些地方不会自己报错。
+
+### 16.5 验收标准
+
+| 维度 | 标准 | 现状 |
+| --- | --- | --- |
+| 身份可解析 | 三个厂商 + 五种取值形态，各有单测 | 23 条 |
+| 语法的拒绝面 | 未知前缀、空段、tag 误用，各有一条断言消息的测试 | 3 条 |
+| 向后兼容 | 已归档配置的渲染逐字节不变 | 3 条（默认身份 / 渲染行 / custom） |
+| `reader-provider.ts` 覆盖 | 语句/分支/函数/行 ≥95% | 100 / 100 / 100 / 97.36（分支 100%） |
+| 派发面 | 输入数 24，不触 25 | `test_dispatch_inputs.py` 绿 |
+| 包覆盖 | `cortex-eval` 四维 ≥95% | 99.44 / 98.05 / 99.77 / 99.63 |
