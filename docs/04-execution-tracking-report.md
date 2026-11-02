@@ -14942,9 +14942,11 @@ RemLabs 94.6%。
 | 最佳存档读数 | **0.906**（453/500） | `run-41259622431`，带 `maxPromptChars=96000` 与两项偏离 |
 | 注册预算内最佳 | **0.898**（449/500） | `run-41284575092`，TR 94.5% / MR 76.9% |
 | 注册配置读数 | P0 待读（`41488630010`） | 该 arm 第一次"不能是默认值穿了个名字" |
-| SOTA 对手 | **agentmemory V4 96.20%** | 差距 5.6–6.4 pt；其后 Mastra 94.9%、RemLabs 94.6% |
+| 同级（A 级）对手 | **memoricai 85.8%** | 我们注册配置 83.5%，落后 2.3 pt |
+| 公开最高（自报） | **Supermemory 97.0%（GPT-4o）** | 差距 7.2 pt（对 89.8）／13.5 pt（对 83.5）；其后 agentmemory V4 96.2%、Agent Zero 95.6% |
 
-**cortex 目前不是 SOTA。** 就 LongMemEval-S 整体准确率这一项，领先者是 agentmemory V4（96.20%）。
+**cortex 目前不是 SOTA。** 就 LongMemEval-S 整体准确率这一项，同级领先者是 memoricai（85.8%），
+公开最高是 Supermemory 97.0%（自报）。
 
 #### 剩余步骤
 

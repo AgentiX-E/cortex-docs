@@ -2848,7 +2848,8 @@ prompt 用掉了 **99.2% 的房间**，几乎一条答案都没带进去。这�
 | --- | --- | --- |
 | 同级（公开 prompt、官方 judge、500 题）最强 | **memoricai 85.8%** | 我们注册配置 83.5%，落后 **2.3 pt** |
 | 我们最好的实验读数 | **89.8%** | 超过同级全部对手，但那是两项偏离的配置 |
-| 公开最高 | **agentmemory V4 96.2%** | 单一确定性运行、Claude Opus 4.6 读者、六信号检索，可比性最低（C 级） |
+| 公开最高 | **Supermemory 97.0%** | 厂商自报，GPT-4o 读者；同一系统在第三方独立比较里读 81.6%（A 级），四个读数的跨度是 31 点 |
 
-**结论：cortex 目前不是 SOTA。** 就 LongMemEval-S 整体准确率，同级（A 级）领先者是 **memoricai（85.8%）**，
-全榜领先者是 **agentmemory V4（96.2%）**。
+**结论：cortex 目前不是 SOTA。** 就 LongMemEval-S 整体准确率，同级（A 级、可复现）领先者是
+**memoricai（85.8%）**；公开最高是 **Supermemory 97.0%（自报）**，其后 agentmemory V4 96.2%、
+Agent Zero Memory 95.6%。
