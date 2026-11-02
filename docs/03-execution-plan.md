@@ -2075,3 +2075,58 @@ B 题的 prompt，且什么都不抛。审计把这条写清楚了。
 - **不**登记 8 是正确的宽度。宽度取决于 provider 的拒绝率，而那个数现在由 `transportRetry.rateLimited` 量。
 - **不**登记并发对打分无影响。超时是一条打分策略，所以摘要比的是答案而不是墙钟。
 - **不**在证明落地前改默认值。默认保持 1，旗标存在，默认不动。
+
+### 14.23 派发结果回来了：那条 429 是假造的
+
+`41393748964`（267 分钟，`failure`）的值不在它测到的东西，而在它**没测到却说自己测到了**的东西。
+
+#### 产物自相矛盾
+
+| 读数 | 值 | 出处 |
+| --- | --- | --- |
+| `calls` / `attempts` | 2892 / 2892 | 全进程没有第二次请求 |
+| `retried` / `rateLimited` | 0 / 0 | 没有任何尝试被回答 429 |
+| 错误 | `LLM request failed: 429 ` | 一个"429"杀死了运行 |
+| 最后一条进度 | `q=326 +3109 s`，死亡 `+3242.8 s` | 失败尝试耗时 **133.8 s** |
+
+两组读数不可能同时为真——除非那个状态码是**客户端自己造的**。它确实是：`retry.ts` 在"重试被拒且没有 response"时返回
+`new Response(null, { status: 429 })`。
+
+#### 三处修法
+
+| 位置 | 改动 |
+| --- | --- |
+| `retry.ts` | 无 response 时**重抛传输错误**（带 `retryExhausted`），不再伪造状态码 |
+| `retry.ts` | `refusedCalls` 第四类 + `RetryRefusal`（三种原因、`retryAfterMs`、`remainingMs`）；未 settle 的调用只记一类 |
+| `openai-compatible.ts` / `llm-factory.ts` | 拒绝原因进消息；thinking 模式预算 = `300 s + 120 s`，使预算撑得起一次满长度尝试之后的重试 |
+
+#### 量出来的数（本地复现，对着构建产物）
+
+| 夹具 | 修前 | 修后 |
+| --- | --- | --- |
+| 传输失败 + 预算耗尽 | 返回伪造 429，`cleanCalls 1` | **reject**，`socket hang up`，`exhaustedCalls 1` |
+| `429` + `Retry-After: 3600` | 返回 429，`rateLimited 1`、`cleanCalls 1` | `refusedCalls 1`，消息含 `retry-after-beyond-budget` + `the provider asked for 3600 s` |
+| `maxRetries: 0` 对 `503` | `cleanCalls 1` | `refusedCalls 1`，原因 `attempts-exhausted` |
+
+#### 判断与代价
+
+**撤回了 P1"按 `rateLimited` 重定上限"。** 它要调的那个读数是假的。给一个梯子修不好的故障配更长的梯子，只会让下一次
+派发更贵。
+
+代价：`retry.ts` 的 refusal 语义从"返回最后一个 response"变成"有 response 就返回、没有就抛"。这改变了两个调用点的
+行为，两处都补了测试，其中一条旧测试的前提（伪造状态码存在）被逐字改写——**旧测试断言的是一个缺陷**。
+
+#### 这次运行其实测到了什么
+
+`completed` 里有一整轮成对数据：**500 + 500**。重复 1 死在 350/500。这是本战役第一次在 thinking 模式下拿到完整一轮，
+而它**没有被打分**——`completed` 有写入者、没有读取者。
+
+| 优先级 | 项 | 阻塞 | 规模 |
+| --- | --- | --- | --- |
+| P0 | 用修好的代码再派发一次（产物应带四项计数器 + 拒绝原因） | 无 | 1 次派发 |
+| P1 | `completed` 的评分者：从 partial 的成对答案 + 数据集还原一轮分数 | 需数据集可达 | 工具 + 测试 |
+| P1 | `relevanceTopK` 256 → 512（48,000 预算，预测 `MR ≥ +3`） | 需 P0 读数 | 1 次派发 |
+| P0 | 第二家全量实测（`zhipu:glm-4.6`） | 容量 5.1× | 需并发或更高 TPM |
+| P2 | 并发 A 路线（需求 #12 使能项，已登记 §14.22） | 无 | 代码 + 双跑摘要 |
+| P2 | 引文级 grounded 枚举 | 无 | 代码 |
+| P3 | 数据集摘要钉住并拒绝 | 需 HF 可达 | 代码 |

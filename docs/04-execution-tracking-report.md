@@ -14781,3 +14781,80 @@ Mastra 94.9%、RemLabs 94.6%。
 落地前保持 1。
 
 *状态：已登记，未实现，未派发。*
+
+### §9.178 派发回读：那条 429 是客户端造的，而记录的可信度就是产品的一部分
+
+#### 入口：产物自己和自己矛盾
+
+`41393748964`（267 分钟，`failure`）的第一手材料只有两行：
+
+```text
+{"attempts":2892,"retried":0,"rateLimited":0,...,"calls":2892,"cleanCalls":2892,"exhaustedCalls":0}
+LLM request failed: 429
+```
+
+`attempts === calls` 说明这个进程里没有第二次请求，`rateLimited === 0` 说明没有一次尝试被回答 `429`。所以最后那行
+里的状态码**从未被收到**。它是在 `retry.ts` 里被造的：
+
+```ts
+return withResponse(resFromLastAttempt ?? new Response(null, { status: 429 }), stats);
+```
+
+传输失败没有 response，于是发明一个"好让调用方有状态可依"的 429。**记录从此把一次线上故障归咎于配额。**
+
+#### 复现（修前 / 修后，对着构建产物跑）
+
+| 夹具 | 修前 | 修后 |
+| --- | --- | --- |
+| 传输失败 + 预算耗尽 | 伪造 429，`cleanCalls 1` | **reject** `socket hang up` + `retryExhausted`，`exhaustedCalls 1` |
+| `429` + `Retry-After: 3600` | 真 429，`rateLimited 1`、`cleanCalls 1` | `refusedCalls 1`，消息带 `retry-after-beyond-budget`、`the provider asked for 3600 s` |
+| `429` 无 header | 8 次尝试后 `cleanCalls 1` | `retriedCalls 1`，消息带 `budget-exhausted` |
+| `maxRetries: 0` 对 `503` | `cleanCalls 1` | `refusedCalls 1`，原因 `attempts-exhausted` |
+
+第一条与生产消息**逐字节相同**（空 statusText、无 body），计数器也相同。这不是推断，是复现。
+
+#### 三个缺陷
+
+| # | 缺陷 | 为什么要紧 |
+| --- | --- | --- |
+| a | **伪造状态码** | `429` 是配额最强的信号；更贵的是待办里正躺着"按 `rateLimited` 重定上限"——要调的参数是一个伪造值的函数。**该计划已撤回** |
+| b | **拒绝算作 clean** | `cleanCalls` 的定义是"没有重试就完成"，而被拒的调用没有完成。产物最令人安心的数字在描述一个正在结束的进程 |
+| c | **预算撑不起一次重试** | thinking 单次上限 300 s、预算 120 s：一次满长度尝试花光全部额度，梯子构造上不可达。实测失败尝试 133.8 s（`+3109 s` → `+3242.8 s`） |
+
+#### 交付
+
+| 文件 | 改动 |
+| --- | --- |
+| `cortex-ai/src/retry.ts` | 无 response 时重抛传输错误；`RetryRefusal`（三原因 + 两数）；`refusedCalls` 第四类；未 settle 只记一类 |
+| `cortex-ai/src/llm/openai-compatible.ts` | 转发 `retryBudgetMs`；`describeRefusal` 把原因写进消息 |
+| `cortex-eval/src/llm-factory.ts` | `resolveRetryBudgetMs` = `THINKING_TIMEOUT_MS + DEFAULT_RETRY_BUDGET_MS` |
+| `cortex-eval/src/retrieval-diagnostics.ts` / `report.ts` | 报告携带并渲染第四类；分区改四项 |
+| `tools/readout-arm-run.py` | 读第四类；**双恒等式**（现代产物四项、旧产物三项） |
+| 测试 | TS +9（retry 3、llm 2、factory 2、report 2）；Python +4 |
+
+#### 门禁
+
+| 项 | 读数 |
+| --- | --- |
+| `pnpm check` | **EXIT=0** |
+| TS 单测 | **4,763**（core 828 / storage 118 / ai 283 / eval 2,717 / memory 817） |
+| Python 单测 | **1,375 passed, 1 skipped, 71 subtests** |
+| 覆盖率 | core 98.77/96.29/99.49/99.2；storage 100/99.12/100/100；ai 99.8/98.92/99.04/100；eval 99.44/98.06/99.77/99.63；memory 100/99.5/100/100 |
+| `retry.ts` / `llm-factory.ts` | 100/96.51/100/100、100/100/100/100 |
+| export census | 964 exports，415 orphan（`resolveRetryBudgetMs` 记为 `referenced-locally`） |
+| docs crosscheck | 52 of 55 marker |
+| Dependabot | 两仓 0 待处理 PR / 0 open alert |
+
+#### 位置与剩余
+
+产品完成度 **13/13 = 100%**，可发布信号维持。本轮不是功能，是**归因正确性**：一次失败的运行从此会说出它死于什么，
+而不是笼统报一个 `429`。
+
+这次运行真正测到的：`completed` 里有**一整轮成对数据（500 + 500）**，随后死在第二轮 350/500。thinking 模式下第一次
+拿到完整一轮，**而它没有被评分**——`completed` 有写入者、没有读取者。这是同一形状的第四个实例。
+
+对外数字不变：**89.80%（TR 94.1 / MR 77.5），仍不是 SOTA —— agentmemory V4 96.20%，差 6.40 点**；其后 Mastra 94.9%、
+RemLabs 94.6%。
+
+剩余：**P0** 用修好的代码再派发（产物应带四项计数器与拒绝原因）→ **P1** `completed` 的评分者 → **P1** `relevanceTopK`
+512（预测 `MR ≥ +3`）→ **P0** 第二家全量（容量 5.1×）→ **P2** 并发 A 路线 / 引文级 grounded 枚举 → **P3** 数据集摘要钉住。

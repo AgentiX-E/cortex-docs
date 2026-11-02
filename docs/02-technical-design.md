@@ -4585,3 +4585,94 @@ cortex-memory/benchmark-*.md         absent
 | 13 | `total: 0` 不除零 | `no questions in the dataset` |
 | 14 | 步骤读的 partial 就是上传的那个 | 工作流测试断言 partial 路径匹配上传 glob |
 | 15 | 两个文件都没有时是错误不是沉默 | `::error::neither a report nor a partial record exists` + `exit 1` |
+### 21.10 那个从未被发送的 429
+
+`41393748964` 跑了 267 分钟后失败。产物末尾是这样两行：
+
+```text
+=== transport retry accounting (process-wide) ===
+{"attempts":2892,"retried":0,"rateLimited":0,"retryAfterHonoured":0,
+ "calls":2892,"retriedCalls":0,"cleanCalls":2892,"exhaustedCalls":0,"retryRate":0}
+
+LLM request failed: 429
+```
+
+**按字面读，计数器说 provider 从未限流过**：2892 次调用、每次都在第一次尝试就被服务、0 个 `429`、0 次重试。
+下一行说一个 `429` 杀死了整轮。两者必有一错。
+
+都不错。`attempts === calls === 2892` 说明这个进程里**没有任何一次调用发出过第二个请求**；`rateLimited === 0`
+说明**没有任何一次尝试被回答 `429`**。所以最后一行里的那个状态码从未被收到——它是**在下面一层被造出来的**：
+
+```ts
+// retry.ts，本轮之前
+return withResponse(resFromLastAttempt ?? new Response(null, { status: 429 }), stats);
+```
+
+传输失败没有 response，重试梯子没有东西可返回，于是**发明了一个 `429`**，"好让调用方仍有一个 HTTP 状态可依"。
+调用方把它打印了出来。记录从此把一次线上故障归咎于 provider 的限流器。
+
+#### 复现，而不是推断
+
+对着构建产物跑三组夹具，每组离真实路径只有一行：
+
+| 夹具 | 返回了什么 | 计数器 |
+| --- | --- | --- |
+| 传输失败 + 预算已耗尽 | `new Response(null,{status:429})` → `LLM request failed: 429 ` | `attempts 1, retried 0, rateLimited 0, cleanCalls 1` |
+| `429` + `Retry-After: 200`，预算 120 s | 真实 `429`，立即返回 | `attempts 1, retried 0, rateLimited 1, cleanCalls 1` |
+| `429` 无 header，默认预算 | 8 次尝试 / 120 s 之后 | `attempts 8, retried 7, rateLimited 8, retriedCalls 1` |
+
+第一行与生产消息**逐字节相同**（`429`、空 statusText、无 body），计数器也相同。这就是证据：那次运行死于一个
+伪造的状态码，而两份"互相矛盾"的读数其实是同一件事的两端。
+
+#### 三个缺陷，一条链
+
+| # | 缺陷 | 后果 |
+| --- | --- | --- |
+| a | **伪造状态码** | `429` 是 provider 关于配额最强的信号；把它印在一次停顿上，等于让下一个派发去看限流——而那里什么都没有 |
+| b | **拒绝被记成 clean** | `cleanCalls` 的定义是"没有重试就完成的调用"，而"被回答 `429` 后拒绝重试"没有完成。它照样落在那里，于是产物里最令人安心的数字（2892 次首试即服务）描述的是一个正在结束的进程 |
+| c | **预算撑不起一次重试** | 预算是从第一次尝试起算的；thinking 模式的单次尝试上限是 300 s，预算是 120 s。**一次满长度的尝试就花光了全部额度**，梯子因此在构造上不可达——与 §21.7 的计数缺陷同一个形状，只是换了个参数。实测：失败的那次尝试耗时 133.8 s（最后一条进度 `+3109 s`，死亡 `+3242.8 s`），正好是"长到吃光预算、短到只是一次停顿" |
+
+#### 五处修法
+
+| 位置 | 改动 | 为什么在这里 |
+| --- | --- | --- |
+| `retry.ts` | 无响应时**重抛传输错误**，并挂 `retryExhausted` | 没有 response 就没有状态可报；传输错误是本层唯一能证实的东西 |
+| `retry.ts` | `RetryRefusal` 随 outcome 走：`attempts-exhausted` / `budget-exhausted` / `retry-after-beyond-budget`，带 `retryAfterMs` 与 `remainingMs` | 这三者需要完全不同的动作，在状态码里无法区分 |
+| `retry.ts` | `refusedCalls` 成为**第四个调用类** | 拒绝不是完成，分区必须给它一个位置 |
+| `retry.ts` | 从未拿到响应的调用**只**记入 `exhaustedCalls` | 它以前同时记入 `exhaustedCalls` 与 `retriedCalls`，把用来校验计数器的恒等式弄坏了 |
+| `openai-compatible.ts` | 转发 `retryBudgetMs`；把拒绝原因写进消息 | `41393748964` 只印了一个状态码就停了，每个读者都从它得出了错误结论 |
+| `llm-factory.ts` | `resolveRetryBudgetMs` = `THINKING_TIMEOUT_MS + DEFAULT_RETRY_BUDGET_MS` | 预算与单次上限是**同一个决定**，只有组合点能持有这条不变量 |
+
+分区现在是 `cleanCalls + retriedCalls + exhaustedCalls + refusedCalls === calls`，在 `cortex-ai` 里断言，并由两个
+读取端各自复核——报告端用四项，`--transport` 在产物带该字段时用四项、在产物早于该字段时用三项（**产物不该被一条
+写在它之后的恒等式判为失败**）。
+
+#### 那次运行其实测到了什么
+
+`completed` 里躺着**一整轮重复**：500 条 baseline 答案与 500 条 feature 答案，成对。随后它死在重复 1 的第 350 题。
+重复 0 的每一条已判分答案都在产物里，**而没有任何报告去给它打分**——流水线写 `completed`，没有任何东西读它。
+
+这是本战役同一形状的第四个实例：**有记录，没有评分者**。本轮登记它，不在本轮修它。
+
+#### 撤回了什么
+
+待办的 P1 是"若仍死于 `429`，按 `rateLimited` 读数重定上限"。**撤回。** 它要据以调参的那个读数是假的——根本没有
+限流可量。拿一个伪造的状态码去调预算，只会给一个梯子修不好的故障配更长的梯子。
+
+| # | 性质 | 判据 |
+| --- | --- | --- |
+| 1 | 不存在伪造状态码 | 传输失败 + 预算耗尽 → **reject**，消息为原始 `socket hang up` |
+| 2 | 原因在重抛后存活 | 同一测试断言 `retryExhausted.cause` 与 `.attempts` |
+| 3 | 拒绝不是 clean | `Retry-After: 3600` → `refusedCalls 1`、`cleanCalls 0`、`rateLimited 1` |
+| 4 | 原因被点名并带两个数 | `retry-after-beyond-budget`、`retryAfterMs 3_600_000`、`remainingMs 120_000` |
+| 5 | 次数用尽与预算耗尽分开 | `maxRetries: 0` 对 `503` → `attempts-exhausted`、`rateLimited 0` |
+| 6 | 四类闭合 | 五调用的混合聚合：1 clean + 2 retried + 1 exhausted + 1 refused = 5 |
+| 7 | 未settle只在一个类里 | 旧测试断言双重计数，现在断言 `retriedCalls 0`、`retried 5` |
+| 8 | LLM 消息点名拒绝 | `not retried (retry-after-beyond-budget)`、`the provider asked for 3600 s` |
+| 9 | 适配器转发预算 | 80 ms 预算 + 1 s 退避 → 恰好 2 个请求，`budget-exhausted` |
+| 10 | thinking 的预算撑得起一次重试 | `resolveRetryBudgetMs > resolveTimeoutMs`，写成不等式断言 |
+| 11 | 报告渲染第四类 | 表格行 + `1 calls were refused without a retry` |
+| 12 | 为零时沉默 | 干净运行不出现该句 |
+| 13 | 读取端容忍字段缺席 | 打印 `predates`，不报分区错 |
+| 14 | 现代产物按四项校验 | `NOT A PARTITION: 90 + 5 + 0 + 1 != 100` |
+| 15 | 旧产物按三项校验 | 既有测试的 `90 + 5 + 0 != 100` 仍通过 |
