@@ -14536,3 +14536,91 @@ expect(statSync(WITNESS).mtimeMs).toBe(WITNESS_MTIME_BEFORE);
 #### 文档
 
 `cortex/docs/AUDIT-THE-SUITE-WRITES-THE-TREE.md`（新建），技术设计第二十节。
+
+### §9.174 一次 `429` 结束了一次运行，而本该熬过它的上限从未被够到
+
+#### 入口不是计划表，是一份失败产物
+
+按上一轮的剩余步骤，这一轮该做的是"一次全量 DeepSeek 派发"。派发之前去看了一眼最新一次的运行：
+`41346610318`（20 题探针，`b254e29`，11-01 20:23Z），`completed failure`，跑 6 分 25 秒，停在第 13 题：
+
+```text
+progress: died on cortex-memory run=0 q=13/20 id=6aeb4375 at +385.2s
+LLM request failed: 429
+```
+
+产物里有 `reached: 12`、12 条已判分答案、一份栈。**没有一个数字说明发生过限流。**
+
+#### 两个缺陷
+
+**（一）梯子实测 31 秒，上限写着 120 秒。** 对永远回 429 的 fetch、用默认参数实测：
+
+```text
+status 429  attempts 6  retried 5  rateLimited 6  elapsedMs 31051
+```
+
+退避是 `1+2+4+8+16 = 31 秒`，第六次已经是最后一次——`DEFAULT_MAX_RETRIES` 是 5。上限是梯子的 3.9 倍，
+任何输入都到不了。**这是"用时长替换次数"那个修法自身的缺陷，下沉一层**：次数留下了、并且先咬合，于是那段
+时长在每一次运行里都没被超出过。
+
+**（二）记录写在了先过期的通道里。** `retryStats()` 在本臂入口里只出现一次，在 `catch` 里
+`console.error`。参考管线那一侧的 `benchmark-diagnostics.json` 有 `transportRetry`，本臂从没接过。
+
+#### 修法两半，缺一不可
+
+| # | 改动 | 数 |
+| --- | --- | --- |
+| 1 | `DEFAULT_MAX_RETRIES` 5 → 8 | 8 的几何和 `1+2+…+128 = 255 秒` 第一次超过 120 秒上限 |
+| 2 | 最后一次**计算出的**退避截到剩余量 | 40/80 对 100 毫秒，旧实现停在 40，剩 60% 窗口没用 |
+
+`Retry-After` 仍然整条拒绝：服务端刚说窗口没开，此刻重试是一次已知会被拒的请求；而我们自己的估计是估计，
+预算才是它的天花板。不对称是设计，写在代码注释里。
+
+修后跨度是**恒等式**：`at().at(-1) === DEFAULT_RETRY_BUDGET_MS`，尝试时刻
+`[0, 1k, 3k, 7k, 15k, 31k, 63k, 120k]`。旧值 31 秒留作对照（`maxRetries: 5`）。
+
+#### 产物字段 `transportRetry`
+
+九个计数器，**无条件写入**——与 `llmUsage` 的缺席规则相反：重试计数在 provider 回答之前自增，所以一次判过
+分的运行不可能为 0，`calls: 0` 读作"计数器没接上"，字段缺席只读作"这份产物早于这个字段"。
+
+文档印三种读数而不是八个数字：`retried: 0`（没被限流）/ `retried > 0, rateLimited: 0`（传输失败或 5xx）/
+`rateLimited > 0`（被限流，代价是墙钟）。另有两种形状印成失败：三个调用类不闭合、完成运行里出现非零
+`exhaustedCalls`（不可能，耗尽会抛）。
+
+`resetRetryStats()` 放在 pass 之前。测试夹具先做一次真实重试再调用本臂，断言产物为 0——**夹具的形状本身是
+判据**：从零开始的夹具对"没有 reset"的实现同样会通过。
+
+`tools/readout-arm-run.py --transport` 三态：`ok` / `absent`（旧产物，退出 2）/ `corrupt`（块在但读不出，
+退出 2，且提示"不是旧产物"）。缺席与损坏是两个答案，折叠成一个会让坏生产者躲在旧产物的借口后面。
+
+#### 变异检验
+
+把 `formatAblationReport` 里那一行渲染调用关掉：8 条测试里 7 条失败，唯一通过的是"没有这个字段时不印这一
+节"——正是该通过的那一条。
+
+#### 门禁
+
+| 项 | 读数 |
+| --- | --- |
+| `pnpm check` | **EXIT=0** |
+| TS 单测 | **4,751**（core 828 / storage 118 / ai **278**，+5 / eval **2,710**，+10 / memory 817） |
+| Python 单测 | **1,342**（+11） |
+| 覆盖率 | core 98.77/96.29/99.49/99.2；storage 100/99.12/100/100；ai 99.79/**100**/99.01/100；eval 99.44/98.06/99.77/99.63；memory **100/99.5/100/100** |
+| `retry.ts` 单文件 | **100 / 100 / 100 / 100** |
+| docs crosscheck | 52 of 55 marker（3 处此 checkout 无值） |
+| export census | 416 孤儿：一条离开（`TransportRetryReport` 有了 caller），零新增 |
+| Dependabot | 0 待处理 PR；0 条 open alert（两仓） |
+
+#### 位置与剩余
+
+产品完成度 **13/13 = 100%**，可发布信号维持。本轮新增的保证不是产品功能，是**可测性**：一次运行现在能说出
+它被限流过多少次、赔了多少墙钟——在此之前这个数字只存在于会过期的日志里。
+
+对外数字不变：**89.80%（TR 94.1 / MR 77.5），仍不是 SOTA —— agentmemory V4 96.20%，差 6.40 点**；
+其后 Mastra 94.9%、RemLabs 94.6%。
+
+剩余：**P0** 一次全量 DeepSeek 派发（299.6 min < 340 min，产物将带 `transportRetry` + `windowComposition`）
+→ **P1** `relevanceTopK` 512（需 P0 的前置读数）→ **P0** 第二家全量（容量 5.1× 阻塞）→ **P1** 若 P0 仍死在
+429，按 `rateLimited` 重定上限 → **P1** 计数契约 delta 步 → **P2** 引文级 grounded 枚举 / `answerWithTrace`
+并发 → **P3** 数据集摘要钉住。

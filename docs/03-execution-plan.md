@@ -1873,3 +1873,53 @@ P1 在实现之前先被否证**——而否证它的证据就在两份已归档
 | P2 | 引文级 grounded 枚举 | 无 | 代码 |
 | P2 | `answerWithTrace` 解锁并发（336 → 42 分钟） | 无 | 代码 + 10 分钟验证 |
 | P3 | 数据集摘要钉住并拒绝 | 需 HF 可达 | 代码 |
+
+### 14.19 派发前先去看了一眼上一份失败产物：`429` 与一条够不到的重试上限
+
+本轮的入口不是计划表，是一份失败产物。`41346610318`（20 题探针，11-01 20:23Z）在 6 分 25 秒后停在
+`LLM request failed: 429`，留下 12 条已判分答案和一份栈。按计划这一轮该做的是"一次全量 DeepSeek 派发"，
+但那份产物说明：**一次 429 就能让五小时的派发全损，而产物里没有一个数字说明发生过限流**。
+
+于是顺序调换：先修存活与记录，再派发。理由是派发是稀缺资源（一次 300 分钟、一次机会），而缺陷是确定的。
+
+#### 改动表
+
+| 文件 | 改动 | 为什么 |
+| --- | --- | --- |
+| `packages/cortex-ai/src/retry.ts` | `DEFAULT_MAX_RETRIES` 5 → **8** | 5 的几何和是 31 秒，120 秒的上限永远够不到 |
+| 同上 | 最后一次计算退避**截到剩余量**（`Retry-After` 仍然整条拒绝） | 倍增很少刚好花完预算：40/80 对 100 停在 40，剩 60% |
+| `packages/cortex-eval/src/report.ts` | `AblationReport.transportRetry?`、`attachTransport`、`transportRetryLines` | 计数只在 stderr 上等于不存在；文档印"三种读数"而不是八个数字 |
+| `packages/cortex-eval/src/bench-memory-arm.ts` | pass 之前 `resetRetryStats()`；pass 之后 `attachTransport` | 计数器是进程级的，不 reset 会把预检残值当测量 |
+| `packages/cortex-eval/src/retrieval-diagnostics.ts` | `TransportRetryScope.provider` 增加 `'run'` | 计数无法按 provider 拆，说成 `llm` 是报告一个无法证实的数 |
+| `tools/readout-arm-run.py` | 新增 `--transport`（三态：ok / absent / corrupt） | 加了字段没人读就是下一个惰性配置；缺席与损坏是两件事 |
+| `.github/workflows/benchmark-cortex-memory.yml` | 成本报告步骤追加 `--transport` | 与 `--spend` 并排：花费是"返回了的调用"，墙钟是"发出的请求" |
+| `tools/export-census-baseline.json` | 重建：`TransportRetryReport` 离开孤儿名单，无新增 | 有了 caller；账本四个视图一致 |
+
+#### 量出来的数
+
+| 读数 | 值 | 出处 |
+| --- | --- | --- |
+| 默认参数下梯子的实际跨度 | **31,051 ms** | 对永远回 429 的 fetch 实测 |
+| 注释与登记承诺的跨度 | 120,000 ms | `DEFAULT_RETRY_BUDGET_MS` |
+| 比值 | **3.9×** | 上限在任何输入下都够不到 |
+| 修复后跨度 | 恰好 120,000 ms | 恒等式断言：最后一次尝试时刻 === 上限 |
+| 旧跨度作为对照 | 31,000 ms | `maxRetries: 5` 显式点名时仍然如此 |
+
+#### 这一轮不派发的判断，以及它的代价
+
+派发被推后，代价是一次派发的时间窗。换来的是：下一次派发如果仍死在 429，产物会带着
+`rateLimited / retriedCalls` ——也就是"120 秒是不是对的数"这个问题的答案。没有这两个数，再派发一次也只是
+把同一个未知重复一遍。
+
+#### 剩余步骤
+
+| 优先级 | 项 | 阻塞 | 规模 |
+| --- | --- | --- | --- |
+| P0 | 一次全量 DeepSeek 派发（带 `transportRetry` + `windowComposition`） | 无（299.6 min < 340 min） | 1 次派发 |
+| P1 | `relevanceTopK` 256 → 512 | 需要 P0 的前置读数 | 1 次派发 |
+| P0 | 第二家全量实测（`zhipu:glm-4.6`） | 容量 5.1×（1.41 q/min） | 需更高 TPM 档 |
+| P1 | 若 P0 仍死在 429：按 `rateLimited` 读数重定上限 | 需要 P0 的产物 | 1 个数 + 1 次派发 |
+| P1 | 计数契约加 delta 步 | 无 | 代码 + 1 次派发 |
+| P2 | 引文级 grounded 枚举 | 无 | 代码 |
+| P2 | `answerWithTrace` 解锁并发（336 → 42 分钟） | 无 | 代码 + 10 分钟验证 |
+| P3 | 数据集摘要钉住并拒绝 | 需 HF 可达 | 代码 |
