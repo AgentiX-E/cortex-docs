@@ -14691,3 +14691,62 @@ Mastra 94.9%、RemLabs 94.6%。
 剩余：**P0** 读 `41393748964` 产物（`transportRetry` + `windowComposition`）→ **P1** `relevanceTopK` 512 →
 **P0** 第二家全量（容量 5.1× 阻塞）→ **P1** 若仍死在 429 按 `rateLimited` 重定上限 / 计数契约 delta 步 →
 **P2** 引文级 grounded 枚举、`answerWithTrace` 并发 → **P3** 数据集摘要钉住。
+
+### §9.176 上一轮加的字段，没有人读——把测量接上读取端
+
+#### 入口：把上一轮的交付对着流水线再读一遍
+
+`9.175` 的结论是"失败路径现在带着计数器"。本轮第一步不是写代码，而是问了一句：**谁在读它？** 答案是没有。审计
+步骤拿的是 `benchmark-cortex-memory-ablation-report.json`，而失败运行不写这个文件——它在"文件不存在"上退出，
+同时那次失败唯一留下的 `benchmark-cortex-memory-partial.json` 就在旁边，没人打开。
+
+**一个没有读者的字段，与没有字段是同一种缺陷，只晚一个 commit。** 这已经是同一形状的第三轮：够不到的梯子
+（`9.174`）、没人写的记录点（`9.175`）、没人调用的读取端（本轮）。
+
+#### 交付
+
+| 文件 | 改动 |
+| --- | --- |
+| `tools/readout-arm-run.py` | `--partial` 与 `partial_section`：范围 + 复用 `transport_section` 的计数器读数 |
+| 同上 | 分支放在 roster 守卫**之前**（partial 无 roster），`completed`/`transportRetry` 在读取端可选 |
+| `.github/workflows/benchmark-cortex-memory.yml` | 审计步骤按文件分支；两文件皆无 → `::error::` + `exit 1` |
+| `tools/__tests__/test_readout_arm_run.py` | +27 条（`TestWhatAFailedRunLeftBehind`） |
+| `tools/__tests__/test_artifact_audit_gate.py` | +2 条（分支路径匹配上传 glob；两文件皆无不得沉默） |
+
+#### 用归档产物当夹具，两条真实形状把接口改了一次
+
+| 产物 | 键数 | 打印出的读数 | 它逼出的设计 |
+| --- | --- | --- | --- |
+| `run-41346610318` | 7（含 `completed: []`） | `12 of 20 (60.0%)`，baseline 20 / feature 12 | 范围要印成占比：`12` 单独读不出分母是 20 还是 500 |
+| `cortex-run-38941095220-partial` | 6（无 `completed`） | `390 of 500 (78.0%)`，`run: 1` | **`completed` 必须可选**，否则读取器拒绝全部归档；且 `run: 1` 足以证明 repetition 0 两侧都完成 |
+
+第二条是这一轮唯一一次接口返工：最初 `PARTIAL_REQUIRED` 里含 `completed`，对着真实归档一跑才发现——**要求它的
+检查会在字段出现之后写的每份产物上通过、却拒绝唯一存在的失败记录**。
+
+#### 门禁
+
+| 项 | 读数 |
+| --- | --- |
+| `pnpm check` | **EXIT=0** |
+| TS 单测 | **4,754**（core 828 / storage 118 / ai 278 / eval 2,713 / memory 817） |
+| Python 单测 | **1,371 passed, 1 skipped, 71 subtests**（+29） |
+| 覆盖率 | core 98.77/96.29/99.49/99.2；storage 100/99.12/100/100；ai 99.79/**100**/99.01/100；eval 99.44/98.06/99.77/99.63；memory **100/99.5/100/100** |
+| 新 Python 分支 | `partial_section` 的每个分支都被打到（报告形状 / 缺键 / 不可读范围 / 空 system / `total: 0` / `completed` 四态 / 计数器三态） |
+| shell interpolation guard | 21 fragment clean（61 run block） |
+| docs crosscheck | 52 of 55 marker |
+| Dependabot | 0 待处理 PR；0 条 open alert（两仓） |
+
+#### 位置与剩余
+
+产品完成度 **13/13 = 100%**，可发布信号维持。本轮没有动任何指标：它把"一次失败运行留下了什么"从**写了但没人读**
+变成**读得出来**，包括那份 78.0% —— 那是 `38941095220` 死了三个小时之后留下的、当时被完整丢弃的那一侧。
+
+派发：`41393748964`（`64144ecd`，`--set thinking=multi-session+temporal`）仍在跑，已 30+ 分钟。它跑的是
+`--partial` 分支之前、但 `transportRetry`（报告路径）之后的代码，所以它的产物会是新旧两套记录点的第一个实测样本。
+
+对外数字不变：**89.80%（TR 94.1 / MR 77.5），仍不是 SOTA —— agentmemory V4 96.20%，差 6.40 点**；其后
+Mastra 94.9%、RemLabs 94.6%。
+
+剩余：**P0** 读 `41393748964` 产物 → **P1** `relevanceTopK` 512 → **P0** 第二家全量（容量 5.1× 阻塞）→
+**P1** 若仍死在 429 按 `rateLimited` 重定上限 / 计数契约 delta 步 → **P2** 引文级 grounded 枚举、`answerWithTrace`
+并发（336 → 42 分钟）→ **P3** 数据集摘要钉住。

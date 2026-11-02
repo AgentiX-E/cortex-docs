@@ -4517,3 +4517,71 @@ cortex-memory/benchmark-*.md         absent
 | 5 | 什么都没测到就什么都不附 | baseline 侧死在第 0 题、进程里仍有一次真实重试：`partial` 缺席 |
 | 6 | 漏斗不做 reset | 变异体在读取前插 `resetRetryStats()`，第 2 行失败（`expected +0 to be 2`） |
 | 7 | 去掉附着只错在该错的行 | 变异体去掉附着：第 1、4 行失败，第 5 行仍通过——配对正确 |
+### 21.9 记录要有读者，否则字段是惰性的
+
+`21.8` 把计数器挂上了 partial。**流水线里没有任何东西读它**：审计步骤拿到的是
+`benchmark-cortex-memory-ablation-report.json`，而失败运行不写这个文件，所以它以"文件不存在"退出——同时，那次
+失败唯一留下的产物就在旁边，没人打开。
+
+**一个没有读者的字段，与没有字段是同一种缺陷，只晚一个 commit。** 本战役已经连续三轮记到这个形状：够不到的
+梯子、没人写的记录点、没人调用的读取端。
+
+#### `--partial`：读数分成两半
+
+```text
+=== partial measurement (the run did not finish) ===
+  died on: cortex-memory, repetition 0
+  reached: 12 of 20 questions (60.0% of it)
+  answers kept -- baseline: 20, feature: 12
+  repetitions finished before it: 0 -- the failure was in the first repetition, so
+  nothing earlier was lost with it
+```
+
+计数器那半直接复用 `transport_section`（不重写），所以"被限流 / 重试但不是 429 / 干净"三种读数不会在报告读取端
+与失败读取端之间漂移。新加的只有报告端无从知道的**范围**。
+
+#### 夹具用归档产物，因为两种形状都在归档里
+
+| 产物 | 键 | 它证明了什么 | 它没带什么 |
+| --- | --- | --- | --- |
+| `run-41346610318` | 7 个，含 `completed: []` | 12/20 已判分，baseline 完整（20 条） | 计数器（写在它们之前） |
+| `cortex-run-38941095220-partial` | 6 个，无 `completed` | `run: 1`，即 repetition 0 在两侧都跑完了 | 那两千条答案，以及承载它们的字段 |
+
+第二条正是"`completed` 在读取端必须是可选"的理由：`reached`/`total`/`run` 与两个答案数组是必需，`completed` 与
+`transportRetry` 不是。要求 `completed` 的读取器会把**唯一的那些失败记录**判成"不是 partial"——一种在字段出现
+之后写的每份产物上都通过、却拒绝全部归档的检查。
+
+#### partial 不能提供的四种读数
+
+每一种都会产出一个看起来像测量值的数，所以逐条点名而不是留白：
+
+| 不可提供 | 为什么 |
+| --- | --- |
+| 准确率 | 该产物的 baseline 有全部 20 条答案，单独给 baseline 打分得到的是一个真实但不属于任何一臂的比率 |
+| `delta` | 它减的是同一索引上的两个聚合，短的一侧会让它变成对一次从未配对的比较做算术 |
+| 每能力表 | 未答到的能力渲染成 `0/0`，与"测到 0"逐字节相同 |
+| "范围 0" | 读取器被指向一份报告时会打印 `0 of 0`，而那份报告答满了每一题——所以两个文件按名字区分，报告被拒绝 |
+
+#### 工作流按分支走，而不是在缺文件上失败
+
+审计步骤现在先看哪个文件存在：有报告 → 照旧 `--audit`；没有报告但有 partial → `--partial`，并打一行
+`::notice::` 说明走了哪个分支；两者都没有 → `::error::` 并 exit 1，因为一次两个文件都没留下的运行**什么都没留下**，
+而这正是 `21.8` 要防的那个缺陷。
+
+| # | 性质 | 判据 |
+| --- | --- | --- |
+| 1 | 范围读成占比 | `reached: 12 of 20 questions (60.0% of it)` |
+| 2 | 两侧保住的答案都计数 | `answers kept -- baseline: 20, feature: 12` |
+| 3 | 三种不可提供的读数被点名 | `ungraded`、`delta … never happened`、`0/0` |
+| 4 | 完整报告被拒绝而不是读成空 | `--partial` 指向合成报告：exit 2 + `this is a complete report` |
+| 5 | 无 `completed` 仍能报出完成的重复次数 | `run: 1` 打印 `1 (the ordinal says 0..0 …)` |
+| 6 | 无 `completed` 且 `run: 0` 说"未记录" | 缺席不被印成 `0` |
+| 7 | 完成的重复逐条带答案数 | `run 0: 3 + 3 answers` |
+| 8 | 计数器缺席永不为零 | `not in this record … predates the field`，且没有 `nothing was throttled` |
+| 9 | 计数器在场时用同一套三种读数 | `throttled 80 of 180 requests`、`provider: run` |
+| 10 | 损坏块不以 0 退出 | 打印范围 **且** exit 2 + `PRESENT AND UNREADABLE` |
+| 11 | 范围不能是布尔 | `reached: true`、`-1`、`"20"`、`1.5`、非列表答案都 exit 2 |
+| 12 | 每个必需键缺席时被点名 | 六个参数各一条 |
+| 13 | `total: 0` 不除零 | `no questions in the dataset` |
+| 14 | 步骤读的 partial 就是上传的那个 | 工作流测试断言 partial 路径匹配上传 glob |
+| 15 | 两个文件都没有时是错误不是沉默 | `::error::neither a report nor a partial record exists` + `exit 1` |

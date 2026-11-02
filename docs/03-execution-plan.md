@@ -1973,3 +1973,52 @@ P1 在实现之前先被否证**——而否证它的证据就在两份已归档
 | P2 | 引文级 grounded 枚举 | 无 | 代码 |
 | P2 | `answerWithTrace` 解锁并发（336 → 42 分钟） | 无 | 代码 + 10 分钟验证 |
 | P3 | 数据集摘要钉住并拒绝 | 需 HF 可达 | 代码 |
+
+### 14.21 上一轮加的字段没有读者：`--partial`
+
+`14.20` 把 `13.216.8` 的计数器挂上了 partial。这一轮把它对着流水线读了一遍：**没有任何东西读它**。审计步骤拿到
+的是报告文件，失败运行不写报告，于是它在"文件不存在"上退出，而那次失败唯一留下的产物就在旁边没人打开。
+
+所以本轮的改动不是新增测量，而是**把已有测量接上读取端**——一个没有读者的字段与没有字段是同一种缺陷。
+
+#### 改动表
+
+| 文件 | 改动 | 为什么 |
+| --- | --- | --- |
+| `tools/readout-arm-run.py` | `--partial` + `partial_section` | 范围是报告端无从知道的东西；计数器那半复用 `transport_section`，两种读数不会漂移 |
+| 同上 | 分支**在 roster 守卫之前** | partial 既无 `questions` 也无 `ablation`，守卫会对着它说一句真话但答错对象 |
+| 同上 | `completed` / `transportRetry` 在读取端**可选** | 归档里 `cortex-run-38941095220-partial` 只有 6 个键，要求 `completed` 会把唯一存在的失败记录判成"不是 partial" |
+| `.github/workflows/benchmark-cortex-memory.yml` | 审计步骤按文件分支：报告 → `--audit`；partial → `--partial`；都没有 → `::error::` + exit 1 | "两个文件都没留下"和"读取器没话说"必须可区分 |
+| `tools/__tests__/test_readout_arm_run.py` | 新增 27 条 | 夹具直接用两份归档产物，其中一条是 `run: 1` 无 `completed` 的真实形状 |
+| `tools/__tests__/test_artifact_audit_gate.py` | 新增 2 条 | 步骤读的 partial 必须就是上传的那个；两文件皆无时不得沉默 |
+
+#### 量出来的数
+
+| 读数 | 值 | 出处 |
+| --- | --- | --- |
+| `41346610318` 的范围 | 12 / 20 = **60.0%** | `run-41346610318/benchmark-cortex-memory-partial.json` |
+| 同一次：两侧保住的答案 | baseline **20** / feature **12** | 同上（baseline 完整，正是不能单独打分的那半） |
+| `38941095220` 的范围 | 390 / 500 = **78.0%**，`run: 1`，无 `completed` | `/workspace/cortex-run-38941095220-partial.json` |
+| 该记录能证明的 | repetition 0 在**两侧都完成**，它的两千条答案不在文件里 | `run: 1` 的序数含义 |
+| 新 Python 测试 | **29**（27 `--partial` + 2 工作流） | `1371 passed, 1 skipped`（+29） |
+
+#### 判断与代价
+
+`--partial` 在计数器块存在但读不出时 **打印范围并以 exit 2 退出**：范围是真的，不该因为另一个字段坏掉就被扣下；
+但那份记录的全部目的是解释一次失败，它的计数块读不出是生产者缺陷，不能因为句子其余部分可读就报 0。
+
+代价：工作流多了一条分支，而分支是那种"写下来就会腐烂"的东西，所以三条断言把它钉在 YAML 上（`--partial` 存在、
+路径匹配上传 glob、两文件皆无时 `::error::` + `exit 1`）。
+
+#### 剩余步骤（顺序未变）
+
+| 优先级 | 项 | 阻塞 | 规模 |
+| --- | --- | --- | --- |
+| P0 | 读 `41393748964` 产物（`transportRetry` + `windowComposition`） | 运行中（已跑 30+ 分钟） | 已派发 |
+| P1 | `relevanceTopK` 256 → 512（48,000 预算，预测 `MR ≥ +3`） | 需 P0 读数 | 1 次派发 |
+| P0 | 第二家全量实测（`zhipu:glm-4.6`） | 容量 5.1×（1.41 q/min） | 需更高 TPM 档 |
+| P1 | 若 P0 仍死在 429：按 `rateLimited` 读数重定上限 | 需 P0 产物 | 1 个数 + 1 次派发 |
+| P1 | 计数契约加 delta 步（`ENUMERATION_CONTRACT` 第 2 步加"增/删/替换"） | 需派发验证 | prompt + 1 次派发 |
+| P2 | 引文级 grounded 枚举 | 无 | 代码 |
+| P2 | `answerWithTrace` 解锁并发（336 → 42 分钟） | 需要 60 题一致性证明 | 代码 + 10 分钟验证 |
+| P3 | 数据集摘要钉住并拒绝 | 需 HF 可达 | 代码 |
