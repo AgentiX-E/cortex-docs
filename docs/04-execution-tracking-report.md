@@ -14893,3 +14893,63 @@ RemLabs 94.6%。
 的区间。
 
 门禁：`pnpm check` **EXIT=0**；TS **4,763**；Python **1,375**；推送 `cortex` → `e280a622`。
+
+### §9.181 那次 10.8% 不是回归，是一个没带参数的派发
+
+`41431790794` 完成、上传 73 MB、读数 **10.8%**。注册配置 500 题读 **83.4%**。72.6 个点的落差在最初几分钟里被读成
+上一小时 `retry.ts` / `llm-factory.ts` / 报告渲染器改动的灾难性回归。
+
+逐字段核对后，事实是：**那次派发一个 input 都没带**，九项配置落回默认。
+
+| 字段 | 注册 | 实际 |
+| --- | --- | --- |
+| `relevanceTopK` | 256 | 64 |
+| `relevanceSignal` | `retrieval-hybrid` | `none` |
+| `promptContract` | `abstention-evidence-blocks` | `abstention` |
+| `ask` | `operands+operand-gap` | `route` |
+| `maxTurnChars` | 400 | 缺席 |
+| `evidenceRolesRoutes` | 2 条 | 6 条 |
+| `reader.thinking` | `disabled` | `enabled` |
+| `reader.thinkingRoutes` | 缺席 | `multi-session,temporal` |
+
+后果不是"弱一点"，是**另一个实验**：gold 召回 **0.071** 对 **0.881**，414/500 题零召回，而 prompt 仍然用掉 47,568/48,000
+（99.2%）的房间。同一次运行的 baseline 侧读 **219/500 = 43.8%**，与三个存档运行逐字相同——模型、数据、判分器、传输
+都没动，`cleanCalls 4,291`、`retriedCalls 0`、`refusedCalls 0`、`exhaustedCalls 0` 四项闭合。动过的只有那九个字段。
+
+#### 这一轮真正的缺陷
+
+不是那九个值，是：`--registration` 有 33 个测试、退出码正确、能一条命令点名全部偏离，而**管线里没有任何一段调用它**。
+
+这是"有写入者、没有读取者"套在**检查**上。本战役此前抓到的同类是字段（`completed` 块有写者无读者）、
+计数（拒绝被记进 `cleanCalls`）与评分者（一整轮成对答案没被打分）。这一例是同一形状的第四次，也是唯一一次
+**前面三次都会被它一次抓住**：那 33 个测试的断言对象是配置，而配置是前三者的共同上游。
+
+#### 做了什么
+
+| 项 | 结果 |
+| --- | --- |
+| 门 | workflow 末段 `Read the artifact against the registration`，偏离 → 红 |
+| 声明 | 仓库变量 `CORTEX_DECLARED_DEPARTURES`，经 `env` 到达 shell，不做 `${{ }}` 插值 |
+| 测试 | `test_registration_gate.py` **12** 条 |
+| 变异 | advisory → 1 红；内联插值 → 3 红；两次都已恢复 |
+| 全量 | Python **1,387 passed, 1 skipped, 71 subtests**（+12） |
+| shell 插值守卫 | 21 个片段干净，含 63 个 workflow run 块 |
+
+#### 此刻的位置
+
+| 指标 | 值 | 说明 |
+| --- | --- | --- |
+| 最佳存档读数 | **0.906**（453/500） | `run-41259622431`，带 `maxPromptChars=96000` 与两项偏离 |
+| 注册预算内最佳 | **0.898**（449/500） | `run-41284575092`，TR 94.5% / MR 76.9% |
+| 注册配置读数 | P0 待读（`41488630010`） | 该 arm 第一次"不能是默认值穿了个名字" |
+| SOTA 对手 | **agentmemory V4 96.20%** | 差距 5.6–6.4 pt；其后 Mastra 94.9%、RemLabs 94.6% |
+
+**cortex 目前不是 SOTA。** 就 LongMemEval-S 整体准确率这一项，领先者是 agentmemory V4（96.20%）。
+
+#### 剩余步骤
+
+1. 读 `41488630010` 的注册读数，作为所有后续偏离定价的锚（P0，运行中）
+2. thinking 单变量归因（P1）：`--set thinking=multi-session+temporal`，其余不动
+3. `turnCutMarker` 单变量归因（P1）：`--set cortex_memory_max_turn_chars=400:ellipsis`
+4. 两者都不动成立后，再谈 `relevanceTopK` 512（P2）
+5. 第二家 provider 全量（P2，容量 5.1× 阻塞）
