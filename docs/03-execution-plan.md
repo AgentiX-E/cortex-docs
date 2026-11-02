@@ -1809,3 +1809,67 @@ disabled`）已经有对照读数（`41203245999`），重复它等于测一个�
 | P2 | 引文级 grounded 枚举 | 无 |
 | P2 | `answerWithTrace` 解锁并发（336 → 42 分钟） | 无 |
 | P3 | 数据集摘要钉住并拒绝 | 需 HF 可达 |
+
+### 14.18 上一轮登记的 P1 被自己的读数退回，换出一个零 token 的新杠杆
+
+本轮没有派发，理由与上一轮不同：上一轮是被容量挡住（第二家 29 h vs 预算 340 min），这一轮是**上一轮的
+P1 在实现之前先被否证**——而否证它的证据就在两份已归档产物里。
+
+#### 改动表
+
+| 文件 | 改动 | 为什么 |
+| --- | --- | --- |
+| `packages/cortex-eval/src/question-record.ts` | 新增 `WindowComposition` 与 `windowCompositionOf` | 把"房间去哪了"变成字段；金标账看不见非金标轮次 |
+| 同上 | `QuestionRecord.windowComposition?`、`QuestionRecordInput.windowComposition`（required nullable） | 缺失必须是编译错误 |
+| `packages/cortex-eval/src/bench-memory-arm.ts` | `overlapOf` → `accountOf`，一次池读取返回两本账 | 两次回调调用在产物里不可验证 |
+| `packages/cortex-eval/src/report-write.ts` | 转发 `windowComposition` | 重算会在 bound 收紧时让占比上升 |
+| `packages/cortex-memory/bench/run-ablation.ts` | `[...candidatesFor(q)]` → `rankedCandidatesFor(q)` | 顺序靠 `Set` 插入顺序是未承诺的行为 |
+| `tools/readout-arm-run.py` | 新增 `--composition` | 加了字段没人读就是下一个惰性配置 |
+| `tools/__tests__/test_readout_arm_run.py` | 新增 4 条 | 合计 = 列和；全打分；旧产物拒绝；部分产物分母 |
+| `packages/cortex-eval/src/__tests__/window-composition.test.ts` | 新增 8 条 | 恒等式在每个夹具上断言 |
+| `packages/cortex-eval/src/__tests__/question-record.test.ts` | 新增 3 条 | 缺席 / 存在 / 零轮次三种状态的区分 |
+
+#### 撤回表
+
+| 登记项 | 状态 | 依据 |
+| --- | --- | --- |
+| §13.213.7「四道题丢在相关性前缀尾部，重排救回 ≥3 道」 | **撤回** | 不在前缀尾部，在前缀之外；`10d9b85a` 两条金标在池之外 |
+| §13.214.3「房间够、选法不对」 | **撤回** | 基数与位置不可比（单位错误） |
+| §13.214.5「会话内按相关性装填」 | **撤回** | `relevanceUnits: "turn"` 已经是这条路径 |
+
+#### 为什么这一轮是"退"，而不是原地
+
+三轮的轨迹：
+
+| 轮 | 结论 | 判据 |
+| --- | --- | --- |
+| N−2 | 四道题丢在排序前缀尾部 ⇒ 修排序 | `--paired` 的四道一致翻转 |
+| N−1 | 工具算错了，修正后 24.3% 池外金标 ⇒ 修选择 | `--pool` 的合计 = 列和 |
+| N | 装填本来就是 relevance，位置形状证明不是时序 ⇒ **修池宽** | 保留位置跨度 0…227，前四分之一零丢弃 |
+
+每一轮都把前一轮的机制名字改小一格，而每一格都有可复现的读数在下面。到这一轮，"选择"被排除之后，剩下的
+是 `relevanceTopK` —— 256 名之后的金标，只有加宽池才能进窗口。
+
+#### 新登记项
+
+| 项 | 预测 | 否证 |
+| --- | --- | --- |
+| `relevanceTopK` 256 → 512（48,000 预算） | `MR` 至少 **+3** | `MR` 移动 < 2，**或** `offered / turns` 下降 |
+
+机制：`10d9b85a` 的两条决定性金标 `goldRanks = -1`，即排在第 256 名之后；池宽 512 会让它们进入 `pool`。
+
+前置：需要一份带 `windowComposition` 的产物来确认"房间没有浪费在未打分的轮次上"。这个前置不是形式——如果
+`unscoredChars` 占比很大，加宽池只会把更多 -2 分轮次变成低分轮次，`MR` 不会动，而"选择拒绝未打分的尾部"
+才是该做的事。
+
+#### 剩余步骤
+
+| 优先级 | 项 | 阻塞 | 规模 |
+| --- | --- | --- | --- |
+| P0 | 一次全量 DeepSeek 派发，产出带 `windowComposition` 的产物 | 无（299.6 min < 340 min 预算） | 1 次派发 |
+| P1 | `relevanceTopK` 256 → 512 | 需要 P0 的产物做前置读数 | 1 次派发 |
+| P0 | 第二家全量实测（`zhipu:glm-4.6`） | 容量 5.1×（1.41 q/min） | 需更高 TPM 档 |
+| P1 | 计数契约加 delta 步 | 无 | 代码 + 1 次派发 |
+| P2 | 引文级 grounded 枚举 | 无 | 代码 |
+| P2 | `answerWithTrace` 解锁并发（336 → 42 分钟） | 无 | 代码 + 10 分钟验证 |
+| P3 | 数据集摘要钉住并拒绝 | 需 HF 可达 | 代码 |

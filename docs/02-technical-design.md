@@ -4099,3 +4099,249 @@ carried          送到了读者面前
 | `--ranks` 结语 | 不得再出现 "only the ranking can" | 断言否定串 + 正串（"beyond the pool"） |
 | 全量门禁 | `pnpm check` 退出 0 | 4,724 TS + 1,327 Python，逐维覆盖率 ≥95% |
 | 对外数字 | 不变 | 89.80%（TR 94.1 / MR 77.5），仍非 SOTA |
+
+## 第十九节 装填顺序不是一个待做的开关，而是一个已经接上的分派
+
+第十八节把"修选择"写成了下一个增量。这一节记录去实现它之前先做的一件事——**确认它没做**——以及那件事的
+结果：它做了，而且做了很久。顺带记一个把"基数"当"成员资格"的单位错误，和那个能一行抓住它的字段。
+
+### 19.1 装填顺序的代码路径
+
+`buildSessionPrompt` 超预算时进 `fitToBudget`，后者把剩下的字符数交给 `chooseEvidence`：
+
+```ts
+function chooseEvidence(question, plan, room) {
+  if (plan.relevanceFor === undefined) {
+    return { evidence: truncateCodePointSafe(plan.render(plan.turns), room), carried: null };
+  }
+  const sessionOf = plan.sessionOf;
+  if (sessionOf !== undefined) {
+    if (plan.relevanceUnits === 'session') return selectBySession(...);
+    if (plan.relevanceUnits === 'session-fill') return selectBySessionFill(...);
+  }
+  return selectByRelevance(question, plan, plan.relevanceFor, room);
+}
+```
+
+三个分支，前两个由 `relevanceUnits` 显式选择，**其余全部落到 `selectByRelevance`**：
+
+```ts
+const ranked = plan.turns
+  .map((turn, arrival) => ({ turn, arrival, relevance: validateRelevance(turn.content, relevanceFor(question, turn.content)) }))
+  .sort((a, b) => b.relevance - a.relevance || a.arrival - b.arrival);
+```
+
+降序按分数，仅在同分时按到达顺序破平。所以：
+
+| 配置 | 走哪条 | 顺序 |
+| --- | --- | --- |
+| `relevanceFor` 缺席 | 时序截断 | 到达顺序（`truncateCodePointSafe`） |
+| `relevanceUnits: "turn"` | `selectByRelevance` | **按分数取前缀**，渲染时还原时序 |
+| `relevanceUnits: "session"` | `selectBySession` | 会话最佳分，取前缀（已冻结，见 `§13.27` 的否证） |
+| `relevanceUnits: "session-fill"` | `selectBySessionFill` | 会话最佳分，跳着装满 |
+
+`41284575092` 是 `relevanceUnits: "turn"`、`relevanceSignal: "retrieval-hybrid"`、`relevanceTopK: 256`、
+`rerank.provider: "none"`。**第一行不适用，第二行就是它**。
+
+### 19.2 两种顺序给出不同的可观测形状，而不只是不同的产物
+
+这一节的论证方式值得单独记：它不用读代码来判定装填顺序，用**形状**判定，而形状在两个已归档产物里数得出来。
+
+时序前缀只可能装 `0..N−1`，所以 48,000 的窗口一定是 96,000 的**连续前缀**。按分数取前缀装的是分数最高的
+N 条，被丢的散在整段会话里，还会落进前四分之一——余弦相似度与到达顺序无关。
+
+| 题 | 48,000 | 96,000 | 被丢 | 保留位置跨度 | 前四分之一被丢 |
+| --- | --- | --- | --- | --- | --- |
+| `0977f2af` | 55 | 119 | 64 | 3 … 114 | 17 |
+| `10d9b85a` | 167 | 232 | 66 | 0 … 227 | **0** |
+| `a1cc6108` | 181 | 243 | 64 | 0 … 235 | **0** |
+| `d24813b1` | 50 | 86 | 36 | 0 … 83 | 10 |
+
+四道题没有一道连续。`10d9b85a` 保住第 227 条、丢 66 条更早的、前 58 条一条不丢。
+
+### 19.3 单位错误：167 是基数，158 是位置
+
+第十八节写道"决定性轮次在 232 轮会话的时序第 158 位，而 48,000 装得下 167 轮，房间够、选法不对"。前半句
+成立，后半句不成立：**窗口的基数与到达顺序里的位置只有在装填 = 时序时才互相说明**，而那正是本节要否掉的
+前提。位置证据说不成立，于是 `158 < 167` 对成员资格一个字都没说。
+
+`10d9b85a` 的实际账：
+
+| 字段 | 48,000 | 96,000 |
+| --- | --- | --- |
+| `total` / `totalAll` | 11 / 22 | 11 / 22 |
+| `pool` | **9** | **9** |
+| `carried` | **9** | **11** |
+
+**`carried == pool == 9`：池内九条全部送达，预算一条没切。** 96,000 多买的两条在 `goldRanks` 里是 `-1`
+（池宽 256，排名 241 仍在池内），即**排在 256 名之外**——只有装完所有打过分轮次之后的剩余房间才捎得上。
+
+⇒ 这道题的损失既不是房间、也不是装填顺序，是**排序的触达**。
+
+### 19.4 `windowComposition`：把"房间去哪了"变成字段
+
+`goldOverlap` 是**金标**去向的账，它的分母是数据集标注的那几条。一道题的金标只占 232 轮里的 11 轮时，它对
+另外 221 轮是沉默的——而窗口花在哪 221 轮上，决定了"更好的顺序有没有用"。
+
+```ts
+export type WindowComposition = {
+  readonly turns: number;
+  readonly offered: number;
+  readonly offeredChars: number;
+  readonly unscoredChars: number;
+};
+
+export function windowCompositionOf(retrieved, pool): WindowComposition | null {
+  if (pool === undefined) return null;
+  let offered = 0, offeredChars = 0, unscoredChars = 0;
+  for (const turn of retrieved) {
+    if (pool.includes(turn)) { offered += 1; offeredChars += turn.length; }
+    else { unscoredChars += turn.length; }
+  }
+  return { turns: retrieved.length, offered, offeredChars, unscoredChars };
+}
+```
+
+四条设计决定，每条都有一个失败模式在后面：
+
+| 决定 | 理由 | 不做会怎样 |
+| --- | --- | --- |
+| `pool === undefined` → `null` | 没有咨询排序 ≠ 排序一条没提供 | 一表零会被读成"排序失败" |
+| 空数组 → 零轮次**对象** | 拒绝作答的题是一次测量 | `null` 会让"测量为零"和"没测量"同形 |
+| 字符是轮次原文长度，不是渲染后长度 | 两列构成"送达证据"的全部 | 除以 48,000 得到一个不描述任何东西的占比 |
+| 合计是列和 | `§13.214` 的 `max(0, Σ)` | 盈余能力在截断前抵掉短缺能力 |
+
+恒等式 `offeredChars + unscoredChars === Σ turn.length` 在**每一个**测试夹具上断言，不只是那个为它写的——将来
+加第三列必须决定它在整体内还是外，不能悄悄变成第三个分区。
+
+**一次池读取，两本账。** `overlapOf` 改名为 `accountOf`，返回 `{ goldOverlap, windowComposition }`，因为两者
+都是对**同一个池**做成员测试，而池来自调用方传入的回调：
+
+```ts
+const pool = poolFor?.(question.question);
+const overlap = goldOverlapOf(retrieved, eligible, pool);
+return { goldOverlap: ..., windowComposition: windowCompositionOf(retrieved, pool) };
+```
+
+调两次在原则上允许两种顺序，在产物里不可验证：拿到两份账的读者无法判断哪一次读是过期的。
+
+### 19.5 接线与拒绝路径
+
+| 位置 | 改动 |
+| --- | --- |
+| `question-record.ts` | `WindowComposition` 类型、`windowCompositionOf`、`QuestionRecord.windowComposition?`、`QuestionRecordInput.windowComposition`（required nullable）、写入规则 |
+| `bench-memory-arm.ts` | `overlapOf` → `accountOf`，一次池读取两本账 |
+| `report-write.ts` | 转发，不重算（重算会在 bound 收紧时让占比上升） |
+| `run-ablation.ts` | `[...candidatesFor(q)]` → `rankedCandidatesFor(q)` |
+| `tools/readout-arm-run.py` | `--composition` |
+
+`run-ablation.ts` 那一行是**语义修正而非行为改变**：`candidatesFor` 返回 `Set`，展开成数组之所以保有顺序，
+靠的是 `Set` 保留插入顺序——那是 JavaScript 的属性，不是这个接口的承诺。`candidatesFor` 的文档明确写它
+"deliberately discards the ranking"，而 `rankedCandidatesFor` 存在的理由就是给需要顺序的调用方一个有名分的
+入口。`goldRanks` 与 `windowComposition` 都要求顺序。
+
+`--composition` 遇到没有该字段的产物**退出 2 并说明是旧产物**，不印一表零：
+
+> ... no record carries a windowComposition. A run with `relevanceSignal: none` has none, and an artifact
+> produced before §13.215 predates the field -- so this is not a window that was entirely unscored, which
+> is what a table of zeroes would say.
+
+### 19.6 验收标准
+
+| 项 | 阈值 | 判定 |
+| --- | --- | --- |
+| 两列构成全部 | 每个夹具 | `windowCompositionOf` 的 8 条测试，恒等式在每条上都断言 |
+| 无排序 → 缺席 | `Object.hasOwn` 为假，JSON 无该键 | `question-record.test.ts` 两条 |
+| 零轮次窗口 → 存在 | JSON 有该键 | 同上 |
+| 统计表合计 = 列和 | 每列 | `TestWhereTheRoomWent` 逐列断言 |
+| 旧产物被拒 | 退出 2 且不提 TOTAL | 一条断言 `returncode == 2` 且 `'TOTAL' not in stdout` |
+| 池的顺序有名字 | `rankedCandidatesFor` | `run-ablation.ts` 的调用点 |
+| 全量门禁 | `pnpm check` 退出 0 | 逐维覆盖率 ≥95% |
+
+## 第二十节 门禁自己的测试在写它测量的那棵树
+
+这一节的起因不是设计，是一次 `git status`：`packages/cortex-core/src/math/vector.ts` 里出现了一个
+没人写的导出函数，名字是测试的探针。`export-census-gate.test.ts` 往真实源码里追加导出、证明 `--check`
+能报出新孤儿，然后在 `finally` 里还原。**还原是对的**，问题在于"还原"从来不是该断言的性质。
+
+### 20.1 五处注入，一条还原，和它覆盖不到的两件事
+
+| 测试 | 写的文件 | 探针 |
+| --- | --- | --- |
+| `fails when a new orphan appears, naming it` | `vector.ts` | `orchestratedCensusGateProbe` |
+| `detects a new orphan even when its name already appears in prose` | `vector.ts` + `fsrs.ts` | `proseMentionedCensusGateProbe` |
+| `survives a tree with no .git` | `vector.ts` | `restoreIsByteLevel` |
+| `still reports the new orphan through a pipe` | `vector.ts` | `pipedCensusGateProbe` |
+
+还原是**进程内**的，所以它说不了两件事：
+
+1. **另一个进程在同一份字节上做什么。** 一个单包 vitest 与一个完整 `pnpm check` 同时跑（开发者等第一个
+   跑完时的常态）就够了：A 的还原可能发生在 B 的写之前，而 B 因为断言已过不再还原。本次污染正是这个形状。
+2. **一次没跑到 `finally` 的运行。** `SIGKILL`、OOM、CI 超时都不会执行 `finally`。而这份文件里本来就有一个
+   为无关原因设的超时（`41279597942` 在更慢的 runner 上 5000 ms 超时），两者只差一步。
+
+残留的方向还特别难查：下一个读到该文件的是 census gate 自己，它报出一个没人写过的孤儿，**归因会落在
+ledger 上而不是 harness 上**。
+
+### 20.2 修法：注入需要一个自己的树
+
+`tools/export-census.mjs` 接受 `EXPORT_CENSUS_ROOT`，ledger 跟着根走：
+
+```js
+const ROOT_OVERRIDE = process.env.EXPORT_CENSUS_ROOT;
+const REPO_ROOT = ROOT_OVERRIDE ? resolve(ROOT_OVERRIDE) : resolve(HERE, '..');
+const BASELINE_PATH = ROOT_OVERRIDE
+  ? join(REPO_ROOT, 'tools', 'export-census-baseline.json')
+  : join(HERE, 'export-census-baseline.json');
+```
+
+脚本本身不对树做分支：给它哪个根，它就在那个根下走 `packages/` 与 `tools/`。census 逻辑一行没动。
+
+测试侧建一棵三符号的树：`a.ts` 导出两个函数，`b.ts` 调其中一个且**不导出任何东西**（只贡献 caller，不贡献
+声明位），`orphanThing` 预先记在种子 ledger 里。于是**注入前那棵树是通过的**——这是每条注入测试都需要的前置
+控制，而且比它替代的那个更强：原来的控制是"另一个测试（`passes on the committed tree`）在文件顺序上更早
+通过"，现在是"同一棵树在这一行之前通过"。
+
+pipe 测试多一处：它原来在 `cwd` 下跑 `node tools/export-census.mjs`，而临时树里**没有**这个文件——测量一棵树
+的工具不属于那棵树。改为按绝对路径调用脚本，`cwd` 设为临时树。
+
+### 20.3 区分"还原成功"与"从未写过"的那个断言
+
+新测试的实质只有一行：
+
+```ts
+expect(statSync(WITNESS).mtimeMs).toBe(WITNESS_MTIME_BEFORE);
+```
+
+`WITNESS` 是 `vector.ts`，mtime 在模块加载时取，早于任何测试。
+
+**为什么是 mtime 而不是内容。** 正确的还原产出的就是原字节，所以内容断言无论"重写过"还是"从未写过"都通过。
+mtime 是唯一便宜的、能把两者分开的信号，而"从未写过"才是能扛住并发与 kill 的性质。
+
+**做过变异检验。** 把一处注入改回写 checkout，断言失败并给出两个时间戳：
+
+```text
+AssertionError: expected 1793583993531.0159 to be 1793583680645.288
+Tests  1 failed | 21 passed (22)
+```
+
+而事后文件内容是干净的——这正是要点：**还原仍然有效，断言仍然抓到了那次写**。
+
+### 20.4 这一节不主张什么
+
+- **不主张 census 的数字错过。** 探针是一个孤儿，gate 报了它，`--check` 退出 1。树是脏的，不是被量错的。
+- **不主张夹具就是仓库。** 断言"关于这个仓库"的测试——`passes on the committed tree`、ledger 的 schema 检查、
+  `bench/run.ts` 的 caller 测试——仍然跑在 `REPO_ROOT` 上。移动的只有注入，因为注入是唯一必须写的操作。
+- **不是对脏树的通用防御。** 主张更窄：这个套件不再产生脏树，而且现在有一条断言这么说。
+
+### 20.5 验收标准
+
+| 性质 | 判据 | 判定方式 |
+| --- | --- | --- |
+| checkout 从未被写 | 全文件跑完后 mtime 不变 | 一条断言，打在曾经唯一的注入目标上 |
+| 没有探针残留 | 四个 marker 都不在 witness 里 | 同一条测试，四条断言 |
+| gate 仍能查出新孤儿 | 退出 1、点名符号、点名文件 | 临时树上的 `orchestratedCensusGateProbe` |
+| 匹配器仍然对注释免疫 | 有 prose 时仍退出 1 | `proseMentionedCensusGateProbe` + 其正向控制 |
+| 退出码能穿过管道 | 经 `cat` 仍退出 1 | 临时树上的 `pipedCensusGateProbe` |
+| 这个仓的 ledger 仍对得上 | 退出 0、无新孤儿 | `passes on the committed tree`，未改 |
+| 覆盖开关不泄漏 | 不传根时测量的是这个 checkout | 所有不传根的测试 |
