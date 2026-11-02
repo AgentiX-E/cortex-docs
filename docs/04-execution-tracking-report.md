@@ -14981,3 +14981,61 @@ RemLabs 94.6%。
 
 **这一条对需求 #8 的意义**：降低 token 消耗的前提是知道 token 去哪了。此前 16% 的请求在终端账上看不见——不是因为没有
 仪器，是因为仪器读数缺了一行。现在它有两个数，而且两者都说明"这一部分不归任何一臂"。
+
+### §9.183 第一份"逐字段就是本臂"的读数：83.90%
+
+派发 `41488630010`（head `e280a622`）由 `tools/dispatch-cortex-memory-ab.py` 发出，21 个 input 全部打印进日志。
+四次重复、500 题、temperature 0。
+
+```
+registration: 20 field(s) compared
+same         20 field(s)
+verdict: this run is the registered configuration, field for field
+```
+
+**这是本战役第一次拿到不需要任何限定语的读数。** 此前每一次都至少带 `turnCutMarker` 与 `reader.thinking`
+两项偏离，所以"本臂是多少"这个问题一直要附带一句"但那是另一套配置"。
+
+| 统计量 | 值 |
+| --- | --- |
+| `featureAggregate.avg`（注册统计量） | **0.8390** |
+| min / max | 0.830 / 0.848（跨度 1.8 pt，这就是本尺度的噪声底） |
+| baseline（无记忆臂） | 0.4480（224/500） |
+| `ablation.delta` | **+0.3915**，p = 1.51e-06 |
+
+分能力（feature / baseline）：IE **145/150 (96.7%)** 对 1、MR **86/121 (71.1%)** 对 106、KU **63/72 (87.5%)**
+对 1、TR **100/127 (78.7%)** 对 86、ABS **30/30** 对 30。
+
+**MR 这一行要看两遍**：feature 在唯一一条 baseline 靠"到达顺序窗口"就够好的能力上，比 baseline **少 20 题**。
+不是新问题，但这是第一次对着注册基线测出来。
+
+#### 那两项偏离值多少，现在有对照了
+
+| 运行 | `thinking` | `turnCutMarker` | `maxPromptChars` | avg | 差 |
+| --- | --- | --- | --- | --- | --- |
+| **`41488630010`** | disabled | `none` | 48,000 | **0.8390** | — |
+| `41284575092` | MS+TR | `ellipsis` | 48,000 | 0.8980 | +5.90 |
+| `41254359622` | MS+TR | `ellipsis` | 96,000 | 0.9045 | +6.55 |
+| `41259622431` | MS+TR | `ellipsis` | 96,000 + `ask=candidates` | 0.9075 | +6.85 |
+
+#### 为什么分能力表不能替我们做拆分
+
+`turnCutMarker` 随 `cortex_memory_max_turn_chars` 走，其作用域 `maxTurnCharsRoutes` 是 **multi-session 与 temporal**；
+`reader.thinking` 的 `thinkingRoutes` 也是 **multi-session 与 temporal**。**两个变量作用在同一批 248 道题上。**
+27 题的差距（TR −20、MR −7、IE +2、KU 0、ABS 0）与"任一变量单独造成"、"两者共同造成"、以及两者之间任意拆分
+都相容。所以要给它们定价，只有 §13.221 注册的那两次单变量派发。
+
+#### 对着自己的验收表
+
+| 行 | 阈值 | 本次 | 判定 |
+| --- | --- | --- | --- |
+| S1 总体 | ≥ 85.0% | **83.90%** | aim，差 **1.10** |
+| S2 knowledge-update | ≥ 85.0% | 87.5% | pass |
+| S3 multi-session | ≥ 85.0% | **71.1%** | aim，差 13.9 |
+| S4 temporal | ≥ 85.0% | **78.7%** | aim，差 6.3 |
+| S5 abstention | ≥ 80.0% | 100% | pass |
+
+S1 差 1.1 点，而上面那两项偏离值 5.9——**采纳这两项，比走到 S1 门槛剩下的路更多**。这句话第一次有对照撑着。
+
+`evidence/longmemeval/summary.json` 保持 **0.8345** 不动：它与本次 0.8390 差 0.45，落在 1.8 点噪声带内。
+把每一份新产物都写进证据文件，会让 S1 随运行漂移而不是随机制漂移——那正是验收表存在的反面。
