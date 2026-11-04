@@ -2982,3 +2982,121 @@ Step 1 是 `identify` 而不是逐会话 `enumerate`。**没被测过的是整�
 - **总体仍不是 SOTA**：Maximem Synap / Agent Zero 95.6、Mastra 94.87、Hindsight 94.6、Mem0 94.4、
   Perpetuity 94.0（第三方），差 3.85–5.45 点。**但新增了一个可比坐标**：同基准的学术最强朴素基线
   Raw-RAG 87.53，我们**高 2.62 分**。
+
+### 14.35 一份文档不会失败，所以把"提醒"换成"门"：派发前注册检查
+
+#### 一、这一轮先承认一件不好看的事
+
+上一轮派发的重分配实验 `41751619617` 跑了 **87 分钟**、产出完整 500 题产物、自检 11 项过 10 项、
+读数 **85.00%**。它差一点被写成"每路由重分配让总体掉 5.15 点"。
+
+事实是**重分配一次都没跑**。派发时只填了 8 个输入，其余 14 个留空；workflow 故意把空白原样下发（产品
+默认只存一份），于是那 14 个落回产品默认，其中 **6 个与注册配置不同**：
+
+```
+ask: operands+operand-gap        -> route
+relevanceSignal: retrieval-hybrid -> retrieval
+promptContract: abstention-evidence-blocks -> abstention
+maxTurnChars: 400                -> (absent)
+maxTurnCharsRoutes: [MS,TR]      -> all six
+evidenceRolesRoutes: [MS,TR]     -> all six
+```
+
+产物自己的配置行把这六行印出来了，而且印在**最后**——门是红的，只是红得太晚。
+
+| 能力 | 注册臂 | 本次 | Δ | 指向 |
+| --- | ---: | ---: | ---: | --- |
+| IE | 96.00% | 95.33% | −0.67 | `evidenceRoles` |
+| **MR** | 76.86% | **71.90%** | **−4.96** | `ask` 的 operands 契约 |
+| KU | 86.11% | 86.11% | **0** | 六个字段一个都不指向它 |
+| **TR** | 95.28% | **81.89%** | **−13.39** | `relevance` 稀词通道 + `maxTurnChars` 上限 |
+| ABS | 100.00% | 96.67% | −3.33 | `promptContract` |
+
+加权和 **−5.00** 对 headline −5.15，残差是"首轮 vs 四轮均值"——**恒等式核对，不是解释**。
+
+#### 二、这是同一个缺陷的第二次发生，而上一轮的修复是一份文档
+
+第 24 步（§10.1.0）已经发生过一次同形事故：只给 `limit`+`review_pass` 派发 `recover`，跑完、变绿、
+有数字，产物配置行显示与采纳配置差 **11 个字段**，96.4% 拒答、IE 1/150。
+
+当时的修复是**把采纳配置写成一份可复制的负载**，并加了一句"先核配置再读分数"。
+
+| | 第 24 步 | 本轮 |
+| --- | --- | --- |
+| 填了几个输入 | 2 / 22 | **8 / 22** |
+| 与注册配置差几个字段 | 11 | **15**（产物可报 6） |
+| 跑完是否变绿 | 是 | 是（产物成功，门禁红） |
+| 读数是否"合理" | 96.4% 拒答 | 85.00% |
+| 代价 | — | **87 分钟 + 27.1M prompt token** |
+
+**一份文档是一个提醒，不是一个不变量。** 它降低了下一次的概率，但没有把"留空"变成"跑不起来"。能拦住
+它的东西必须**会失败**。
+
+#### 三、门读载荷，不读环境——两个输入就能证明
+
+`tools/registration-preflight.py` 在 build 之前跑，把这次派发**自己声明的输入**与
+`tools/dispatch-cortex-memory-ab.py` 的 `INPUTS` 表比对。那张表已被 `test_preregistration_config.py`
+钉在 §10.3 上，所以这里读的是注册本身，不是第四份副本。
+
+环境变量是显而易见的来源，而它**不可能**成立：workflow 故意把空白原样下发，于是"派发选了产品默认"和
+"派发什么都没选"在环境里是同一个空字符串。只有事件载荷保留区别——**载荷里不存在的键，就是没人要过**。
+
+| 输入 | workflow 留空时的 fallback | 注册值 | 读环境会看到 |
+| --- | --- | --- | --- |
+| `limit` | `60` | `0` | `60`：一个值，而且看起来合理 |
+| `thinking` | `disabled` | `multi-session+temporal` | `disabled` |
+
+**读环境会放过一个 60 题、思考关闭的运行。**
+
+#### 四、两道门问两个问题，15 与 6 不是矛盾
+
+| 门 | 问题 | 何时 | 读什么 | 本次 |
+| --- | --- | --- | --- | --- |
+| `registration-preflight.py` | **要了什么** | build 前 | 事件载荷 | **15 个偏离** |
+| `readout-arm-run.py --registration` | **跑了什么** | 产物后 | `memoryArmConfig` | **6 个偏离** |
+
+产物侧从别的字派生三个（`askRoutes`←`ask`、`evidenceRoles`←`evidenceRolesRoutes`、
+`maxPromptChars`←自己的输入），另有三个是 harness 属性（`limit`/`temperature`/`model`·`thinking`），
+不作为臂字段携带。**输入层计数更大，因为它问得更早，而更早的问题值得在更大的集合上回答。**
+
+#### 五、声明清单有两个失效方向
+
+`CORTEX_DECLARED_DEPARTURES` 由派发器写。这次它声明了 `cortex_memory_relevance_top_k`——而那个字段
+**没有动**（送 256，注册也是 256）。门会说出来：
+
+| 形状 | 含义 | 判定 |
+| --- | --- | --- |
+| 字段动了但没列 | 这次运行是一个没说自己是的实验（§13.202.6） | **失败** |
+| 字段列了但没动 | 记录描述的是意图，不是事实 | 通过 + 提示 |
+
+第二种通过，因为派发本身合法，提示就是修复。门还按**值**打印声明清单，这样一份陈旧的仓库变量（上一次
+派发写的、这次没写）会出现在日志里，而不是被静默继承。
+
+#### 六、验收标准（先写，已成代码）
+
+| # | 判据 | 由谁保证 |
+| --- | --- | --- |
+| 1 | 全量 22 输入的派发通过 | `test_the_registered_arm_passes` |
+| 2 | 缺键 → `ABSENT` 且失败，并打印注册值 | `test_a_blank_input_is_a_departure` |
+| 3 | 空字符串与缺键同判（两者在下游不可区分） | `test_an_empty_input_is_a_departure` |
+| 4 | 改变值 → `DEPARTED` 且**同时打印两个值** | `test_a_moved_input_is_reported_with_both_values` |
+| 5 | 声明全部偏离 → 通过 | `test_declaring_every_departure_lets_it_through` |
+| 6 | 声明了没动的键 → 通过 + 提示 | `test_declaring_a_key_that_did_not_move_is_reported_and_passes` |
+| 7 | 声明清单接受 JSON 与逗号两种形状 | `test_the_declared_list_accepts_both_shapes_it_has_carried` |
+| 8 | **读不到载荷时必须失败**（不知道 ≠ 同意） | `test_no_payload_fails_rather_than_passing` |
+| 9 | 事故的原始 8 输入形状被拒，且 15 个字段全列 | `test_the_shipped_shape_of_the_incident_is_refused` |
+
+共 9 条，`tools/__tests__/test_registration_preflight.py`。工作流里新增步骤
+`Check the dispatch against the registration`，位于 `Setup Python` 之后、`Install dependencies` 之前
+——**在任何依赖安装之前**。
+
+#### 七、位置
+
+- 产品完成度 **13/13 = 100%**，**可发布信号维持**。
+- 对外 headline 不变 **90.15%**（注册配置，4 轮），A 级口径 **SOTA**（领先同级最强 4.35 点）。
+- **总体仍不是 SOTA，且榜首换人**：新坐标 **Exabase M-1 96.4%**（Gemini 3 Flash，厂商自报），差
+  **6.25 点**；其后 Maximem Synap / Agent Zero 95.6、Mastra 94.87、Hindsight 94.6、Mem0 94.4。
+- **新判断（竞品 §1.18）**：LongMemEval-S 已饱和（第三方 89–95% 挤在一起，LoCoMo 答案键 6.4% 本身
+  是错的、裁判接受 62.81% 的模糊回答）。**能继续区分系统的只有 BEAM（100K→10M）**，而 BEAM-10M 上
+  连当前第一的 past.dev 多会话推理也只剩 **28.17%**——而 MR 恰是我们唯一显著输给自己对照的能力。
+  **所以 MR 的难点是规模，不是提示词。**
