@@ -5515,3 +5515,105 @@ workflow 故意不把产品默认抄进自己的 fallback：如果 `CORTEX_MEMOR
 （`test_no_payload_fails_rather_than_passing`）专门测最后一列，第 9 条
 （`test_the_shipped_shape_of_the_incident_is_refused`）以事故本身的 8 个输入为输入，断言它被拒且 15
 个字段全部列出。
+
+### 22.15 一次计数只有在带上分母时才是计数：并发池与每实例普查
+
+#### 22.15.1 前提：分片池是真的按实例分片的
+
+§14.22 引入的并发池（`workers`）不是为了快，而是为了**让第二个 provider 的全量复现落在预算内**。它成立的代价是一个设计约束：
+
+> *每个 worker 拿**自己的实例**，只共享那些按设计无状态的东西（HTTP 客户端、按文本索引的 embedding 缓存）。*
+
+因为 `MemorySystem` 把每题的中间状态放在**单槽**上（`lastRawOutput`、`lastPromptText`、`lastAdmittedEvidence`……），两个调用打同一个实例会把 A 题的 prompt 记到 B 题上，**而且不抛异常**。
+
+#### 22.15.2 缺陷：普查是每实例状态，而代码从一个实例读
+
+`CortexMemory` 的四个计数器——`#reasons`、`#recoveries`、`#bareRetries`、`#votes`——**是实例字段**，与被单槽化保护的那些状态同类。而 arm 这样读：
+
+```ts
+const census = {
+  ...abstentionReasonsOf(feature),   // 在池存在时，feature 就是 worker 0
+  ...recoveryOf(feature),
+  ...bareRetryOf(feature),
+};
+```
+
+于是四 worker 的运行把**四分之一**的题目当成全部发布出去：
+
+| run | 产物 census | 每轮 | 500 / workers |
+| --- | ---: | ---: | ---: |
+| `41546569106`（注册臂） | **2,000** | 500 | 日志行**没有** `workers=` |
+| `41751619617` | 456 | 114 | `workers=4` → 125 |
+| `41773546221` | 488 | 122 | `workers=4` → 125 |
+
+识别它的是**一列在旧产物里不存在的字段**，不是任何关于配置的假设。
+
+另一半缺陷在 CLI 里：
+
+```ts
+featureFor: (worker) => (worker === 0 ? feature0 : buildFeature()),
+```
+
+worker 0 跨轮复用 `feature0`，其余 worker **每轮新造一个实例**——实例身份是 `(worker, pass)` 的函数，所以就算有人想枚举也枚举不出来。而 `BenchmarkWorkerPool.systemFor` 从一开始就写着"每个 worker 最多调用 `min(workers, questions)` 次"。**这是文档与实现的契约背离，且没有任何测试看着它。**
+
+#### 22.15.3 契约：枚举、折叠、拒绝部分答案
+
+```ts
+export type AblationPool = {
+  readonly workers: number;
+  baselineFor(worker: number): MemorySystem;
+  featureFor(worker: number): MemorySystem;
+  /** 这个池交给 worker 的每一个 feature 实例，按 worker 序，worker 0 在最前。 */
+  featureInstances(): readonly MemorySystem[];
+};
+```
+
+`createAblationPool` 是唯一实现：按 worker 记忆化（这正是 `systemFor` 一直声称的行为），返回 worker 序列表。三条规则：
+
+| # | 规则 | 为什么 |
+| --- | --- | --- |
+| 1 | **折叠，不挑选** | 四个普查各自跨枚举求和 |
+| 2 | **全有或全无** | 任何一个实例报不出来，字段就**缺席**。对"碰巧有值的子集"求和正是本节要修的截断形状，所以它不能同时是修复的形状 |
+| 3 | **投票的零规则属于总数** | "三个零不是一个普查"说的是**运行**，不是**worker**：抽不到投票题的 worker 合法地报 `0/0/0`，按实例套这条规则会把该 worker 丢掉再把剩下的加起来 |
+
+再加一道**拒绝而不是二选一**的守卫：
+
+```ts
+function censusSourcesOf(feature, pool): MemorySystem[] {
+  if (pool === undefined) return [feature];
+  const instances = [...pool.featureInstances()];
+  if (!instances.includes(feature)) throw new Error(/* ... */);
+  return instances;
+}
+```
+
+一个不枚举"arm 实际测量的那个实例"的池，只有两种读法——只读 `feature`（原缺陷）或只读池（静默丢掉 worker 0 的份额）——**而两者都会产出一个读者会相信的数字**。所以它停。
+
+#### 22.15.4 它损坏什么、不损坏什么
+
+| 量 | 是否损坏 | 原因 |
+| --- | --- | --- |
+| 准确率、逐能力、逐轮 | **否** | 答案按 `index` 写进预分配向量；`workers` 只改完成顺序 |
+| headline `featureAggregate.avg` | **否** | 同一批答案，`benchmark-concurrency.test.ts` 断言 3 worker 与串行逐字节相同 |
+| 普查**计数** | **是，约等于 worker 数倍** | 一个 worker 的份额被当成全部 |
+| 普查**比率** | **无偏，但噪声 2 倍** | 分子分母被同一次均匀切分截断，所以 `28/488 = 5.74%` 估计的是与 `130/2,000 = 6.50%` 同一个量——只是标准误是 `√4 = 2` 倍 |
+| 逐能力的下降归因 | **不可靠** | 切分按领取顺序而非路由，某条路由可能整体不在被数的那四分之一里 |
+
+**这张表决定了哪道门能抓到它：**比率近似存活，计数完全存活不了。`census-unit` 是"产物自己声明的分母"与"普查总和"的算术比对——它不需要任何机制假设，所以它在三种错误读法都在流传时是对的。
+
+#### 22.15.5 验收标准（先写，已成代码）
+
+| # | 判据 | 由谁保证 |
+| --- | --- | --- |
+| 1 | 9 题 × 2 轮 × 3 worker → 普查总和 **18** | `pool-census.test.ts` |
+| 2 | 串行 5 题 × 2 轮 → **10**（控制组，修复不得移动它） | 同上 |
+| 3 | 池中某 worker 无普查能力 → 字段**缺席**，不是对剩下的求和 | 同上 |
+| 4 | 池不枚举被测量实例 → **抛错** | 同上 |
+| 5 | 投票裁决跨 worker 求和，不丢"零票 worker" | 同上 |
+| 6 | 全部 worker 都 `0/0/0` → **无**投票普查 | 同上 |
+| 7 | 每 worker 一个实例，跨轮同一个 | 同上 |
+| 8 | **五条路由各一题、产品实例、3 worker、2 轮 → 10** | `arm-census-routes.test.ts` |
+| 9 | 同五条路由串行 → **5** | 同上 |
+| 10 | 真实产物：census = `questionCount × runs` | 工作流的 `census-unit` 审计 |
+
+第 8 条是关键的一条：**一题一路由**时，"只数了三分之一"不可能被解释成"只有会话路由计数"，因为会话路由只是五条里的一条。
