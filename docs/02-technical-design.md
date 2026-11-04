@@ -5676,4 +5676,4 @@ return instructionsFor(contract, date, 'operands+operand-gap', scope, shape);
 | 可达集 | 与出厂块比较，差异集合**等于** `ASK_ROUTES` | `evidence-ask-reach.test.ts` |
 | 两份表不能漂 | 产品与 arm 的 `ASK_ROUTES` 键集合一致 | `test_ask_table_parity.py` |
 | 迁移本身 | 与参考 builder **逐行相等** | `ask-verbatim.test.ts` |
-| 行为判据 | MR ≥ 96/121，其余五路由逐题复现，弃答不升，`promptChars` ±1% | 派发 `41859220351` |
+| 行为判据 | MR ≥ 96/121，其余五路由逐题复现，弃答不升，`promptChars` ±1% | 派发 `41860773768` |
