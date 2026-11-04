@@ -5617,3 +5617,63 @@ function censusSourcesOf(feature, pool): MemorySystem[] {
 | 10 | 真实产物：census = `questionCount × runs` | 工作流的 `census-unit` 审计 |
 
 第 8 条是关键的一条：**一题一路由**时，"只数了三分之一"不可能被解释成"只有会话路由计数"，因为会话路由只是五条里的一条。
+
+### 22.16 一个 ask 的两半：可达集与变更集，以及为什么这次的回退是一次委托
+
+`ask=verbatim` 是本仓库第一个**把参考管线的聚合契约整体搬过来**的指令块。它同时暴露了 ask 机制里两个一直被分开对待、但其实是一件事的概念。
+
+#### 22.16.1 为什么它需要"逐行相等"这个断言
+
+前几节的 ask 都是**改写**：把参考管线的意思用本项目的措辞重述，然后在少数句子上加强（或减弱）。改写的好处是可控，坏处是不可证伪——"我抄的是它"永远只能靠读。
+
+`verbatim` 换掉了这个前提。产品里的常量是 `buildAggregationQaPrompt` 的文本，**未删节、未改写、未换序**，连结尾那个裸 `Answer:` 一起。测试从 `cortex-eval` 导入参考 builder（本包已经为 `Answer` 类型依赖它），把本包的 abstention token 传进去，切出 `Context:` 之前的行，再补上 `Answer:`，然后断言**字符串相等**：
+
+```ts
+const lines = reference.split('\n');
+const at = lines.indexOf('Context:');
+expect(block).toBe([...lines.slice(0, at), 'Answer:'].join('\n'));
+```
+
+两个细节让它成为**精确**比较而不是近似比较：
+
+1. **token 是参数**。参考 builder 的第三参数是 token，本包把它自己的 token 传进去，于是文本里不需要任何替换。一旦有人在产品常量里手写 token，这条断言先红。
+2. **`Answer:` 是参考的内容，不是本项目的装饰**。参考把指令发在上下文**之上**、以 `Answer:` 结尾；本项目的装配把指令块放在**最后**，于是同一行 `Answer:` 成为 prompt 的最后一行，模型从同一位置续写。差异是位置差异，不是文本差异——这是唯一一处允许两臂不同的地方。
+
+#### 22.16.2 可达集 ≠ 变更集，而且这一次两者的差是四比一
+
+| 表 | 值 | 相对谁测 |
+| --- | --- | --- |
+| `ASK_ROUTES.verbatim` | `multi-session, flat, temporal, abstention` | **出厂**块（`route`） |
+| `ASK_CHANGES.verbatim` | `multi-session` | `operands+operand-gap`，即这一跑要被对打的臂 |
+| `ASK_CHANGES_WHEN_DERIVATION.verbatim` | *(空)* | 同上，在 derivation 形问法上 |
+
+三行不是三份声明，是**一个声明在三个参照系里的读数**。可达集大是因为 `verbatim` 建立在注册臂之上，注册臂已经动过的三条路由在它下面仍然是动的；变更集小是因为它对自己要打的那一臂只动一条路由。把两者写成同一个数，会让产物里的 `askRoutes` 看起来像变更集，而这正是 §13.104 / §13.123 / §13.124 三次事故的共同形状。
+
+#### 22.16.3 回退写成一次委托，是这四分之一世纪里第一次
+
+前面每个 ask 的回退都是**枚举**：三条 `if`，把 flat、temporal 指回 `enumerated` 的块，理由是"回退到 `own` 会返回出厂块，那不是对照的块"。这段话在本文件里出现了三次，每次都对应一次真实损失（`39641088296` TR −21.4 / IE −9、`40807829150` MR −48 / TR −12）。
+
+`verbatim` 第一次可以把它写成一句话：
+
+```ts
+return instructionsFor(contract, date, 'operands+operand-gap', scope, shape);
+```
+
+它把"其余路由读对照读的字节"从**一张需要人跟进的表**变成**一个表达式的性质**。这是本轮唯一一处结构上的改进，也是它比新增指令块本身更值钱的地方：下一次加 ask，回退的正确写法是默认的，错误的写法需要主动写出来。
+
+#### 22.16.4 derivation 形问法为什么不在变更集里，而且这不是遗漏
+
+参考管线在**问法**上就分叉：枚举形走 `buildAggregationQaPrompt`，派生形走 `buildDerivationQaPrompt`——两个 builder，两段文本。本项目的派生半边是 `operands`，它已被采纳且价值 **63 题**（§13.193.5）。
+
+同时迁移两半会把两件事混成一件：一半是"参考的枚举契约 vs 本项目的枚举契约"，另一半是"参考的派生契约 vs `operands`"，后者从未被注册过。所以 `verbatim` 只搬枚举半边，派生问法读对照的字节，变更集写成**空**——空集在这里是一个断言，不是省事。
+
+#### 22.16.5 验收：这一节怎么被检验
+
+| 层 | 断言 | 位置 |
+| --- | --- | --- |
+| 参考的事实 | 聚合 builder 写清单、有 `Answer:`、无 `write ONLY the final answer` | `ask-verbatim.test.ts` |
+| 单变量的边界 | 六个路由 × 两种问法渲染两遍，差异集合**等于** `ASK_CHANGES` | `ask-changes.test.ts` |
+| 可达集 | 与出厂块比较，差异集合**等于** `ASK_ROUTES` | `evidence-ask-reach.test.ts` |
+| 两份表不能漂 | 产品与 arm 的 `ASK_ROUTES` 键集合一致 | `test_ask_table_parity.py` |
+| 迁移本身 | 与参考 builder **逐行相等** | `ask-verbatim.test.ts` |
+| 行为判据 | MR ≥ 96/121，其余五路由逐题复现，弃答不升，`promptChars` ±1% | 派发 `41859220351` |
