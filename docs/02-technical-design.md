@@ -6072,6 +6072,14 @@ export function promptDigest(prompt: string | null): string | null {
 
 ### 22.23.3 切法与读法
 
+实现在 `tools/readout-arm-run.py --attribution <control.json> <treatment.json>`：打印两个群体、各自的精确二项检验、可归因差值，以及两侧四遍的 `min/avg/max`。三个性质各有测试（`tools/__tests__/test_readout_attribution.py`，11 条）：
+
+| 性质 | 为什么测它 |
+| --- | --- |
+| 摘要缺失的记录单独一桶 | 早于该字段的产物无法为它发出的字节作证，并进任一侧都会放大那一侧 |
+| 精确二项而不是正态近似 | 10 对时两者是 `0.0215` 与 `0.0073`，差别正好落在决策点上 |
+| 未变群体的金标变化必须为 0 | 这不是发现而是**工具缺陷**：交付轮不可能在提示词不变的情况下进出，非零即退出码 1 |
+
 | 群体 | 判定 | 读它做什么 |
 | --- | --- | --- |
 | 未变 | `digest(a) == digest(b)` | **噪声对照**：翻转率应与"两次派发完全相同"时测到的 3.2% 同阶 |
