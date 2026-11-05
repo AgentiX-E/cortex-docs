@@ -16135,6 +16135,7 @@ Mem0 于 **2026-10-02** 把评测改成五维（BLEU / F1 / LLM 分 / **token �
 | 覆盖率（每维度） | core 96.29 / storage 99.12 / ai 98.72 / eval 97.78 / memory 99.51（branch）；stmt 与 funcs 均 ≥98.77 |
 | 两仓推送 | `cortex` `aee3327`；`cortex-docs` 本轮提交 |
 | Dependabot | 两仓 0 open PR / 0 alert |
+| 工具 | `--split`（全带/部分带，恢复 §13.243.2 口径）与 `--room`（窗口反事实模拟）入库，各带测试 |
 | 派发 | `41860773768`，`master@aee3327`，48,000 字符，4 轮，500 题，**1 项声明 departure** |
 
 ### 六之二、本轮差点自己制造一次同类事故：预算读自一条 as-of 注释
