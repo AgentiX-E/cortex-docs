@@ -6153,3 +6153,60 @@ export function promptDigest(prompt: string | null): string | null {
 `readout-arm-run.py --audit` 增加一条 `PASS/FAIL audit`：当且仅当配置带 `reviewPass: 'audit'` 时账必须存在，`changed ≤ attempted`，且 `attempted` 等于被标记的记录数；配置为 `bare` 时两者都不得出现。
 
 这条检查的形状与它旁边九条一致：**同一份产物里两个字段互相约束**，不需要对照跑就能判定。而 `bare` 侧禁止出现零值账，是因为零值账会让"这个构建没有审计"与"审计跑了并且同意了一切"产出同一份档案——这正是 `bareRetry` 当初被引入时要消除的歧义。
+
+## 22.25 归因、单位与两个事实：一轮里被读数打穿的四个设计假设
+
+### 22.25.1 并发下的花费归因必须发生在写入端
+
+**原设计**：`traceUsage` 在每次 `answer*` 前后各取一次进程级 `llmUsage()`，把差值加进该侧的累计。文档里写着"差值而不是重置"，理由是进程级账本单调、不需要 `reset()`。
+
+**读数**：`42054107910` 上 `usageBySide` 报 `10,606 + 9,852 = 20,458` 次调用，而整跑 `llmUsage.calls = 5,966`，**3.43 倍**；feature 侧 prompt tokens 报 `137,355,496`，整跑是 `37,149,529`。
+
+**为什么**：账本是进程级且单调的，四个 worker 并发作答时，每个答案的区间都包含别人的调用。差值法在"同一时刻只有一个答案在飞"时精确，而这个 arm 的每一次派发都是四 worker。
+
+**修法**：把归因挪到**写入端**。
+
+| 层 | 名字 | 职责 |
+| --- | --- | --- |
+| `cortex-ai`（可移植） | `observeUsage(observer)` / `createUsageTally()` | 只提供"每条 usage 记录都会通知"的注册点，和"可累加的账" |
+| `cortex-eval`（仪器） | `AsyncLocalStorage<UsageTally[]>` + `withUsageAttribution` | 提供作用域：一个答案跑在自己的 async 上下文里，四个 worker 各自记账 |
+
+`node:async_hooks` 不能进 `cortex-ai`：它的入口是 `tools/entry-guard.mjs` 保留的可移植入口之一，第一版把 `AsyncLocalStorage` 写进产品包时被入口守卫直接判红——守卫是对的，浏览器构建不该为了一个只有 Node 跑会问的问题而加载不了。
+
+一个副作用值得记下：这套结构让"残余"（judge、phrasing）仍然是**一次减法**，而且是在账本只增不减的前提下取的减法，`minusUsage` 的负数守卫因此仍然有意义——它现在守的是"两个读数不在同一本账上"。
+
+### 22.25.2 单位：逐题字段必须是计数，不是布尔
+
+**原设计**：`recoveryAttempted` / `recoveryAnswered` / `auditAttempted` / `auditChanged` 是布尔，语义是"这个机制在这一题上是否发生"。
+
+**读数**：`audit.attempted = 469`，花名册里 118 条记录被标记；比值正是 `runs = 4`。
+
+**为什么**：花名册记的是**第一遍**（`ablation.ts` 的 `baseFirst` / `featFirst`），普查累计的是四遍。布尔在 `runs = 1` 时恰好等于计数，在 `runs = 4` 时丢掉四分之三，于是"恒等式"只在一种配置下成立——而派发从来不用那种配置。
+
+**修法**：四个字段改成计数，并按题**累加**（`traceCensus` 拿到 `merge`），恒等式改成在任何 `runs` 下都成立的那一条：
+
+> 花名册这一列的和 = 运行级普查。
+
+改名是修法的一部分：`recoveryConsultations` / `recoveryAnswers` / `auditConsultations` / `auditChanges`。一个单位变了而名字没变的字段，正是 §13.259 里 `bareRetry` 静默消失的那种歧义。
+
+### 22.25.3 交付与取证是两个事实，一个字段不能同时服务
+
+**原设计**：`#recordEvidence(admitted, assembled)` 一次写五个量——`lastPromptText`、`lastPromptEvidenceChars`、`lastRetrievedContext`、`lastAdmittedEvidence`。注释里论证过：审计分支要用**答案来自的那个提示词**记录，否则覆盖统计会描述被丢弃的咨询。
+
+**读数**：审计触发的题上 `promptChars` **+530**、`promptDigest` 在 117/118 题上变化，而 `deliveredPromptChars` 中位只动 **2 个字符**。交付的字节一个都没变，产物却说变了。
+
+**为什么**：两个问题被写进了一个字段。"交付"问的是检索产出了什么（语料 + 嵌入 + 融合 + 锚点 + 预算，与模型无关，必须逐字节可比）；"取证"问的是作答那次调用看到了什么（审计会按自己指令占用的空间重新选证据，所以它就是审计的那一份）。
+
+**修法**：拆成 `#recordDelivery`（只由首轮写，喂 `promptChars` / `promptDigest`）与 `#recordCoverage`（由作答那次写，喂 `carried` / `admittedEvidence`）。无审计的跑两者同源，历史可比性不受影响。
+
+这件事的分量超过这一跑：**§13.257 与 §13.261 的全部归因都以 `promptDigest` 为刀**。一个会重建提示词的机制，原本可以把自己伪造成一次检索变化。
+
+### 22.25.4 派发字段的名字覆盖哪些机制，要按种群判断而不是按字面
+
+`carriesBareLadder(pass)` 返回 `true` 仅对 `bare` 与 `recover`。§13.128 的修复正是把 `=== 'bare'` 换成这个函数，理由是裸梯子与恢复遍作用在**不相交**的种群上。
+
+`audit` 当初被排除，理由写成"在它下面再叠一次裸重试，会让任何变化都变成两次咨询"。这个理由描述的是 `answerSessions` 产生不出来的状态：裸重试分支在 `first === null` 且是裸拒答时触发并**立即返回**，审计分支要求 `first !== null`。两者作用在同一次调用的**不相交结果**上。
+
+**代价**：`42054107910` 是一次声明了单字段的派发，实际动了两个机制——对照转化了 71 次裸拒答（`bareRetry 71/71`），处理侧 0 次，拒答数从 134 涨到 209。它所有的准确率数字都是"审计"与"撤回一个已发布机制"之和。
+
+**修法**：`carriesBareLadder(pass) = pass !== 'none'`，`none` 是唯一表示"没有梯子"的名字；`review-pass-ladder.test.ts` 断言 `audit` 带上梯子，注释里写明种群不相交的论证与这次的实测代价。
