@@ -7562,3 +7562,164 @@ byRoute[route] ?? maxPromptChars ?? DEFAULT_MAX_PROMPT_CHARS
 | `cortex-eval` 全包 | 99.34 / 97.79 / 99.61 / 99.58 |
 
 新增 21 条测试，两个包合计 **3,001 + 903** 条全绿。
+
+### 22.47 一个比值必须带着它的分母一起写下来
+
+#### 22.47.1 缺陷：分子与分母来自两个总体
+
+`prompt tokens per correct answer` 此前只存在于 `tools/cost-ledger.py`：
+
+```python
+'perCorrectAnswerPromptTokens': per_question_per_run / float(accuracy)
+```
+
+两个操作数在同一个 artifact 里，但指代不同：
+
+| 操作数 | 取处 | 总体 |
+| --- | --- | --- |
+| `per_question_per_run` | `usageBySide.feature.promptTokens / (questionCount × runs)` | **全部跑次**的求和 |
+| `accuracy` | `feature.metrics.accuracy` | **一次跑次**（渲染为 `first of N runs`，理由见 §13.122） |
+
+在 `42355323615` / `42387911305` 这一对上，两条臂的第一次跑次落在均值两侧（−0.55 pp 与 +0.05 pp），于是旧除法对基线多收 0.60%、对对照少收 0.06%，把 1.20 pp 的准确率差读成 **0.57%** 的成本差（正解 **1.23%**）。
+
+判据上这属于"**两个数各自都对，但它们之间的指代错位**"——与 §22.44 记录的"一个量有两种写法"同族，但更难，因为两种写法都合法。
+
+#### 22.47.2 设计：读数进 artifact，人口随它走
+
+**类型**（`usage-by-side.ts`）：
+
+```ts
+export type CostEfficiency = {
+  readonly perCorrectAnswerPromptTokens: number;
+  readonly promptTokensPerQuestion: number;
+  readonly accuracy: number;
+  readonly accuracySource: 'all-runs' | 'first-repetition';
+};
+```
+
+**纯函数**取四个值、四个守卫：
+
+```ts
+export function costEfficiencyFrom(input: {
+  readonly promptTokens: number;
+  readonly questionCount: number;
+  readonly runs: number;
+  readonly accuracy: number;
+  readonly accuracySource: 'all-runs' | 'first-repetition';
+}): CostEfficiency | null {
+  if (!Number.isFinite(promptTokens) || promptTokens <= 0) return null;
+  if (!Number.isFinite(questionCount) || questionCount <= 0) return null;
+  if (!Number.isFinite(runs) || runs <= 0) return null;
+  if (!Number.isFinite(accuracy) || accuracy <= 0 || accuracy > 1) return null;
+  const promptTokensPerQuestion = promptTokens / (questionCount * runs);
+  return { perCorrectAnswerPromptTokens: promptTokensPerQuestion / accuracy, /* … */ };
+}
+```
+
+返回 `null` 而不是 `Infinity` / `0` / 抛错，因为四种缺席都是 artifact 真实可能的状态，而每一个都会被一个数字误报：答对零题的跑批，每正确回答的成本是**无穷**而不是很大；一次没花钱的跑批是**未测量**（`attachLlmUsage` 一层下的同一条规则）；题数或跑次数未知的跑批根本给不出每题读数——**用一个猜出来的跑次数做除数，就是 `perQuestionPerRun` 当初要避免的那个缺陷**。
+
+**装配**（`report.ts`）：
+
+```ts
+export function attachCostEfficiency(report: AblationReport): AblationReport {
+  const feature = report.usageBySide?.feature;
+  if (feature === undefined || report.usageBySide === undefined) return report;
+  if (report.runs === undefined) return report;
+  if (report.llmUsage !== undefined) {
+    try { residualUsage(report.llmUsage, report.usageBySide); } catch { return report; }
+  }
+  const aggregate = report.ablation.featureAggregate;
+  const accuracy = aggregate === undefined ? report.feature.metrics.accuracy : aggregate.avg;
+  /* … */
+}
+```
+
+三处判断各有理由：
+
+| 判断 | 理由 |
+| --- | --- |
+| `report.runs === undefined` 即拒绝 | 缺失不等于 1。一条四次跑批的 artifact 若丢了该字段，会被按四分之一的价格报出来 |
+| `residualUsage` 抛错即拒绝 | 分子是 `usageBySide` 的一列；两臂之和大于总数说明两份 tally 不来自同一个账本（渲染器此时印 `SPLIT UNAVAILABLE`）。一个已知不可靠的分子算出的比值，比缺席更糟 |
+| 校验条件挂在 `llmUsage !== undefined` 上 | 两个字段独立装配；要求一个有另一个才可信，会让"只带分侧"的 artifact 无理由地不可定价 |
+| `featureAggregate` 缺失时回退并在 `accuracySource` 写明 | 两个总体在一次跑批上相等、在四次上不等；让巧合冒充测量就是缺陷本身 |
+
+**为什么不用类型强制**：`AblationResult.featureAggregate` 是 required，而 artifact 是 JSON。required 是"本构建写什么"的断言，不是"磁盘上有什么"的断言——这一点在 §22.47.4 被验证为真。
+
+#### 22.47.3 判据
+
+| id | 断言 | 反例 |
+| --- | --- | --- |
+| `E0` | 读数对**哪次跑次排在第一位**不变 | 同一次跑批出两个价格 |
+| `E1` | 有 `featureAggregate` 用 `all-runs`，无则用 `first-repetition` 并写明 | 悄悄选了一个 |
+| `E2` | 四种缺席一律不 attach，不写 `0` | 除法未定义处出现数字 |
+| `E3` | 答对零题 → 缺席，而不是很大 | `inf` 被渲染成价格 |
+| `E4` | 不闭合的分侧不能定价 | 用渲染器自己标 `SPLIT UNAVAILABLE` 的那一列算出比值 |
+| `E5` | 渲染行在同一句里给出分母与人口名 | 只报价格的文本 |
+| `V0` | `cost-ledger.py` 优先采用 artifact 自带的读数 | 消费者与产出方不一致 |
+| `V1` | 形状不对的自带读数被拒，退回自算 | `accuracy: 92` 被当成小数 |
+| `V2` | 工具自算时选中同一分母 | 有/无 `costEfficiency` 的两个 artifact 读成两个价格 |
+| `V3` | 三种人口名（`artifact` / `all-runs` / `first-repetition`）都出现在文本里 | 文本说不出用的是哪一个 |
+
+`E0` 是**代码评审看不出来的那一条**：两种除法单独看都正确，只有在"同一跑批、不同排列"下才分岔。所以它是直接断言的——两个只有 `feature.metrics.accuracy` 不同的 artifact 必须返回**同一个**浮点数。
+
+`V0`/`V1` 的实现（`cost-ledger.py`）：
+
+```python
+def _authored_efficiency(report: dict) -> dict | None:
+    authored = report.get('costEfficiency')
+    if not isinstance(authored, dict): return None
+    if authored.get('state') != 'measured': return None
+    ratio = authored.get('perCorrectAnswerPromptTokens')
+    accuracy = authored.get('accuracy')
+    if isinstance(ratio, bool) or not isinstance(ratio, (int, float)) or ratio <= 0: return None
+    if isinstance(accuracy, bool) or not isinstance(accuracy, (int, float)): return None
+    if not 0 < accuracy <= 1: return None
+    return {..., 'accuracySource': 'artifact'}
+```
+
+形状校验不是仪式：`costEfficiency` 是一个**未来构建**会写的字段，一个百分比或一个字符串仅仅因为存在就被采用，会让本工具的拒绝行为依赖于另一侧的纪律。
+
+#### 22.47.4 同一个缺陷的第二个实例：不闭合的分侧
+
+`E4` 不是预防性设计。分子是 `usageBySide` 的一列，而那个块是两个独立累加的 tally；当 `baseline + feature` 声称的 prompt token 大于 `llmUsage` 报出的总数时，`residualUsage` 拒绝给出残差，渲染器印 `SPLIT UNAVAILABLE` 而不印分臂列。**比值继承了那个怀疑**，而缺席读作"未测量"、错误读作"测量过"。
+
+`tools/cost-ledger.py` 侧实现同一条规则，但**有单侧性**：没有总数、总数不是整数、某一侧没有 token 计数的 artifact 什么都不能证明，因为"缺少证人"而定罪是另一种错误。
+
+#### 22.47.5 一个"能读旧 artifact"的读者，不能在自己渲染时崩
+
+补 `first-repetition` 回退测试时暴露了一个线上缺陷：`formatAblationReport` 无保护地读 `ab.featureAggregate.min`，于是**回退路径存在的理由本身**——一个在 `featureAggregate` 出现之前写下的 artifact——渲染时抛 `TypeError: Cannot read properties of undefined`。
+
+修法是把扩散表的每一行交给 `spreadRow(name, spread)`，缺失时渲染 `—`：
+
+```ts
+function spreadRow(name: string, spread: AggregateStats | undefined): string {
+  if (spread === undefined) return `| ${name} | — | — | — | — |`;
+  return `| ${name} | ${pct(spread.min)} | ${pct(spread.avg)} | ${pct(spread.max)} | ${pct(spread.median)} |`;
+}
+```
+
+`—` 不是 `0.00%`：这是本文件对重试计数器和 token 列用过的同一条 `null`-versus-`0` 规则，上移一张表。`—` 说的是"这些跑次从未被摊开"，是关于跑批的**事实**，不是稳定性结论。
+
+同时把 `pct` 从 `formatAblationReport` 的函数体提到模块级，因为新出现的两个渲染器（扩散行、每正确回答行）不是那个函数体，却必须用同一种方式格式化小数。
+
+这是本 campaign 第三次遇到"关于缺席的规则活在一个从未被执行过的缺席分支里"。
+
+#### 22.47.6 结果
+
+| 文件 | 覆盖率（语句/分支/函数/行） |
+| --- | --- |
+| `usage-by-side.ts` | **100 / 96.55 / 100 / 100** |
+| `report.ts` | **99.62 / 96.07 / 100 / 99.61**（本轮之前 98.79 / 95.74 / 100 / 98.73） |
+| `cortex-eval` 全包 | **99.38 / 97.81 / 99.61 / 99.62** |
+
+新增 28 条 TS 测试（`cost-efficiency.test.ts`）与 14 条 Python 测试（`test_cost_ledger.py`），合计 `cortex-eval` **3,029**、python 工具 **1,929**，全绿；导出普查 0 新孤儿（`CostEfficiencyInputs` 因只出现在签名里被判为孤儿，改为内联参数类型）。
+
+**真实 artifact 上的验证**：`42391635411` 的 artifact（由**不含** `costEfficiency` 的 `8890b052` 生成）经 `cost-ledger.py` 读出
+
+```text
+  per question per run            12,103   prompt tokens
+  per correct answer              13,359   prompt tokens
+  at accuracy                     90.60%   (453 correct, all-runs)
+```
+
+即回退路径选中了 `all-runs` 并把它写在了渲染行上——工具对一个旧 artifact 的选择与新构建会做的选择一致（`V2`）。
