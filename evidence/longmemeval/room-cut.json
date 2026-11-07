@@ -1,0 +1,89 @@
+{
+  "primary": "medianEvidenceRatio",
+  "ratio": {
+    "ratio": 0.486511,
+    "paired": true,
+    "control": {
+      "run": "42355323615",
+      "maxPromptChars": 48000,
+      "medianPromptChars": 46926.0,
+      "questions": 500
+    },
+    "reduced": {
+      "run": "42373407439",
+      "maxPromptChars": 24000,
+      "medianPromptChars": 22830,
+      "questions": 499
+    },
+    "measure": "median promptChars of the reduced arm / median promptChars of the control arm, same 500 questions, same reader, same judge"
+  },
+  "accuracy": {
+    "controlFirstRepetition": 0.914,
+    "reducedFirstRepetition": 0.882,
+    "deltaPoints": -3.2,
+    "registeredTolerance": -2.0,
+    "met": false,
+    "byCapability": {
+      "ABS": {
+        "control": 1.0,
+        "reduced": 1.0,
+        "delta": 0.0,
+        "n": 30
+      },
+      "IE": {
+        "control": 0.9333,
+        "reduced": 0.9267,
+        "delta": -0.67,
+        "n": 150
+      },
+      "KU": {
+        "control": 0.8889,
+        "reduced": 0.875,
+        "delta": -1.39,
+        "n": 72
+      },
+      "MR": {
+        "control": 0.8347,
+        "reduced": 0.7686,
+        "delta": -6.61,
+        "n": 121
+      },
+      "TR": {
+        "control": 0.9606,
+        "reduced": 0.9134,
+        "delta": -4.72,
+        "n": 127
+      }
+    }
+  },
+  "deliveredTurns": {
+    "ABS": {
+      "controlMedian": 76,
+      "reducedMedian": 34
+    },
+    "IE": {
+      "controlMedian": 64,
+      "reducedMedian": 32
+    },
+    "KU": {
+      "controlMedian": 67,
+      "reducedMedian": 28
+    },
+    "MR": {
+      "controlMedian": 199,
+      "reducedMedian": 102
+    },
+    "TR": {
+      "controlMedian": 205,
+      "reducedMedian": 109
+    }
+  },
+  "verdict": {
+    "C2": "pass",
+    "C1": "pass at 22,830/4.06 = 5,623 tokens per question",
+    "A": "fail (-3.20 against a -2.0 tolerance)",
+    "B": "fail, in the opposite direction: the fall is entirely in MR and TR",
+    "C": "pass (ABS 30/30 at both rooms)"
+  },
+  "note": "tools/gold-room.py priced MR and TR at zero exposed questions and predicted the 49 exposed questions would be in ABS, IE and KU. The measurement is the reverse: the three named capabilities lost 2.1 points combined and the two cleared ones lost 11.3. See docs/PROMPT-ROOM-IS-LOAD-BEARING.md."
+}
