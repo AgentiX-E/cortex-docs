@@ -18120,10 +18120,11 @@ declared but unchanged: ['cortex_memory_max_prompt_chars'] -- the departure name
 
 | 项 | 值 |
 | --- | --- |
-| python 工具测试 | **1,820 通过 + 1 skipped + 201 subtests**（上轮 1,792） |
+| python 工具测试 | **1,824 通过 + 1 skipped + 201 subtests**（上轮 1,792） |
 | `pnpm check` | 全绿（typecheck + lint + prettier + docs-crosscheck + 全测试） |
 | 文档交叉校验 | **56 of 61** 已验证，5 条本次 checkout 无值 |
-| 新增测试文件 | 3（`prompt-room-recorded`、`test_evidence_budget`、`test_prompt_room_resolution`） |
+| 新增测试文件 | 3（`prompt-room-recorded`、`test_evidence_budget`、`test_prompt_room_resolution`）；另在同一文件内为守卫接线加 4 条 |
+| `cortex-eval` 覆盖率 | **99.23 语句 / 97.73 分支 / 99.49 函数 / 99.46 行**；`acceptance.ts` 100% × 4 |
 | 新增文档 | `cortex/docs/AUDIT-PROMPT-ROOM.md` |
 
 ### 七、SOTA 位置（按轴分开报）
