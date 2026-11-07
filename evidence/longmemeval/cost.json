@@ -1,0 +1,25 @@
+{
+  "primary": "perQuestionPerRun",
+  "readings": {
+    "perCall": 11689.993239980686,
+    "perQuestionPerRun": 12104.988,
+    "perQuestion": 48419.952
+  },
+  "inputs": {
+    "promptTokens": 24209976,
+    "calls": 2071,
+    "questionCount": 500,
+    "runs": 4,
+    "cacheHitPromptTokens": 18933570
+  },
+  "retries": 71,
+  "comparableTo": "prompt tokens delivered for one question, one repetition",
+  "cap": {
+    "maxPromptChars": 48000,
+    "impliedCharsPerToken": 4.11,
+    "reading": "at-cap",
+    "band": "3.5-4.7 characters per token, English prose",
+    "status": "inferred"
+  },
+  "run": "42310779222"
+}

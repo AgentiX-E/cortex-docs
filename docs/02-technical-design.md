@@ -7066,3 +7066,55 @@ but required in type 'Record<RelevanceUnits, RelevanceUnits | undefined>'.
 | `paired_capability_delta` 的测试 | **6** |
 | 门工具测试总数 | **77 passed + 111 subtests** |
 | 文档交叉校验（cortex） | 52 of 55 markers verified |
+
+### 22.40 成本维度的实现：一条除法口径、一份带来源的证据文件、一条渲染规则
+
+`C1` 从一个"没有值的行"变成"可读的行"，中间需要三件东西，缺一件这条行就还是装饰。
+
+#### 22.40.1 一条除法口径，写在工具里而不是写在文档里
+
+一份产物里 `usageBySide.feature.promptTokens = 24,209,976`、`calls = 2,071`、`questionCount = 500`、`runs = 4`。四种数、三种除法、都成立：
+
+| 读数 | 除法 | 值 | 回答什么 |
+| --- | --- | ---: | --- |
+| per call | `promptTokens / calls` | 11,690 | 一次交给读者的上下文有多大 |
+| per question per run | `promptTokens / (questionCount × runs)` | **12,105** | 一道题一次要花多少，含重试 |
+| per question | `promptTokens / questionCount` | 48,420 | 一次四轮评估总共花多少 |
+
+`tools/cost-ledger.py` 选 `perQuestionPerRun` 作主读数，理由不是偏好而是**口径一致**：`C1` 的 metric 与它对照的三条竞品 recipe（Zep 4.4K、Mem0 6.8K、Maximem 7.4K）原话都是 per question。`perCall` 保留并打印，因为它是这份文件里唯一一个"不是每题"的读数，而"prompt 有多大"恰好是读者会问的另一个问题。`perQuestion` 也打印，理由相反：它是把一个四轮实验的总量拿去和竞品的单次数字对比时唯一会用到的那一个，而两者之间差的正是**重复轮数**——那是评估框架的性质，不是产品的性质。
+
+工具对四种残缺都**拒绝而不是回退**，且每种拒绝的理由都是"回退会答错一个问题"：缺 `usageBySide.feature` 时不回退到 `llmUsage`（那是两个系统的和）；缺 `questionCount`/`runs` 时不只打 `perCall`（那会让一份只能答三分之一问题的账本看起来完整）；`calls: true` 不当作 1（`isinstance(True, int)` 在 Python 里成立）；缺 `cacheHitPromptTokens` 不当作 0（`None` 和 `0` 是两个读数，文件里只有一个）。
+
+#### 22.40.2 一份带来源的证据文件
+
+`--write` 必须同时给 `--run`，否则非零退出：不带运行号的证据文件是一个谁也复算不出来的数字。落盘形状：
+
+```json
+{
+  "primary": "perQuestionPerRun",
+  "readings": { "perCall": 11689.99, "perQuestionPerRun": 12104.99, "perQuestion": 48419.95 },
+  "inputs": { "promptTokens": 24209976, "calls": 2071, "questionCount": 500, "runs": 4,
+              "cacheHitPromptTokens": 18933570 },
+  "retries": 71,
+  "cap": { "maxPromptChars": 48000, "impliedCharsPerToken": 4.11, "reading": "at-cap", "status": "inferred" },
+  "run": "42310779222"
+}
+```
+
+`cap` 那一段是本轮的第二个发现：上限 48,000 字符、每次 11,690 tokens，商是 4.11 字符/token——英文散文的密度，所以交付**填满了**窗口。工具把它打印成 `window fill at-cap`，并显式标注 `inferred`：判断所用的是"英文 3.5–4.7 字符/token"这条带，带本身是语言的性质而不是运行的性质，换了语料就会错。标签写成 `inferred` 而不是 `measured`，是为了让这句话可以被合理地反对。
+
+#### 22.40.3 一条渲染规则，两个打印器
+
+`acceptance-check.mjs` 打印人读的矩阵，`docs-crosscheck.mjs` 打印文档里 `reading:` 标记（HTML 注释形式）允许携带的值。这一轮之前它们是同一条规则的两份拷贝，而 `C1` 第一次带来一个"均值"值，两份拷贝当场分开：`12105` 与 `12104.99`。于是同一份 checkout 里，读者打开哪份文档，另一份都显得是错的——而分歧在格式化器上，不在测量上。
+
+修法是**一条规则**：`count` 写整数。没有小数个 prompt token，而把 24,209,976 / 2,000 = 12,104.988 写到两位小数，是在宣称一个除法并不具备的精度。为避免这条规则只被"这一次恰好对"验证，加了 4 条测试：把旧规则放回去，其中 2 条立刻红，并给出 `- 12105 / + 12104.99` 的 diff。测试在缺 `node`、缺 `dist`、缺兄弟仓库证据文件时**跳过而不是失败**——缺前置条件不是分歧，把两者混为一谈的测试会在 CI 第一次因无关原因变红时被删掉。
+
+#### 22.40.4 这一节的数值
+
+| 项 | 值 |
+| --- | ---: |
+| `cost-ledger.py` 测试 | **37 passed**（无 mock） |
+| 渲染一致性测试 | **4 passed**（已验证可抓回归） |
+| 验收行无值数 | 5 → **4** |
+| 文档交叉校验 | 53 of 56 markers verified |
+| `C1` 读数 | **12,105** 对阈值 6,000 |
