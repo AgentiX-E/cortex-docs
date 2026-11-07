@@ -1,0 +1,74 @@
+{
+  "units": {
+    "evidence": "characters of evidence the prompt carried after `fitToBudget`",
+    "prompt": "characters of the whole assembled prompt",
+    "required": "tokens per question, one repetition"
+  },
+  "density": {
+    "charsPerToken": 4.06,
+    "charsPerCall": 47541.6,
+    "tokensPerCall": 11720.8,
+    "retryShare": 0.0343,
+    "band": "2.5-6.0 characters per token",
+    "status": "measured"
+  },
+  "readings": {
+    "medianEvidenceChars": 46926.0,
+    "medianEvidenceTokensPerQuestion": 11558.0,
+    "medianPromptChars": 47829.5,
+    "medianPromptTokensPerQuestion": 11781.0,
+    "instructionShareOfMedian": 0.0189,
+    "medianInstructionShare": 0.0141
+  },
+  "cap": {
+    "rooms": {
+      "multi-session": 48460
+    },
+    "roomSource": "maxPromptCharsByRoute",
+    "minRoom": 48460,
+    "maxRoom": 48460,
+    "medianUtilisation": 0.987,
+    "medianUnspentChars": 630.5,
+    "resolved": false,
+    "unspentByCapability": {
+      "ABS": {
+        "n": 30,
+        "medianUnspentChars": 884.0,
+        "maxUnspentChars": 4363
+      },
+      "IE": {
+        "n": 150,
+        "medianUnspentChars": 1247.0,
+        "maxUnspentChars": 11533
+      },
+      "KU": {
+        "n": 72,
+        "medianUnspentChars": 974.0,
+        "maxUnspentChars": 3491
+      },
+      "MR": {
+        "n": 121,
+        "medianUnspentChars": 126,
+        "maxUnspentChars": 386
+      },
+      "TR": {
+        "n": 127,
+        "medianUnspentChars": 610,
+        "maxUnspentChars": 852
+      }
+    }
+  },
+  "quantisation": {
+    "medianCharsPerEvidenceTurn": 110.3,
+    "turnsPerThousandChars": 9.07,
+    "evidenceTurnsMedian": 417.5
+  },
+  "ratio": {
+    "ratio": 1.0,
+    "numeratorEvidenceTokens": 11558.0,
+    "referenceEvidenceTokens": 11558.0,
+    "paired": false
+  },
+  "reference": null,
+  "run": "42355323615"
+}

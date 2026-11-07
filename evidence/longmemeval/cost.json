@@ -1,25 +1,34 @@
 {
   "primary": "perQuestionPerRun",
   "readings": {
-    "perCall": 11689.993239980686,
-    "perQuestionPerRun": 12104.988,
-    "perQuestion": 48419.952
+    "perCall": 11720.790922259777,
+    "perQuestionPerRun": 12136.879,
+    "perQuestion": 48547.516
   },
   "inputs": {
-    "promptTokens": 24209976,
+    "promptTokens": 24273758,
     "calls": 2071,
     "questionCount": 500,
     "runs": 4,
-    "cacheHitPromptTokens": 18933570
+    "cacheHitPromptTokens": 23870370
   },
   "retries": 71,
   "comparableTo": "prompt tokens delivered for one question, one repetition",
   "cap": {
-    "maxPromptChars": 48000,
-    "impliedCharsPerToken": 4.11,
+    "maxPromptChars": 48460,
+    "minRoom": 48460,
+    "maxRoom": 48460,
+    "rooms": {
+      "maxPromptCharsByRoute": {
+        "multi-session": 48460
+      }
+    },
+    "roomSource": "maxPromptCharsByRoute",
+    "impliedCharsPerToken": 4.13,
     "reading": "at-cap",
     "band": "3.5-4.7 characters per token, English prose",
-    "status": "inferred"
+    "status": "inferred",
+    "caveat": "the routes this map does not name took the product default, which the artifact does not record; the fill is computed at the widest named room and is therefore a ceiling on it rather than a measurement. Artifacts written after \u00a713.299 carry `effectivePromptChars` and do not have this limitation."
   },
-  "run": "42310779222"
+  "run": "42355323615"
 }
