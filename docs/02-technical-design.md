@@ -7016,3 +7016,53 @@ but required in type 'Record<RelevanceUnits, RelevanceUnits | undefined>'.
 `ask=verbatim-acts`：在参考管线的聚合契约里**只换一行**——把"不得替换或推断不同的动词"换成"同一个**行为**换个动词也算"，并保留一条边界（行为缺失或性质不同才排除，证据没说的不许添加）。改动以 `replaceLine(VERBATIM_MULTI_SESSION_INSTRUCTION, …)` 派生，测试断言 diff 本身：一行出、两行入、其余逐行保位；参考管线自己的文本不动（`buildAggregationQaPrompt` 仍含被替换那句）。
 
 十三门，其中第 13 门是**归因**：`42310779222` 里失败原因是"动词排除"的六道题（`88432d0a`、`2ce6a0f2`、`129d1232`、`gpt4_ab202e7f`、`60159905`、`bc149d6b`）里至少 4 道必须翻对，否则分差来自抖动。可达上限也是算术：18 道低估里 6 道是动词/角色排除、3 道是日期窗口（这条规则不动），所以上限约 +5.0 分，杠设在 +3（80%）。
+
+### 22.39 reranking 的验收标准第一次变成可执行的，而它暴露了门工具的一个形状缺口
+
+§13.115 是我们唯一一个"已实现、已登记、从未跑"的增量。它的判据写在散文里（"MR ≥ +3 且没有能力掉超过 2，且 `fallbacks = 0`"），而仓库里的门工具一次也没读过它。这一节记录把它变成可执行验收时发现的两件事。
+
+#### 22.39.1 缺口：15 个门种全部是跨产物的，没有一个能读一次跑批内部的两侧
+
+`tools/registered-gates.py` 此前有 15 个门种，它们共同的形状是 `treatment` 对 `control` 两个**产物**——两个 run id，两份 JSON。
+
+而 §13.115 的配对不是这个形状。它的 control 不是更早的一次运行，而是同一份产物里的另一侧：`ablation.perCapability.<cap>` 已经同时带着 `baselineCorrect`、`featureCorrect`、`total`、两个不一致计数和这一跑自己的 McNemar p。
+
+把同一份产物传给 `capability_delta` 两次是没有用的：`_by_id` 两侧会返回**同一批记录**，于是它在一次真的动过的运行上报告 `+0.00`。这个失败是静默的，而且看起来完全正常——正是本项目反复防的那一类。
+
+新增的 `paired_capability_delta` 读的是 `ablation.perCapability`，不是记录。两条拒绝：块缺失 → `UNEVALUABLE`；`total`/`baselineCorrect`/`featureCorrect` 不是整数或 `total = 0` → `UNEVALUABLE`。**默认成 0 会让一个改了写入器的产物被读成"动了零分"**，那是 §13.107 换了个地方。
+
+六条测试，无 mock，其中一条是"把同一份产物当两侧传进去"这个形状本身的回归：`test_a_gain_over_the_bar_passes` 用 `94 → 101`，`test_a_gain_under_the_bar_fails` 用 `94 → 96`（1.65 分，正是 §13.291 量到的抖动尺度）。
+
+#### 22.39.2 一个意外：它读出的第一组数字是参考管线，不是我们自己
+
+在 `42310779222` 上试跑，门读出：
+
+```
+`MR` 103/121 → 94/121 = 85.12% → 77.69% (-7.44 points, bar ≥ -20.00); the pair moved +9/−18, McNemar p = 0.1221
+```
+
+这不是 id 实验，是**我们 vs 参考管线**：`baseline.name` 是 `reference-pipeline`，`feature.name` 是 `cortex-memory`。也就是说这份产物的"两侧"是两条不同的管线，而 `-7.44` 正是 §1.40 那个"我们自己仓库里最强的竞品"。
+
+这条数字与文档里引用的 7.43 分差一位小数不同（85.12 对 86.78 的口径差），而 `p = 0.1221` 与 §13.288 记的 `0.122` 一致。**记在这里是因为它说明：门工具的第一次实测，读出的是我们自己的既有结论，而不是一个新数。** 这是仪器可信的一个便宜证据。
+
+#### 22.39.3 由此确认的 §13.115 执行形状：两次派发，不是一次
+
+写门的时候才看清的一件事：**§13.115 说的"paired within one invocation"指的是 baseline 与 feature 在同一份产物里，而我们的 `baseline` 永远是 `reference-pipeline`，不是"关掉 rerank 的 cortex-memory"。**
+
+于是 rerank 只能这样测：
+
+1. **control**：`cortex_memory_relevance_top_k=128` + `rerank=none`。这是一个**新的基线**，因为已注册的池宽是 256，而 128 是 Zhipu `/rerank` 单次调用的文档上限（也正好是 RAW-RAG 自己的 k）。它本身有独立读数：池宽从 256 降到 128 的代价。
+2. **treatment**：同上 + `rerank=on`。与 control 的差别只有一个变量。
+
+两次跑批，不是一次。`pair` 的 `paired_capability_delta` 因此用不上——它读的是同一份产物内的两侧，而这里两侧是两份产物。**这个门种的价值在别处**：它是给任何"一次跑批内自带对照"的实验用的，而这样的实验在 §13.115 之后还会有。
+
+顺序也由此确定：**先 control，后 treatment**。反过来的话，treatment 会缺少唯一的可比基线，而 `256 vs 128` 的差异会被读成 rerank 的效应——§13.233 的教训（`+6.7` 其实是 thinking 的 `+6.25` 加上一个四字段 bundle 的 `+0.60`）正是这一条。
+
+#### 22.39.4 这一节的数值
+
+| 项 | 值 |
+| --- | ---: |
+| 门种数（新增前 → 后） | 15 → **16** |
+| `paired_capability_delta` 的测试 | **6** |
+| 门工具测试总数 | **77 passed + 111 subtests** |
+| 文档交叉校验（cortex） | 52 of 55 markers verified |
