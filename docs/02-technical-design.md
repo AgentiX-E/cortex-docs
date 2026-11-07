@@ -7140,3 +7140,105 @@ but required in type 'Record<RelevanceUnits, RelevanceUnits | undefined>'.
 3. **补偿必须被门验，不能被判词保证。** 字符预算的填充粒度是"轮"，+460 未必恢复**同样的**轮，可能恢复成一组不同的轮。所以 §13.295 的门 4 是逐题的"**没有一道题的金标轮少于它在 48,000 时的**"（`coverage_monotone`），门 5 是上次失败的那道 `≥ 98`。两条都过才叫常量覆盖下的判定。
 
 **为什么这比"再跑一次大样本"更值**：`p = 0.2266` 的 +4.13，样本量翻四倍也未必显著；而 460 字符的房间差是**确定性的**、每次跑都在的混杂。先去掉确定性的那一个，噪声才轮到被讨论。
+
+### 22.42 三处边界：证明与权威、布尔与三值、以及一句被读错的状态说明
+
+这一轮的外部审阅提出了多跳依赖传播（DAG）、三值弃答契约、增量维护三块设计。三块的价值不同，落地顺序也不同。本节只写**边界**——因为边界是这类设计能不能做对的全部。
+
+#### 22.42.1 `derivedFrom` 与 `Derivation`：一个是权威，一个只能是证明
+
+仓库里已经定过案。`ARCHITECTURE.md` 第 91 行：
+
+> A speculative `ProvenanceNode` type once stood in for this and read no code; it was deleted rather than kept as a shape without a graph. The remedy is a `derivedFrom?: string[]` field on `Fact`, not a parallel table.
+
+`docs/DECISION-PROVENANCE-NODE.md` §3.1 补上了失败机理：
+
+> `ProvenanceNode`'s error was structural: it made provenance a **sibling** of the domain types instead of a property of them, which is why it has no consumer.
+
+外部路线图建议"`Fact.derivedFrom` + 独立版本化 `DerivationStore`"，审阅卡把两者一并判为同构风险。**这里需要更细的切分**，因为两者粒度不同，只有一个才是失败的形状：
+
+| 记录 | 存什么 | 能不能决定一条事实是否存在 |
+| --- | --- | --- |
+| `Fact.derivedFrom?: string[]` | 这条事实依赖哪些事实的 id | **能**——它就是事实自己那一行 |
+| `Derivation` | 规则 id、规则版本、前提绑定、证据跨度、计算版本 | **不能**——它是证明记录，不是来源 |
+
+判断标准只有一条：**有没有第二条路径能声称"A 事实成立"。** `ProvenanceNode` 死了，是因为它是领域类型的**兄弟**——没有任何类型指向它，所以没有任何代码读它。一个只能从事实行上的 `proof_id` 到达、且不允许断言事实行没断言过的东西的 `Derivation`，是**证明**，不是第二权威。
+
+这条界线必须写进类型而不是写进注释。落地时的形状是：
+
+- `Fact.derivedFrom` 是唯一的事实来源权威，`revision.ts` 的 cascade 只沿它传播；
+- `Derivation` 若建，`Fact` 上只有一个 `proofId?: string` 指向它，且 `Derivation` 的读接口**不导出**任何形如 `factsOf(derivationId): string[]` 的方法——一旦导出，它就变成了第二个来源；
+- 谁消费 `derivedFrom` 必须先存在，否则不建。这是 `AUDIT-UNREFERENCED-*` 反复记录的失败模式，也是 `ProvenanceNode` 的墓志铭。
+
+**当前状态**：`packages/cortex-core/src/knowledge/revision.ts` 的 cascade **已经实现**（`cascade?: boolean` 在第 65 行，非 `true` 直接早返回在第 243 行，`function cascade()` 在第 292 行）。缺的不是 cascade，是边。
+
+#### 22.42.2 布尔门不是三值契约：`⊥` 是独立立项
+
+`packages/cortex-core/src/knowledge/assumption.ts` 第 170 行：
+
+```ts
+export function isAnswerable(fact: KnowledgeFact): boolean {
+  if (fact.stale === true) return false;
+  const persistence = assumptionOf(fact, 'persistence');
+  return persistence === undefined || persistence.status !== 'refuted';
+}
+```
+
+这是一个**二值门**，旁边还有一个数值折扣 `assumptionPenalty`（`refuted=0 / stale=0 / aged=discount / answerable=1`）。它能说"这条事实不算"，能说"这条事实打折"，但**说不出第三种话**：
+
+> 在当前前提下，没有可用的规则。
+
+这两件事不同。"我不知道答案"是信息不足；"这个问题依赖的前提已经不成立"是**前提消失**。前者应该弃答，后者应该报"在该前提下不成立"。把它们并成一个"不知道"，会让系统在"用户搬家了"之后仍然拿旧通勤时间当候选，只是分数低一点。
+
+所以 `⊥` 是一个真缺口，位置在 `isAnswerable` 旁边——**二值门保留，三值出口并列加**，因为现有五条路由的行取决于是二值的，改签名会让它们全部变成三值判断，而那是一次未经测的全局行为改动。
+
+**正确性条件（不可省）**：`⊥` 必须在 stratified negation 下才成立。对规则 `R(x) :- A(x), not B(x)`，只有 `B` 所在层到达不动点之后，`not B` 才是可判定的。在那之前吐出的 `⊥` 是一个谎。实现 `⊥` 的人必须同时实现分层，否则它只是把"没有证据"包装成了"确定不存在"。
+
+**为什么现在不派发**：它是新机制，要走预注册 + 受控集。底座已经在了——`packages/cortex-eval/src/assumption-ablation.ts` 的 16 例确定性集（`flat` 5/16、`annotated` 5/16、`gated` 16/16，且 `flat` 与 `annotated` 的政策表逐项相同，所以两者相等是设计而不是巧合）。三值臂应该加在这套底座的第四个位置上，而不是另起一套。
+
+#### 22.42.3 README 的状态说明被读成了"产品没接通"
+
+外部审阅的结论之一是"产品代码与刷分管线是两套实现"。核查后这条**一半成立，而成立的那一半改变了下一步动作**。
+
+`README.md` 的 Status 段原文：
+
+> It is *not* yet the engine behind our published LongMemEval-S number — the evaluation harness drives its own memory implementation and consumes only statistics helpers and one vector index from core.
+
+这句话说的是 **`cortex-core`**。它是对的：`packages/cortex-eval/src/bench-memory-arm.ts` 对 `cortex-memory` 是 **type-only import**（第 422、450 行的注释写明是为了包间无环），feature 臂的 `CortexMemory` 实例由 `cortex-memory/bench/run-ablation.ts` 注入。
+
+但**提示词契约层是接通的**，而且它是最近收益的来源：`instructionsFor`（`cortex-memory/src/prompt.ts:1855`）负责选指令块，`VERBATIM_ACTS_MULTI_SESSION_INSTRUCTION`（第 1594 行）改过之后，`42337560027` 里 94 道可覆盖的 `MR` 题 **94 道全部**输出了新字节。
+
+所以准确的说法是：
+
+| 层 | 是否接通评测 | 状态 |
+| --- | --- | --- |
+| 提示词契约（`ask` / `promptContract` / assembly 顺序） | **是** | 每轮都在被测量，且是近期增量的来源 |
+| 值门（假设台账 / 时序 / 唯一性 / 完整性） | **否** | `A8` 与 `cortex-memory` 产品 A/B 都未 dispatch |
+| `cortex-core` 的统计助手与向量索引 | 是 | README 已说明 |
+
+因此下一步动作**不是重写管线，而是 dispatch 那个已经组装好的 A/B**。README 那句话会保留（它说的是事实），但需要补一句让读者不会把它读成"整个产品没接通"——这一条已在本轮修正。
+
+#### 22.42.4 一个会让整批作废的缺陷：provider 返回 `null` 时不能崩
+
+`42347151147`（§13.295 的跑批）在 135 秒、第 88/500 题上死掉：
+
+```
+TypeError: Cannot read properties of null (reading 'usage')
+    at OpenAICompatibleLLM.complete (openai-compatible.ts:83:33)
+```
+
+provider 返回了 **HTTP 200** 和四字符的 body `null`。`res.json()` 对 `null` 返回 `null`，下一行读 `json.usage` 就抛了。三个属性让它不可恢复：
+
+| 属性 | 后果 |
+| --- | --- |
+| `null` 是一次**成功的解析** | 写 `if (res.status !== 200)` 的守卫看不见它 |
+| 空 body 时 `res.json()` **抛** `SyntaxError` 而不是返回 `null` | 写 `if (json === null)` 的守卫处理了 `null`，照样死在空 body 上 |
+| 重试阶梯按**状态码**重试 | `200` 对它是成功，阶梯已经返回，它根本不知道 body 不可用 |
+
+第三条是设计事实而不是缺陷：**重试层看不到响应体**，因为 `Response` body 只能读一次，阶梯必须把 `Response` 原样交还给调用方。所以"provider 没给回复"没法表达成一次重试。
+
+修复后 `complete` 把 body 读成 `… | null`、把解析失败也归到 `null`、用 `json?.usage`，并且除非 `content` 是字符串否则返回 `''`。
+
+**返回空答案而不是抛异常，理由在记账而不在宽容**：`parseUsage(undefined)` 返回 `undefined`，`recordUsage` 把它记成一次 **unpriced** 调用，`report.ts` 在任何一次 unpriced 时打印 `PARTIAL: N of M calls reported no usage`。所以一个"全部返回空"的 provider 会产出一份**说自己如此**的产物，这是容忍单次空答案的前提。抛异常则是拿一次可测量的单点缺失（2,000 次题×轮里的 1 次 = 0.05 分）换一次不可测量的整体作废。
+
+8 条测试，无 mock（走生产的 `fetchFn` 注入），并且验证过它们能抓住原缺陷：把 `json?.usage` 改回 `json!.usage`，8 条里 4 条立刻红，报错原文就是线上那一句。
