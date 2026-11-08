@@ -8146,3 +8146,59 @@ const FIELD_ALIASES = [[/^maxPromptChars(ByRoute)?(\..+)?$/, 'maxPromptChars']];
 **`EfficiencyComparison.leading` 与 `outcome` 可以不一致，而那个不一致就是发现。** `42355323615` 对 `42310779222` 在 `MR` 上 p = 0.0044、无障碍，总体仍是 `confounded`（两个字段都动了）。只读 `outcome` 的人会看到"什么都没建立"，从而丢掉一个 121 题能力上的 3.1 点已认证增益。
 
 **`stale` 是验收矩阵的第四种状态，不是四种之一的变体。** `Source` 的 `artifact` 变体新增可选 `attest`：每条子句给一个路径与该路径必须持有的值。不符时 `attestationOf` 返回原因，`verdictOf` 以 `stale` 结案——`current` 照常打印，`blocking` 恒为 false，`--strict-unrun` 与 `unrun` 同等计入缺失。一条关于旧配置的正确测量不该变红，也不该被读成通过；它需要的修法与两者都不同：**重新挂接**。
+
+### 22.54 planner 的契约：候选替换词必须在问题、对话、gold 三处都缺席
+
+§22.52 把"配对照"从一句叮嘱变成一个检查。这一轮把同一个思路推到审计计划期，而它抓到了一个会让整次审计崩掉的缺陷。
+
+**缺陷的形状。** `planNumberSwap` / `planEntitySwap` / `planCrossGold` 各自过滤候选替换词，条件都是两条：不在**对话**里、不在**gold** 里。`assertWrongByConstruction` 则检查三条：答案变了、gold 不在答案里、**引入的 token 不在问题里**。两者不对称——planner 不管问题，断言管。于是一句"Did Marcus help Rachel move?"会把语料池里的 `Marcus` 借给 `cross-gold`，断言拒绝，而拒绝是 `throw`：
+
+```text
+audit: a cross-gold introduced "Marcus", which the question itself states -- the answer would not be wrong
+```
+
+断言是对的，planner 是错的。后果的形状是最坏的一种：**语料相关**（夹具里没有这样写的问题，所以它自己的套件一直是绿的）、**以崩溃出现**（不报假接受率，报异常）、**并且晚**（一次真实产物，九十分钟之后）。
+
+**契约。** 三个 planner 的候选过滤条件现在是三条，第三条是 `!mentions(source.question, candidate)`：
+
+| 位置 | 必须缺席于 | 为什么 |
+| --- | --- | --- |
+| `planNumberSwap` 的候选 | 对话、问题、gold | 问题里说过的数字被换掉，答案仍然可能对 |
+| `planEntitySwap` 的候选 | 对话、问题、gold | 同上，实体版 |
+| `planCrossGold` 的引入 token | 对话、问题、gold | 借来的 gold 里的名字若问题已提到，答案并非必然错 |
+
+断言**不删**。理由是可证伪的：planner 的拒绝可以被下一个新增的 planner 撤销，而断言是这个不变量的唯一运行时位置。所以它现在的角色是"最后一道"——三臂在覆盖率上仍是 0，这是断言的正常形状，也是它存在的意义。
+
+**为什么这是设计层面的改动而不是补丁。** 三条过滤条件中第二条（问题）在语义上和另外两条不同：对话与 gold 是**工具控制的文本**，问题是**数据集给的文本**。一个不变的语料可以一直是"安全"的，而下一份语料未必，所以问题必须在计划期被当作不可信输入处理，而不是在断言期被当作已检查的输入处理。
+
+### 22.55 死分支的判定标准：谁在声称这个状态是可能的
+
+去投毒规则要求"分支要么被测试走到，要么被删掉"。这一轮删了十一个，判据是同一条，可以写成一个问题：**这行代码是否声称了一个本系统不可能出现的状态？**
+
+| 判据 | 例子 | 处置 |
+| --- | --- | --- |
+| 类型系统已经排除 | `byCapability.get(k) ?? []`，`k` 来自同一张 map 的键 | 删，改 `!` |
+| 构造保证长度 | `featurePerRun[run] ?? 0`，数组以 `length: runs` 构造 | 删 |
+| 容器保证唯一 | 能力比较器的相等分支，map 键互不相同 | 删，用默认 `sort()` |
+| 上游已拒绝 | `classifyPaired` 的两个守卫，`summarisePaired` 先拒绝且说得更清楚 | 删 |
+| 划分保证 | `markers.ts` 的 token 平局分支，两候选共享 span 需要同名 token 在两个类里 | 删 |
+| 描述符规范保证 | `enumerable !== undefined`，`getOwnPropertyDescriptors` 一律带它 | 删 |
+
+反过来的判据同样重要：**这条分支会不会在下一份语料上出现？** 会，就该写测试（历史字段缺失而非为空、`String.match` 返回 `null`、只有 getter 或只有 setter 的访问器、降序到达的能力名、空语料、以及替换的三条形状）。不会，就删——因为"兜底"在代码里是一个**断言**，声称那个状态可达，而下一次排障的人会照它去读。
+
+### 22.56 控制组的 ref 是一份代码，不只是一个输入表
+
+`workflow_dispatch` 的 `ref` 通常取 `master`，派发脚本还带一条守卫：本地 HEAD 的 tree 与远端 master 的 tree 不同就拒绝。这条守卫防的是"测了调用方没在看的代码"。
+
+`E11`（同配置重跑）需要的是相反的方向：**测的正是调用方在看的那份代码，只是那份代码不是最新的**。于是 `42452904894` 派发在标签 `s0-control-7692f20` 上，指向 `7692f204`，也就是基线跑的那个 commit；输入的偏离恰好是基线产物记录的两个字段（`ask` 与 per-route 房间），并由 `CORTEX_DECLARED_DEPARTURES` 声明。
+
+判据不在"是否走脚本"，而在三条可核对的字段：
+
+| 断言 | 核对方式 |
+| --- | --- |
+| `S0a` 配置逐字段相同 | 产物 `memoryArmConfig` 与基线产物对比 |
+| `S0a` 代码相同 | 产物 `head_sha` = `7692f204` |
+| `S0b` 偏离恰好两个 | `CORTEX_DECLARED_DEPARTURES` 与产物字段对比 |
+| `S4` 包相同 | 第 1 次重复的 `promptDigest` 与基线对比 |
+
+第四条是这四条里唯一"无论结论如何都要报告"的一条：它是否证工具，不是许可证。允许"先跑再说、事后用摘要核对"等于把控制组变成一个希望。

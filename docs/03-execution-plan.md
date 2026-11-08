@@ -6273,3 +6273,33 @@ pacing floor 400 min (500 questions x 1 call(s) x 8 passes x 6000 ms), budget 34
 #### 14.64.4 下一轮
 
 **`E11` 所需的派发是本轮唯一没能做的实验**：`42355323615` 同配置重跑一次。它把噪声地板从下界变成真界，也是队列里最便宜的一个。其次是覆盖率棘轮（`acceptance.ts` 66.66% 语句覆盖是数据表，但 `markers.ts` 的 68.75% 分支仍未修）、`J8`→`J9`、`A1` 归因定预算、`letta` 首派（唯一可对表的 438/500）。
+
+### 14.65 第三十七轮：把控制组派出去，并在覆盖率缺口里修掉一个会让审计崩掉的 bug
+
+#### 14.65.1 派发
+
+`42452904894`，ref = 标签 `s0-control-7692f20`（→ `7692f204`，即 `42355323615` 的 commit），输入 = 那个 commit 的派发表 + 基线产物记录的两个偏离（`cortex_memory_ask=verbatim-acts`、`cortex_memory_max_prompt_chars=multi-session:48460`），偏离已写入 `CORTEX_DECLARED_DEPARTURES`。返回后按 `S0a`（配置/`head_sha`）→ `S0b`（偏离恰好两个）→ `S4`（`promptDigest`）→ `S1a/1b/1c`（带区）的顺序读。
+
+#### 14.65.2 修掉的缺陷
+
+`judge-audit.ts` 的三个 planner 只把候选替换词与**对话**、**gold** 比对，不与环境**问题**比对；`assertWrongByConstruction` 检查问题，并且以 `throw` 拒绝。于是一句提到别的 gold 实体的问题会让 `planAudit` 对**整份语料**抛错。修法：三条 planner 的候选过滤加 `!mentions(source.question, candidate)`；断言保留为最后一道。测试先写、失败信息为 `audit: a cross-gold introduced "Marcus", which the question itself states`。
+
+#### 14.65.3 删掉的死分支（十一处）
+
+`markers.ts` 的 token 平局分支；`paired-flip.ts` 的 `classifyPaired` 两个守卫、map 兜底、下标兜底、比较器相等臂；`system-mirror.ts` 的 `enumerable` 守卫；`competitor.ts` 的 `score ?? 0`。判据见 `02` §22.55。
+
+#### 14.65.4 补的测试（缺的那一臂，不是 happy path）
+
+历史字段**缺失**而非为空的实例、`String.match` 返回 `null`、只有 getter / 只有 setter 的访问器、降序到达的能力名、空语料、替换的三条形状（追加 / 就地 / 拒绝）、以及"问题提到替换词"的拒绝。
+
+#### 14.65.5 账本
+
+导出普查基线用生成器重建而非手改：`totals` 433 / 1,041，`groups` 恢复八类（生成器原先只认五类，三段各自成篇的理由被折进 catch-all）。`export-census-gate` 22/22。验收矩阵里那条 `unrun` 行测试改为点名 `D1`、`M1`、`P1` 三行并要求理由长度。
+
+#### 14.65.6 机械指标
+
+`cortex-eval` 135 文件 / **3,139** 条全绿，整包 **99.53 / 98.45 / 99.62 / 99.71**；`markers.ts`、`competitor.ts`、`paired-flip.ts`、`system-mirror.ts`、`acceptance.ts` 全部 100/100/100/100；`judge-audit.ts` 97.05 / 95.58 / 100 / 96.42（剩余三臂为断言的失败路径）；工具 pytest 34；`docs:crosscheck` 58/64、6 跳过；`verify` 在 `7a0f574` 上两个 job 全绿。
+
+#### 14.65.7 下一轮
+
+① `S0` 读数（先 `S0a`/`S0b`，再 `S4`，最后带区）② `J8`（`judge-regrade.mjs --scorer full`）→ `J9` ③ `A1` 归因定预算 ④ `letta` 首派（唯一可对表 438/500）⑤ 覆盖率门禁改逐文件口径（数据已备齐）⑥ `C3` 的四次重复预算派发。
