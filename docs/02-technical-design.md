@@ -8069,3 +8069,49 @@ node tools/efficiency-frontier.mjs --label control --label reduced \
 ```
 
 工具读 `questionCount`、`runs`、`feature.metrics`（或 `metrics`）、`usageBySide.feature`（或 `usage`），缺任何一项按名字报错而不取默认值——默认成零会报出 99.9% 的节省。除数恒为 `questionCount x runs`，因为 `usageBySide.feature.promptTokens` 是**所有重复的合计**（§22.47 的那个比值缺陷）。`--json` 是 `C3` 证据文件的格式；文件今天不存在，因为唯一候选配对不可比，工具拒绝生成。
+
+### 22.52 双仪器、非对称合并，以及"配对照"必须是一个检查而不是一句叮嘱
+
+`packages/cortex-eval/src/efficiency-frontier.ts` 本轮新增 `PairedEvidence` 与精确 McNemar（复用 `paired-test.ts` 的既有实现，不写第二份），`tools/efficiency-frontier.mjs` 新增四项拒绝。
+
+#### 22.52.1 两个方向，两种合并规则
+
+```ts
+export type PairedEvidence = readonly { label: ReadingLabel; wonByA: number; wonByB: number }[];
+
+compareEfficiency(a, b, policy, paired?)   // 有配对证据时，该标签只用配对仪器
+```
+
+| 方向 | 规则 | 它防的是什么 |
+| --- | --- | --- |
+| 降级（`blocking`） | 界规则 **或** 配对认证的损失 | 初版只用配对，于是把一条 −3.20 点的臂读成"没更差"（p = 0.1325）并在 0.50x 上下文上把它**提升**了 |
+| 提升（`leading`） | **只有**配对认证的胜利 | 界不是检验；提升是唯一会夸大的方向 |
+
+**"没有显著的配对"不等于"没有效应"**——这句话就是降级取并集的理由。`p = 0.05` 是策略里的 `alpha`，与 `margin` 分开，因为两者单位不同：`margin` 是某个差值上的非劣界，`alpha` 是配对对数上的显著性水平，谁也不能用另一个表达。
+
+#### 22.52.2 精确而不是 χ²
+
+比较决定采纳时，配对对数通常是 20–40，正是近似不保守的区间。实现是精确二项尾、对数空间累加（不受 `0.5ⁿ` 下溢限制），并且**校验入参**：负数或小数没有 p 值，而算术会返回 `1`——一个披着"无证据"外衣的错误答案，是显著性检验唯一不能意外产生的东西。它与 §10.9 记录的 `p = 2.039e-56` 在三位有效数字上吻合。测试夹具必须**自洽**：胜负数与边际必须相容，否则那不是一个测量而是两个数。
+
+#### 22.52.3 对照必须单变量——做成了检查
+
+```js
+const DERIVED_FIELDS = /(Routes$|^effectivePromptChars\.)/;   // 派生，不是变量
+const FIELD_ALIASES = [[/^maxPromptChars(ByRoute)?(\..+)?$/, 'maxPromptChars']]; // 同一变量的两种写法
+```
+
+工具把两个 `memoryArmConfig` 展平、折叠别名、丢掉派生字段，差出**实质字段**：
+
+- `0` 个 → `config: identical, so this pair measures a run and not a variable`
+- `1` 个 → `config: single variable -- maxPromptChars`（可以认证）
+- `>1` 个 → `config: NOT a single-variable pair, differs on …`，**结论强制 `incomparable`**
+
+算术照样跑、照样打印，但它不能提升任何东西——因为它将要提升的那个差异并不归属于这条比较所命名的变量。这条检查的存在理由，是本项目已经犯过两次同样的错。
+
+#### 22.52.4 账单：否决权而非投票权
+
+`billedTokenRatio` 在两边缓存相同时等于 `tokenRatio`，因此它**超出**上下文比值的全部信息都来自缓存命中率，而命中率是"这一趟怎么走"的属性：同一系统两次四次重复派发读出 78.21% 与 98.34%，折算 1.003x 上下文上的 **0.156x** 账单。所以账单项从 `aBetterSomewhere` / `bBetterSomewhere` 里删除，只保留在 `aNotWorse` / `bNotWorse` 里。一次涨上去的账单能否决一次上下文节省（这个方向不会夸大），一次降下来的账单不能成为任何结论的理由。
+
+#### 22.52.5 准确率读哪一个字段
+
+`feature.metrics.correct` 是**第一次重复**；`ablation.featureAggregate.avg` 是均值。工具现在优先读后者并打印 `read on` 列（`repetition-mean` / `first-repetition`），区间仍然用单次 500 题 Wilson——**过覆盖而不是欠覆盖**。配对计数只能是第一次重复的答案（工件每题只存一份答案），所以"均值的配对检验"这条不成立、也不声称成立；要它成立，需要一次**每次重复都留存逐题答案**的派发。

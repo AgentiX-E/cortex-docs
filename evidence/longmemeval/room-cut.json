@@ -1,89 +1,169 @@
 {
-  "primary": "medianEvidenceRatio",
+  "$comment": "The 24,000-character window cut, read against the arm that differs in exactly one field, on the population `report.ts` says to read. Two corrections are folded into this version and both are recorded rather than applied silently: the control (was `42355323615`, which moves `ask` alongside the window) and the accuracy population (was `feature.metrics`, the first repetition, where `ablation.featureAggregate.avg` is the mean over all of them).",
+  "primary": "medianPromptChars",
   "ratio": {
-    "ratio": 0.486511,
+    "ratio": 0.487395,
     "paired": true,
     "control": {
-      "run": "42355323615",
+      "run": "42310779222",
       "maxPromptChars": 48000,
-      "medianPromptChars": 46926.0,
+      "medianPromptChars": 46825.5,
       "questions": 500
     },
     "reduced": {
       "run": "42373407439",
       "maxPromptChars": 24000,
-      "medianPromptChars": 22830,
-      "questions": 499
+      "medianPromptChars": 22822.5,
+      "questions": 500
     },
     "measure": "median promptChars of the reduced arm / median promptChars of the control arm, same 500 questions, same reader, same judge"
   },
+  "configDelta": [
+    "maxPromptChars"
+  ],
   "accuracy": {
-    "controlFirstRepetition": 0.914,
-    "reducedFirstRepetition": 0.882,
-    "deltaPoints": -3.2,
-    "registeredTolerance": -2.0,
-    "met": false,
+    "control": "42310779222",
+    "label": "matched: one field, maxPromptChars",
+    "overall": {
+      "controlMeanCorrect": 454.25,
+      "reducedMeanCorrect": 441.0,
+      "n": 500,
+      "controlAccuracy": 0.9085,
+      "reducedAccuracy": 0.882,
+      "deltaPoints": -2.65,
+      "wonByReducedFirstRep": 13,
+      "lostByReducedFirstRep": 23,
+      "discordant": 36,
+      "mcnemarP": 0.132498
+    },
     "byCapability": {
-      "ABS": {
-        "control": 1.0,
-        "reduced": 1.0,
-        "delta": 0.0,
-        "n": 30
-      },
       "IE": {
-        "control": 0.9333,
-        "reduced": 0.9267,
-        "delta": -0.67,
-        "n": 150
-      },
-      "KU": {
-        "control": 0.8889,
-        "reduced": 0.875,
-        "delta": -1.39,
-        "n": 72
+        "controlMean": 142.5,
+        "reducedMean": 139,
+        "total": 150,
+        "deltaPoints": -2.33,
+        "wonByReduced": 3,
+        "lostByReduced": 6,
+        "mcnemarP": 0.507812
       },
       "MR": {
-        "control": 0.8347,
-        "reduced": 0.7686,
-        "delta": -6.61,
-        "n": 121
+        "controlMean": 95.75,
+        "reducedMean": 93,
+        "total": 121,
+        "deltaPoints": -2.27,
+        "wonByReduced": 5,
+        "lostByReduced": 6,
+        "mcnemarP": 1.0
+      },
+      "KU": {
+        "controlMean": 63.75,
+        "reducedMean": 62.5,
+        "total": 72,
+        "deltaPoints": -1.74,
+        "wonByReduced": 5,
+        "lostByReduced": 6,
+        "mcnemarP": 1.0
       },
       "TR": {
-        "control": 0.9606,
-        "reduced": 0.9134,
-        "delta": -4.72,
-        "n": 127
+        "controlMean": 122.25,
+        "reducedMean": 116.5,
+        "total": 127,
+        "deltaPoints": -4.53,
+        "wonByReduced": 0,
+        "lostByReduced": 5,
+        "mcnemarP": 0.0625
+      },
+      "ABS": {
+        "controlMean": 30,
+        "reducedMean": 30,
+        "total": 30,
+        "deltaPoints": 0.0,
+        "wonByReduced": 0,
+        "lostByReduced": 0,
+        "mcnemarP": 1.0
       }
     }
   },
-  "deliveredTurns": {
-    "ABS": {
-      "controlMedian": 76,
-      "reducedMedian": 34
+  "accuracyTwoVariableControl": {
+    "control": "42355323615",
+    "label": "two variables: maxPromptChars AND ask; not attributable to the window",
+    "overall": {
+      "controlMeanCorrect": 459.75,
+      "reducedMeanCorrect": 441.0,
+      "n": 500,
+      "controlAccuracy": 0.9195,
+      "reducedAccuracy": 0.882,
+      "deltaPoints": -3.75,
+      "wonByReducedFirstRep": 11,
+      "lostByReducedFirstRep": 27,
+      "discordant": 38,
+      "mcnemarP": 0.013853
     },
-    "IE": {
-      "controlMedian": 64,
-      "reducedMedian": 32
-    },
-    "KU": {
-      "controlMedian": 67,
-      "reducedMedian": 28
-    },
-    "MR": {
-      "controlMedian": 199,
-      "reducedMedian": 102
-    },
-    "TR": {
-      "controlMedian": 205,
-      "reducedMedian": 109
+    "byCapability": {
+      "IE": {
+        "controlMean": 142.5,
+        "reducedMean": 139,
+        "total": 150,
+        "deltaPoints": -2.33,
+        "wonByReduced": 4,
+        "lostByReduced": 5,
+        "mcnemarP": 1.0
+      },
+      "MR": {
+        "controlMean": 101.5,
+        "reducedMean": 93,
+        "total": 121,
+        "deltaPoints": -7.02,
+        "wonByReduced": 2,
+        "lostByReduced": 10,
+        "mcnemarP": 0.0385742
+      },
+      "KU": {
+        "controlMean": 63.75,
+        "reducedMean": 62.5,
+        "total": 72,
+        "deltaPoints": -1.74,
+        "wonByReduced": 5,
+        "lostByReduced": 6,
+        "mcnemarP": 1.0
+      },
+      "TR": {
+        "controlMean": 122,
+        "reducedMean": 116.5,
+        "total": 127,
+        "deltaPoints": -4.33,
+        "wonByReduced": 0,
+        "lostByReduced": 6,
+        "mcnemarP": 0.03125
+      },
+      "ABS": {
+        "controlMean": 30,
+        "reducedMean": 30,
+        "total": 30,
+        "deltaPoints": 0.0,
+        "wonByReduced": 0,
+        "lostByReduced": 0,
+        "mcnemarP": 1.0
+      }
     }
   },
+  "corrections": [
+    {
+      "what": "control",
+      "was": "42355323615 (ask=verbatim-acts, room map)",
+      "why": "it moves `ask` in the same dispatch that shrank the room, so the deltas belong to the pair. Against the one-field control the cut is smaller on every capability except TR."
+    },
+    {
+      "what": "population",
+      "was": "feature.metrics (first repetition)",
+      "why": "`report.ts` states that `featureAggregate.avg` is the right population because every cost ratio denominator must describe the same repetitions as the numerator. The first repetition of `42310779222` is 90.20% against a four-repetition mean of 90.85%; of `42355323615` 91.40% against 91.95%."
+    }
+  ],
   "verdict": {
     "C2": "pass",
-    "C1": "pass at 22,830/4.06 = 5,623 tokens per question",
-    "A": "fail (-3.20 against a -2.0 tolerance)",
-    "B": "fail, in the opposite direction: the fall is entirely in MR and TR",
-    "C": "pass (ABS 30/30 at both rooms)"
+    "C3": "unrun: the reduced arm ran 2 repetitions against 4, so the bill is not admissible as evidence",
+    "matchedPair": "single variable",
+    "accuracyCost": "overall -2.65, TR -4.53; the margin rule blocks both, IE -2.33 and MR -2.27 sit inside it, and no paired test certifies anything (TR 0 won / 5 lost, p = 0.0625)"
   },
-  "note": "tools/gold-room.py priced MR and TR at zero exposed questions and predicted the 49 exposed questions would be in ABS, IE and KU. The measurement is the reverse: the three named capabilities lost 2.1 points combined and the two cleared ones lost 11.3. See docs/PROMPT-ROOM-IS-LOAD-BEARING.md."
+  "note": "The room ratio is robust to the control choice (0.4874 against the one-field arm, 0.4864 against the two-variable one), because the room is a configuration constant. The accuracy attribution is not robust to it, and that is the whole of the first correction."
 }

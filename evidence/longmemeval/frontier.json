@@ -1,0 +1,364 @@
+{
+  "policy": {
+    "margin": 0.025,
+    "tokenTolerance": 0.05,
+    "alpha": 0.05
+  },
+  "reference": {
+    "arm": "registered",
+    "overall": {
+      "value": 0.908,
+      "lower": 0.8794606777802376,
+      "upper": 0.9303176334985452,
+      "halfWidth": 0.02542847785915381
+    },
+    "perCapability": [
+      {
+        "capability": "IE",
+        "value": 0.9533333333333334,
+        "lower": 0.9068124260764263,
+        "upper": 0.9772137410981221,
+        "halfWidth": 0.03520065751084789
+      },
+      {
+        "capability": "MR",
+        "value": 0.7933884297520661,
+        "lower": 0.7127662199819701,
+        "upper": 0.8559544628673365,
+        "halfWidth": 0.07159412144268318
+      },
+      {
+        "capability": "KU",
+        "value": 0.8888888888888888,
+        "lower": 0.795768557414096,
+        "upper": 0.9426124893992622,
+        "halfWidth": 0.0734219659925831
+      },
+      {
+        "capability": "TR",
+        "value": 0.9606299212598425,
+        "lower": 0.9111425632265358,
+        "upper": 0.9830684522303219,
+        "halfWidth": 0.03596294450189308
+      },
+      {
+        "capability": "ABS",
+        "value": 1,
+        "lower": 0.8864829086095221,
+        "upper": 1,
+        "halfWidth": 0.05675854569523897
+      }
+    ],
+    "promptTokensPerQuestion": 12104.988,
+    "billedPromptTokensPerQuestion": 2827.5387,
+    "runs": 4
+  },
+  "arms": [
+    {
+      "arm": "registered",
+      "overall": {
+        "value": 0.908,
+        "lower": 0.8794606777802376,
+        "upper": 0.9303176334985452,
+        "halfWidth": 0.02542847785915381
+      },
+      "perCapability": [
+        {
+          "capability": "IE",
+          "value": 0.9533333333333334,
+          "lower": 0.9068124260764263,
+          "upper": 0.9772137410981221,
+          "halfWidth": 0.03520065751084789
+        },
+        {
+          "capability": "MR",
+          "value": 0.7933884297520661,
+          "lower": 0.7127662199819701,
+          "upper": 0.8559544628673365,
+          "halfWidth": 0.07159412144268318
+        },
+        {
+          "capability": "KU",
+          "value": 0.8888888888888888,
+          "lower": 0.795768557414096,
+          "upper": 0.9426124893992622,
+          "halfWidth": 0.0734219659925831
+        },
+        {
+          "capability": "TR",
+          "value": 0.9606299212598425,
+          "lower": 0.9111425632265358,
+          "upper": 0.9830684522303219,
+          "halfWidth": 0.03596294450189308
+        },
+        {
+          "capability": "ABS",
+          "value": 1,
+          "lower": 0.8864829086095221,
+          "upper": 1,
+          "halfWidth": 0.05675854569523897
+        }
+      ],
+      "promptTokensPerQuestion": 12104.988,
+      "billedPromptTokensPerQuestion": 2827.5387,
+      "runs": 4,
+      "accuracySource": "repetition-mean",
+      "cacheHitShare": 0.7820565373546838
+    },
+    {
+      "arm": "route-room",
+      "overall": {
+        "value": 0.92,
+        "lower": 0.8928931229079627,
+        "upper": 0.9407021975260784,
+        "halfWidth": 0.02390453730905784
+      },
+      "perCapability": [
+        {
+          "capability": "IE",
+          "value": 0.9533333333333334,
+          "lower": 0.9068124260764263,
+          "upper": 0.9772137410981221,
+          "halfWidth": 0.03520065751084789
+        },
+        {
+          "capability": "MR",
+          "value": 0.8429752066115702,
+          "lower": 0.7677328589335874,
+          "upper": 0.8971096294677146,
+          "halfWidth": 0.06468838526706355
+        },
+        {
+          "capability": "KU",
+          "value": 0.8888888888888888,
+          "lower": 0.795768557414096,
+          "upper": 0.9426124893992622,
+          "halfWidth": 0.0734219659925831
+        },
+        {
+          "capability": "TR",
+          "value": 0.9606299212598425,
+          "lower": 0.9111425632265358,
+          "upper": 0.9830684522303219,
+          "halfWidth": 0.03596294450189308
+        },
+        {
+          "capability": "ABS",
+          "value": 1,
+          "lower": 0.8864829086095221,
+          "upper": 1,
+          "halfWidth": 0.05675854569523897
+        }
+      ],
+      "promptTokensPerQuestion": 12136.879,
+      "billedPromptTokensPerQuestion": 440.39769999999965,
+      "runs": 4,
+      "accuracySource": "repetition-mean",
+      "cacheHitShare": 0.9833817244120173
+    },
+    {
+      "arm": "reduced",
+      "overall": {
+        "value": 0.882,
+        "lower": 0.8507673840349824,
+        "upper": 0.9074074074074073,
+        "halfWidth": 0.028320011686212454
+      },
+      "perCapability": [
+        {
+          "capability": "IE",
+          "value": 0.9266666666666666,
+          "lower": 0.873463014734016,
+          "upper": 0.9585616131949707,
+          "halfWidth": 0.042549299230477344
+        },
+        {
+          "capability": "MR",
+          "value": 0.768595041322314,
+          "lower": 0.6858900983993008,
+          "upper": 0.834769681674008,
+          "halfWidth": 0.07443979163735359
+        },
+        {
+          "capability": "KU",
+          "value": 0.875,
+          "lower": 0.7791873780725083,
+          "upper": 0.9328229170689444,
+          "halfWidth": 0.07681776949821806
+        },
+        {
+          "capability": "TR",
+          "value": 0.9212598425196851,
+          "lower": 0.8611126194383686,
+          "upper": 0.9566701040990998,
+          "halfWidth": 0.04777874233036561
+        },
+        {
+          "capability": "ABS",
+          "value": 1,
+          "lower": 0.8864829086095221,
+          "upper": 1,
+          "halfWidth": 0.05675854569523897
+        }
+      ],
+      "promptTokensPerQuestion": 6077.236,
+      "billedPromptTokensPerQuestion": 3035.90694,
+      "runs": 2,
+      "accuracySource": "repetition-mean",
+      "cacheHitShare": 0.5106592865572441
+    }
+  ],
+  "verdicts": [
+    {
+      "arm": "route-room",
+      "outcome": "incomparable",
+      "tokenRatio": 1.0026345337971423,
+      "billedTokenRatio": 0.1557530229382889,
+      "billComparable": true,
+      "blocking": [],
+      "unresolvable": [],
+      "paired": [
+        {
+          "label": "overall",
+          "wonByA": 12,
+          "wonByB": 6,
+          "pValue": 0.2378845214843749,
+          "resolved": false
+        },
+        {
+          "label": "IE",
+          "wonByA": 0,
+          "wonByB": 2,
+          "pValue": 0.5,
+          "resolved": false
+        },
+        {
+          "label": "ABS",
+          "wonByA": 0,
+          "wonByB": 0,
+          "pValue": 1,
+          "resolved": false
+        },
+        {
+          "label": "MR",
+          "wonByA": 9,
+          "wonByB": 2,
+          "pValue": 0.0654296875,
+          "resolved": false
+        },
+        {
+          "label": "TR",
+          "wonByA": 2,
+          "wonByB": 1,
+          "pValue": 1,
+          "resolved": false
+        },
+        {
+          "label": "KU",
+          "wonByA": 1,
+          "wonByB": 1,
+          "pValue": 1,
+          "resolved": false
+        }
+      ],
+      "pairedUsed": true,
+      "configDelta": [
+        "ask",
+        "maxPromptChars"
+      ],
+      "matched": false
+    },
+    {
+      "arm": "reduced",
+      "outcome": "incomparable",
+      "tokenRatio": 0.5020439508077167,
+      "billedTokenRatio": 1.0736924449522123,
+      "billComparable": false,
+      "blocking": [
+        "overall",
+        "IE",
+        "TR"
+      ],
+      "unresolvable": [],
+      "paired": [
+        {
+          "label": "overall",
+          "wonByA": 13,
+          "wonByB": 23,
+          "pValue": 0.1324981639627364,
+          "resolved": false
+        },
+        {
+          "label": "IE",
+          "wonByA": 3,
+          "wonByB": 6,
+          "pValue": 0.5078125,
+          "resolved": false
+        },
+        {
+          "label": "ABS",
+          "wonByA": 0,
+          "wonByB": 0,
+          "pValue": 1,
+          "resolved": false
+        },
+        {
+          "label": "MR",
+          "wonByA": 5,
+          "wonByB": 6,
+          "pValue": 1,
+          "resolved": false
+        },
+        {
+          "label": "TR",
+          "wonByA": 0,
+          "wonByB": 5,
+          "pValue": 0.0625,
+          "resolved": false
+        },
+        {
+          "label": "KU",
+          "wonByA": 5,
+          "wonByB": 6,
+          "pValue": 1,
+          "resolved": false
+        }
+      ],
+      "pairedUsed": true,
+      "configDelta": [
+        "maxPromptChars"
+      ],
+      "matched": true
+    }
+  ],
+  "summary": {
+    "dominating": 0,
+    "dominated": 0,
+    "incomparable": 2,
+    "underpowered": 0,
+    "matchedPairs": 1,
+    "matched": {
+      "arm": "reduced",
+      "outcome": "incomparable",
+      "billComparable": false,
+      "billedTokenRatio": null
+    },
+    "pairedPairs": 2
+  },
+  "frontier": {
+    "front": [
+      "registered",
+      "route-room",
+      "reduced"
+    ],
+    "dominated": [],
+    "underpoweredPairs": 1
+  },
+  "provenance": {
+    "referenceArmsTheProjectCallsRegistered": [
+      "42310779222",
+      "42355323615"
+    ],
+    "whyTwo": "the second adopts `ask: verbatim-acts` and a route room on top of the first, and no dispatch has measured the pair at equal repetitions with a one-field difference"
+  }
+}
