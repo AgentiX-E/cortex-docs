@@ -8463,3 +8463,69 @@ INPUTS ──────┘
 `ProvenanceNode`（那个类型已删除）、状态表里**必须**保留它的删除记录、以及"Implementation status"这一节必须存在。
 这是本仓库最好的一类测试：**删除一个符号是一行，删除"曾经做过这个决定"的证据是另一回事**。文档重写因此被迫保留了
 那条历史说明，而不是顺手抹平。
+
+### 22.61 oracle 证据条件：为什么是**数据集变换**而不是系统装饰器
+
+#### 22.61.1 问题形状
+
+证据进入 `MemorySystem` 的唯一入口是参数：`answer(question, context, sessions)`。所以"换掉池子"在架构上有两个
+位置可选——包住系统（替换实参），或重写交给 arm 的数据集。两者都能得到同一个分数，但**失效方式完全不同**，
+而这里赌注全在失效方式上。
+
+#### 22.61.2 装饰器的失效方式是静默的
+
+Harness 的**路由**按成员存在性决定：
+
+```
+MR 且 question.sessions  → answerSessions
+TR + answerTemporal      → answerTemporal(question, context, questionDate, sessions)
+ABS + answerAbstention   → answerAbstention(question, context, sessions)
+single-session-assistant → answerAssistant
+single-session-preference→ answerPreference
+knowledge-update         → answerKnowledgeUpdate
+否则                     → answer(question, context, sessions)
+```
+
+一个装饰器要重新暴露六个回答成员，外加五个可选访问器（`lastRawOutput`、`lastRetrievedContext`、
+`lastPromptEvidenceChars`、`lastAdmittedEvidence`、`lastPromptText`）。**漏掉一个不会抛错**：路由静默落到
+`answer`，被保留的那条提示路径从未被走，而 artifact 仍然报告一个天花板——只是那个天花板是在另一个 prompt 下
+测的。这与本仓反复记录的"inert configuration"是同一族缺陷，只是入口换到了路由层。
+
+改用 `Proxy` 可以保住全部表面，但它有第二个坑：harness 的访问器是 `.bind(worker)` 调用的，而 `bind` 到代理
+会让 `this` 变成代理，私有字段（`#options`）当场报错。要绕开就得让 get 陷阱对函数返回 `bind(target)` 的副本，
+再用测试证明 `in`、`get`、`bind` 三条语义都没变——**为一个测量写一套元编程防御**，是拿可读性换一个本可以不存在的问题。
+
+#### 22.61.3 变换的失效方式是响亮的
+
+数据集变换只动 `context`/`sessions`，系统对象一字不改，于是路由、访问器、私有字段全部保持原样。它的失效面缩到
+两处，而且两处都能变成硬错误：
+
+| 失效 | 处理 |
+| --- | --- |
+| gold turn 不属于任何会话 | **抛错**并点名 `question.id`。`goldTurns` 由 `goldTurnsOf` 从 `sessions` 派生，是同一个渲染器的输出，所以这只可能是渲染器不一致，而不是数据集性质 |
+| 变换没有被 graded run 看见 | `assertOracleReached(report, census)` 在 arm 返回**之后**检查 artifact 的 `dataset` 后缀与 `questionCount`。绑在 artifact 上而不是绑在局部变量上，才叫检查 |
+
+还有两处刻意的"不发明"：
+
+1. **不伪造会话边界**。数据集没带 `sessions` 时，输出的 `sessions` 保持缺失，而不是变成 `[gold]`——后者会把每一题
+   都路由到 `answerSessions`，为一个条件从未命名的原因改变 prompt。
+2. **不把 `[]` 当成"有 gold 但没有 turn"**。空 gold 与缺失同义（都表示数据集没有指名证据），所以原样透传并计入
+   `unsourced`；一个空池会让每题都拒答，读起来像"读者不会回答"。
+
+#### 22.61.4 天花板自己的自检
+
+变换之后，读者拿到的每一个 turn 都来自 gold 集合。于是 artifact 自带的 `goldOverlap` 反过来成了对变换的检验：
+`sourced` 题目上 `carried < total` 只可能意味着**读者自己的 prompt 组装**丢掉了手上的 turn。这条自检不需要新代码，
+只需要把 gold 集合原样留在输出上（不重算、不过滤）。
+
+#### 22.61.5 开关放在哪里，以及为什么这是约束下的选择
+
+`benchmark-cortex-memory.yml` 已占 24/25 个 `workflow_dispatch` 输入，`test_dispatch_inputs.py` 拒绝占满的工作流
+（"下一个注册将无法派发"）。所以开关走仓库变量：
+
+| 层 | 通道 | 守卫 |
+| --- | --- | --- |
+| 解析 | `cortextMemoryArmOptions` 读 `CORTEX_MEMORY_ORACLE`，`'1'`/`'0'`/空，其它**抛错** | 不复用 `readToggle`：它对未识别值返回 off，而这里"静默跑语料"正是唯一不能容忍的失败 |
+| 记录 | `toMemoryArmConfig` 每次写 `evidenceSource` | 缺席意味着"artifact 早于该字段"，而从现在起没有运行的 artifact 是缺席的 |
+| 渲染 | Markdown 单独一行 `Evidence source:`，`gold-sessions` 附带"这是读者天花板" | 与配置行分开，因为它是唯一**改变数字含义**而非运行行为的字段 |
+| 声明 | 派发脚本把 `oracleEvidence` 写进 `CORTEX_DECLARED_DEPARTURES`，并**每次**写 `CORTEX_MEMORY_ORACLE` | 门禁的 `idle` 列表对"声明了但没动"只报告不失败，所以声明是记录而不是对 payload 的冒充 |

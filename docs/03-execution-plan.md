@@ -6523,3 +6523,53 @@ Design Principles 与八条门禁 → Implementation status（诚实状态表）
 | 4 | 32 个文件的覆盖率余量按维度排序 | 机械项，可并行 |
 | 5 | `A1` 归因定预算 → `letta` 首派（唯一可对表 438/500）→ `C3` 四次重复预算派发 | 外部可复现性 |
 | 6 | `verify.yml` 两个空默认值（`cortex_memory_ask` / `cortex_memory_max_prompt_chars`） | 已记录未修：改动会波及所有经该工作流派发的臂，必须单独一轮 |
+
+### 14.71 第四十二轮：把 oracle 条件落成一个变量，并把预算曲线派进同轮
+
+#### 14.71.1 动作
+
+| # | 动作 | 产出 |
+| --- | --- | --- |
+| ① | 新建 `packages/cortex-eval/src/oracle-evidence.ts` | `oracleEvidenceDataset`（纯变换，gold sessions 替换 `context`/`sessions`）+ `describeOracleCensus` + `assertOracleReached`；三条"不发明"：不伪造会话边界、不把 `[]` 当空池、不丢不属于会话的 gold turn（抛错） |
+| ② | 开关接线：`CortexMemoryArmOptions.oracleEvidence` + `readOracleEvidence` | `'1'`/`'0'`/空三值；**不复用 `readToggle`**（未识别值会静默跑语料），未识别值抛错 |
+| ③ | artifact 自述：`MemoryArmConfig.evidenceSource` + Markdown 独立一行 | `corpus \| gold-sessions`，`gold-sessions` 附带"这是读者天花板而非系统分" |
+| ④ | bench 入口接线 + 跑后断言 | 变换在 restore 限制**之后**施加；`assertOracleReached` 绑在 artifact 上（`dataset` 后缀 + `questionCount`），不是绑在局部变量上 |
+| ⑤ | 派发通道：仓库变量 `CORTEX_MEMORY_ORACLE` | 工作流 24/25 输入，`test_dispatch_inputs.py` 拒绝占满；故走 `vars`，由派发脚本**每次**写（默认 `0`）并声明 `oracleEvidence` |
+| ⑥ | 预注册文档 `docs/MEASURE-ORACLE-CEILING.md` | 三档判据（按**题**写：`≤8` / `9–27` / `≥28`）+ 五条否证 + 两条对读者有利的不对称（截断与房间都不再受限）+ `E1` 三点曲线判据 |
+| ⑦ | 改正 `S` | 91.60%（458/500）属已被取代的配置；注册配置的最近读数是 `42337560027` 的 **456/500 = 91.20%**，且注册形态（`multi-session:48460`）从未在 500 题上跑过。登记为撤回第 10 条 |
+| ⑧ | 派发 | `O1` 全量 500×4（`42500412709`）、**控制组**（注册形态 48,460，`42500867182`）、`E1` 的判据点 12,000（`42500965819`） |
+
+#### 14.71.2 验收标准（本轮新增门禁自身）
+
+| 断言 | 判据 | 否证 |
+| --- | --- | --- |
+| 变换只有一个变量 | 输出的 `context` 是 gold 集合的子集且逐题等于 gold 长度 | 多带一个 turn ⇒ 测的不是天花板 |
+| 会话边界不丢 | 双会话 gold 输出两组，且顺序按数据集而非按 gold 列表 | 顺序反了 ⇒ `TR` 的日期行落到事实之后 |
+| 不伪造边界 | 输入无 `sessions` ⇒ 输出 `'sessions' in q === false` | 输出 `[gold]` ⇒ 每题被路由到会话路径 |
+| `[]` 不是空池 | 空 gold ⇒ 原样透传且计入 `unsourced` | 输出空池 ⇒ 每题拒答，读成"读者不会回答" |
+| 不可放置即失败 | gold turn 不属于任何会话 ⇒ 抛错并点名 `question.id` | 静默丢弃 ⇒ 天花板被压低且无人能看出原因 |
+| 二次施加被拒 | 已带后缀的数据集再变换 ⇒ 抛错 | 幂等 ⇒ census 描述的是两个群体 |
+| artifact 自述 | `dataset` 带 `+oracle`、`evidenceSource` 每次写、Markdown 单独一行 | 缺一 ⇒ 语料分数可被读成天花板 |
+| 开关严格 | `'oracle'`/`'TRUE'` ⇒ 抛错 | 复用 `readToggle` ⇒ 静默跑语料 |
+
+#### 14.71.3 读数（工程侧）
+
+| 量 | 值 |
+| --- | --- |
+| 新增单测 | **24 条**（`oracle-evidence.test.ts`），含 5 条否定性用例 |
+| 新增 pytest | **6 条**（`test_dispatch_departures.py` 的 oracle 开关类） |
+| 包测试 | **3,184 passed**（上轮 3,160，+24） |
+| `cortex-eval` 覆盖率 | 语句 99.57 / 分支 98.61 / 函数 99.81 / 行 99.73 |
+| 导出普查 | 0 新孤儿（`ORACLE_DATASET_SUFFIX` 收回为模块私有，测试断言字面量） |
+| 派发守卫 | 43 passed / 62 subtests（含 25 输入上限、注册表一致性、声明顺序） |
+
+#### 14.71.4 队列（重新排序）
+
+| # | 项 | 为什么排这里 |
+| --- | --- | --- |
+| 1 | **读 `O1` 与 `E1(12,000)`**（已派发） | 两条判据都已预注册，读数即结论；`O1` 决定下一阶段投reader 还是 retrieval |
+| 2 | 若 `O1` 与 91.60% 的差落在 17 题地板内 ⇒ `C3` 四次重复 | 只有重复能把"差 3 题"变成可读 |
+| 3 | `MR` 计数轴按**配对**判据登记（≥6 转换对 ≤1 损失） | 唯一能越过公开 `MR` 的机制 |
+| 4 | `E1` 另两点（24,000）按第一点结果决定 | 三点曲线的形状取决于膝在哪里 |
+| 5 | 32 个文件的覆盖率余量按维度排序 | 机械项，可并行 |
+| 6 | `verify.yml` 两个空默认值（`cortex_memory_ask` / `cortex_memory_max_prompt_chars`） | 改动会波及所有经该工作流派发的臂，须单独一轮 |
