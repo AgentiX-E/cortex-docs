@@ -7804,3 +7804,196 @@ function spreadRow(name: string, spread: AggregateStats | undefined): string {
 本轮之前，"同骨干最强 Reglos 87.2%，我们 91.95%" 这条领先是建立在 `exact` 优先评分器上的。本轮之后这条领先的有效性下降：**我们不知道 Reglos 的 87.2 是用什么形状的答案拿到的**，也不知道我们的 91.95 有多少来自 `exact` 的宽容。
 
 这不是要撤回那条比较，而是要给它加一个条件：**跨系统准确率比较需要一个形状无关的评分协议**。这是下一轮之后才能回答的问题，本轮只把它登记下来。
+
+### 22.49 两种额度用尽是同一族，而边际计数推不出配对结论
+
+这一节记录两件事，它们的共同点是**错误都发生在层与层之间**：一个在重试层与归类层之间，一个在统计层与结论层之间。
+
+#### 22.49.1 缺陷一：`RetryOutcome` 把阶梯的测量一起丢掉了
+
+`retryableFetchWithStats` 有两种坏结局，形状不同：
+
+| 结局 | 机制 | 携带的信息 |
+| --- | --- | --- |
+| 传输失败 | **抛出** `Error`，附 `RetryExhaustion` | `attempts`、`attemptsMs`、`timeoutMs`、`cause` |
+| 重试次数用尽 | **返回**最后一个 `Response` + `RetryRefusal{reason:'attempts-exhausted'}` | 只有 `RetryStats`（attempts / retried / rateLimited） |
+
+`post` 拿到非 ok 的 response 后：
+
+```ts
+throw new Error(message);   // outcome 出作用域，RetryExhaustion 无处可寻
+```
+
+于是 `runWorker` 的 `catch` 里，`deadlineExhaustion(err)` 读 `err.retryExhausted` —— **对 429 永远读到 `undefined`**，落进 `throw err`，整批 500 题作废。`42381702081` 就是这样死的：1,613 次请求里 28 次 429（1.7%），其中一次调用连续撞了九次。
+
+**修法必须落在重试层，不能落在适配层。** `attemptsMs`、`timeoutMs`、`elapsedMs` 只存在于那个 `for` 循环的作用域里；在适配器里补一个形状相同的对象，就等于**伪造三个读者将要据以推理的数字**。所以：
+
+```ts
+export type RetryOutcome = RetryStats & {
+  response: Response;
+  refusal?: RetryRefusal;
+  /** The full exhaustion object, when the attempt count ran out and the caller needs to classify it. */
+  exhausted?: RetryExhaustion;
+};
+```
+
+`withRefusal` 在 `attempts-exhausted` 路径上填入它，适配器用与抛出路径**同一个** `withExhaustion` 附加。一条代码路径，两种结局。
+
+#### 22.49.2 缺陷一的归类：与时限对称的判据
+
+```ts
+function deadlineExhaustion(err): RetryExhaustion | null {
+  // 每一次尝试都撞到 timeoutMs × 0.99
+}
+function rateLimitExhaustion(err): RetryExhaustion | null {
+  // 每一次尝试都被答以 429：rateLimited === attempts
+}
+```
+
+两个函数读**同一个对象**，问**结构相同的问题**：*是否每一次尝试都因同一个外部原因失败？* 是则那是对该题的事实，不是对本批的事实。
+
+三点设计判断：
+
+| 判断 | 理由 |
+| --- | --- |
+| 混合成因（一次 429 + 一次断网）仍然抛出 | 两个原因都不解释它，按题归类是猜测，而这一层的猜测会变成一个准确率数字 |
+| 两类共用**一个**上限（2%） | 上限回答的是"这一批还在描述被测系统吗"；一半丢给时钟一半丢给额度，与全部丢给一类是同一个答案。两个上限会造出"各 4% 都不触发"的批 |
+| `kind` 字段分开记 | 补救措施不同：`CORTEX_READER_TIMEOUT_MS` vs `CORTEX_LLM_MIN_INTERVAL_MS`。一句笼统的"调大上限"对其中一半是错的，而错一半的建议比没有建议更糟——它是一次会被重做的派发 |
+
+同时删掉了一处**不可达分支**：`err instanceof ProviderContentRefusal ? err.providerCode : null`。上面的守卫已经是 `err is ProviderContentRefusal`，所以 `: null` 分支永不可达——它以"最后两个未覆盖分支"的形式暴露了自己。**不可达分支不是纵深防御，是伪装成安全的覆盖空洞。**
+
+#### 22.49.3 缺陷二：从边际计数推配对结论
+
+上一轮（§13.307.2）的推理是：
+
+> `exact` 从 175 掉到 134，准确率从 90.60% 掉到 85.80%；`exact` 少 41、准确率少 47，比值 0.96 —— 所以损失在评分契约。
+
+每一步算术都对，**结论错**。因为边际计数说不出**它数到的那些题后来怎么了**。按 `questionId` 配对之后：
+
+| | A 对 | A 错 |
+| --- | --- | --- |
+| **B 对** | 419 | 10 |
+| **B 错** | 34 | 37 |
+
+`exact` 迁移的 **53** 题里，**B 仍被判对 47 题**。判官把它们救回来了。迁移是真的（边际确实掉了 41），净损失是 **6**。
+
+这是本项目反复付学费的那一类错误：**把一个分布的变化当成一个配对的事实**。而 `E0`（§13.308）已经用过正确的方法——构造能证伪它的对象，而不是从汇总数推。
+
+#### 22.49.4 仪器：一个必须能拒绝自己的分解器
+
+`tools/arm-delta-decomposition.py` 做配对、矩阵、迁移计数与题型分解。它在 Python 里**重实现**了 `metrics.ts` 的四通道判定，因此是一个可能错的第二意见。所以：
+
+```python
+for record in questions:
+    channel, verdict = channel_of_record(record)
+    if verdict is not None and bool(record.get('correct')) != verdict:
+        disagreements.append(record['questionId'])
+if disagreements:
+    raise DecompositionRefused(...)
+```
+
+三个可确定性推导的通道（`structural` / `exact` / `numeric`）逐题与 artifact 的 `correct` 比对，任一不符即拒绝。**没有这道校验，失败是静默的**：一张在"两个评分者不一致"之上算出来的表，看起来与上一张完全一样。
+
+`judge` 通道是唯一不可重推的判定（它是 LLM 的答案），所以它的大小被单独报告为 `judgeDependence` —— 两臂分别为 **50.4%** 与 **57.2%**。一个主要由判官决定的臂，其分解是关于判官与 gold 的一致性，不是关于这个臂。
+
+| id | 断言 | 反例 |
+| --- | --- | --- |
+| `D0` | 重推的判定与 artifact 不符即拒绝，并点名题目 | 在分歧之上印出一张表 |
+| `D1` | 以 `questionId` 配对，重排过的 artifact 是同一个比较 | 一次 resort 被读成回归 |
+| `D2` | 两臂题目集合不同即拒绝 | 两个数据集的比较被报成两个臂的比较 |
+| `D3` | 迁移计数同时报"被判官救回多少"，不只报"移动了多少" | 一次迁移被报成一次损失 |
+| `D4` | 题型分解要算，因为 gold 的写法是数据集的属性 | preference 题被并进其余 |
+
+#### 22.49.5 分解的结果，与它推翻的东西
+
+| 成因 | 题数 | 占比 |
+| --- | --- | --- |
+| preference 题（gold 是标准而非答案） | **10** | 42% |
+| `exact` 迁移未被救回 | **6** | 25% |
+| 真实的答案质量差异 | **8** | 33% |
+
+第一行的 29 道题占数据集 **5.8%**，承载 **42%** 的差距，两臂准确率 79.3% 对 44.8%（34.5 pp）。第二行是"形状效应"的全部——它的上限是 **1.2 个百分点**，而不是上一轮预测的 4 个以上。
+
+于是 `R5` 被撤回，`§22.48.6` 关于"同骨干比较需要与形状无关的评分协议"的结论被撤回。仍然成立且更锋利的是需求 12 的结论：**在这套 harness 上，更强的读者确实低 4.70 个点，而最大的单一成因落在一个判官即全部仪器的题型上。**
+
+`retry.ts` / `benchmark.ts` 覆盖率 **100 / 99.4 / 100 / 100**（剩一个 v8 对 `sort` 内联 `||` 的计数偏差），`cortex-eval` 全包 **99.39 / 97.85 / 99.61 / 99.62**。
+
+### 22.50 判官身份是治疗变量，不是常量
+
+上一轮（§22.49）把两臂 preference 题的 34.5 pp 差距分解成三类成因，并把其中最大的一类（10 题）归给"判官即全部仪器"。这一轮的重判读数到手，结论要再往下走一层：**那 10 题不是"判官判错了"，是两次重判用的根本不是 artifact 用的那个判官。**
+
+#### 22.50.1 读数，与它表面上支持的东西
+
+`mode=regrade`、`passes=5`、`population=preference`、`limit=500`，每臂 29 题：
+
+| run | 臂 | artifact 记对 | 五轮翻转 | 与 artifact 一致 | 多数重判 | 方向 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `42428350939` | B（`deepseek-v4-pro`） | 13 / 29 | **0 / 29** | 19 / 29 | **23 / 29** | `re-grade-only` 10 |
+| `42428353518` | A（`deepseek-flash`） | 23 / 29 | 1 / 29 | 28 / 29 | 22 / 29 | `artifact-only` 1 |
+
+字面读法：artifact 对 B 偏严 10 题、对 A 偏宽 1 题。这个读法停留了一轮，是错的。
+
+#### 22.50.2 三个静默替换
+
+job 日志在每个 step 之前打印整个 env 块，里面写着 `CORTEX_LLM_MODEL: deepseek-chat`。而这两个工具调用的工厂读的是 `DEEPSEEK_MODEL`（回退 `CORTEX_READER_MODEL`）；`CORTEX_LLM_MODEL` 是 `cortex-ai` 的 profile 变量，属于另一条生成路径。于是 `judge-audit.yml` 的 `model` 输入是装饰品——**每一次判官审计都用默认模型评分**，无论派发说了什么，因为"变量未设置"不是错误。
+
+| # | 缺陷 | 后果 |
+| --- | --- | --- |
+| 1 | 判官由 `createLlmFromEnv`（**读者**工厂）构造，而 `run-ablation.ts` / `regrade-partial.ts` 调的是 `createJudgeFromEnv` | 四个调用方，两件仪器。读者工厂还会**拒绝**路由级 `DEEPSEEK_THINKING`，而两臂都跑在 `multi-session+temporal` 下 |
+| 2 | 模型名写进工厂不读的变量 | 重判用 `deepseek-chat`，artifact 由 `deepseek-v4-pro` / `deepseek-flash` 评 |
+| 3 | 审计 job 从不设 `TEMPERATURE` | `withTemperature` 从未生效，重判跑在供应商默认温度，而 artifact 全部是 `0` |
+
+#### 22.50.3 更深的一半：判官跟着读者走
+
+`createJudgeFromEnv` 从**读者**取身份，理由写在 docblock 里："判官跑在另一个模型上会让本战线的数字与自己的历史不可比"。这句话对**一个臂跨时间**成立，对**两个臂在同一时间**不成立：当被比较的治疗就是读者时，跟着读者走的判官就是跟着治疗走的判官。
+
+`M1` 比的正是 `deepseek-flash` 与 `deepseek-v4-pro`。在 29 道 gold 是"标准"而非"答案"的题上，它比的是两个判官。
+
+这不是"评审方差"——五轮翻转 0 与 1，两个判官都可复现，且**可复现地互相反对**。也不是 gold 的问题——29 题在两臂上都走 judge 通道（数值门未触发）。它是模型间分歧，34.5 pp，落在数据集的 5.8% 上。
+
+#### 22.50.4 哪些数字安全，哪些不安全
+
+| 比较 | 判官 | 是否受污染 |
+| --- | --- | --- |
+| 单次派发内的 ablation delta（`§10.1` 发布的那个数） | 一个进程、一个判官、两侧同一件 | **不受影响** |
+| 跨派发的臂对臂比较（需求 12 的证据） | 各臂自己的读者 | **受影响**，凡判官决定的判定处 |
+| 竞品对比（`competitor-harness`） | 每次运行各自构造 | **受影响**，需固定判官后才能对表 |
+
+把这条写进设计文档而不是只写进注册表，是因为它改变的是**"什么算一次比较"**的定义：一份 artifact 的准确率是"这个臂 + 这个判官"的联合陈述，只有当两份 artifact 的 `judge` 块相同，它们的差才是关于臂的。
+
+#### 22.50.5 修复的三部分
+
+**一个工厂。** 两个工具改用 `createJudgeFromEnv`。四个调用方，一件仪器。
+
+**一个变量，一个角色。** `CORTEX_JUDGE_MODEL` 独立于读者地钉住判官，`resolveJudgeIdentity` 报告用的是哪一个：
+
+| `source` | 含义 | 跨臂可比 |
+| --- | --- | --- |
+| `'reader'` | 没有派发钉判官，它跟着臂的读者 | 否——臂就是读者 |
+| `'pinned'` | `CORTEX_JUDGE_MODEL` 指定 | 是，当两份 artifact 写同一个值 |
+| 缺失 | 早于该字段的 artifact | 只能从两个环境重建 |
+
+不复用 `DEEPSEEK_MODEL`，因为那个名字是**读者**的：用重指读者来钉判官，等于换一条路重犯本节记录的缺陷。其报错信息点名 `CORTEX_JUDGE_MODEL`——报错里写着操作者没设过的变量名，是同一类静默替换。
+
+**一处真相。** `tools/judge-identity.mjs` 从 `memoryArmConfig.judge`（旧 artifact 回退 `.reader`）读出 provider / model / temperature 并填进环境，于是"重判描述的是 artifact 的判官"由构造保证，而不是靠操作者记得。仍然允许显式换判官（"`deepseek-chat` 会怎么看 B 的答案"是一次合法且有用的测量），但两个身份并排打印、`matchesArtifact` 写进读数 JSON、不一致时打印警告说明这是关于某个判官的测量而不是对 artifact 的更正。
+
+```json
+"judge": {
+  "artifact": { "provider": "deepseek", "model": "deepseek-v4-pro", "temperature": 0 },
+  "regrade":  { "selection": "deepseek-v4-pro", "temperature": "0", "thinking": "disabled" },
+  "matchesArtifact": true
+}
+```
+
+`measure-models.yml` 故意不动：它全程用 `CORTEX_LLM_*` 并由 `resolveLlmProfile` 构造读者，那套变量对**它的**工厂是正确的。缺陷是一个文件混用了两套约定，所以修复落在"先打印再花钱"这道闸上，而不是一次改名。
+
+#### 22.50.6 下一轮的判据
+
+| id | 断言 | 反例 |
+| --- | --- | --- |
+| `J4` | 用 B 臂**自己的**判官重判 29 题，至少 26/29 与 artifact 一致，记对数 13 ± 1 | 一致性低于 26：artifact 里的身份不是产出它的身份 |
+| `J5` | 用一个钉住的判官，`M1` 的 preference 差 < 5/29 | 差仍 ≥ 10：差距是真实能力差，§22.49 的读法成立 |
+| `J6` | 钉判官不移动**单次派发内**的 ablation delta 超过 1 题 | delta 移动：判官与 feature flag 相互作用 |
+| `J7` | 换判官使绝对 preference 准确率移动 **> 5** 点 | 移动更小：两个判官可互换，10 题差异归因于具体答案而非判官 |
+
+`J4` 决定本节是否已经完整：若 artifact 能被自己的判官复现，三个替换解释了全部差异，`M1` 必须在钉住的判官下重读一遍；若不能，artifact 的判官还有第四个未知，本战线最老的那个数字（`M1` 的准确率对）需要重建而不是重新解释。
