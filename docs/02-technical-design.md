@@ -8404,3 +8404,62 @@ INPUTS ──────┘
 加字段时撞出一个潜在缺陷：`sumBucketCorrect` 一直守卫 `bucket !== undefined`，而 `collectSeries` 里读同一个 partial record 的循环没有，
 失效形态是一次 `TypeError`，从两份本来有效的运行的汇总里抛出来。两处现在都跳过：键存在而值为 undefined 不是一次测量，
 跳过与键缺失完全同义。`variance.ts` 改动后四面 **100/100/100/100**，`cortex-eval` 135 文件全绿。
+
+### 22.60 对外文档面成为可执行契约：`manual:check` 的三条检查与一条棘轮
+
+#### 22.60.1 为什么把文档当代码测
+
+本仓库的缺陷史里，"文档说 A、代码做 B"出现了三次（§22.58 的登记册三实例），每一次都不是靠重读散文发现的，
+而是靠**第三列**（制品）或一个门禁发现的。对外文档的风险更高：读者不会跑测试套件，他会照着示例抄，然后在自己机器上撞到运行时错误。
+
+所以本轮把两份对外文档（`docs/USER-MANUAL.md`、`README.md`）接进 `pnpm check`，跑三条检查：
+
+| 检查 | 做法 | 它防的失效 |
+| --- | --- | --- |
+| **示例编译** | 抽出每一条 ```ts 围栏，写成临时工程，用仓库的严格设置（`strict`、`exactOptionalPropertyTypes`）对 `dist/*.d.ts` 做 `tsc` | 改名、删方法、选项形状变化后示例仍写着旧 API |
+| **契约表双向比对** | `<!-- contract-table: X -->` 块每行第一列是选项名，集合必须**等于**类型 `X` 的键集 | 只查一个方向的表等于会静默丢行：类型加了没写、写了类型没有 |
+| **子路径存在** | 页面里出现的每个 `@agentix-e/...` 必须出现在对应包的 `exports` 里 | 清单里改了子路径而散文没改 |
+
+#### 22.60.2 行号映射：失败必须指回页面
+
+示例被写到临时目录，编译器的诊断会指向 `example-07.ts:12`——一个读者打不开、也已经不存在的文件。映射是
+`围栏起始行 + tsc 行号`：围栏内容第一行是 `fenceLine + 1`，tsc 从 1 数起，两者相加落在页面自己的行上。
+单元测试直接断言这个等式（在手册里改坏一个字面量，然后要求工具报出**那一行**），因为"指回页面"是这个门禁唯一的输出价值。
+
+#### 22.60.3 空集不是通过
+
+三条拒绝，全部来自"`0/0` 不是通过"这条老规则：
+
+- 全页 **0 条 ts 围栏** ⇒ 失败。`0 examples checked` 与 `every example compiled` 不能打印成同一句话。
+- 全页 **0 张契约表** ⇒ 失败，理由同上（选项面会整体失检）。
+- 围栏不闭合 ⇒ 硬失败并报出开启行。一个未闭合的围栏会把页面剩余部分吞成一条示例，随后以"与内容无关"的理由编译失败。
+
+#### 22.60.4 一条棘轮：28/28
+
+工具统计"被示例覆盖的选项数"，本轮把这条从**上报**升级成**断言**：`documented ⊆ demonstrated`，否则失败并列出差集。
+
+现在 22 个 `CortexMemoryOptions` + 6 个 `GateOptions` = **28 个选项全部有可编译示例**。理由与覆盖率门禁同源：
+一行表格是**声明**，一条示例是**证据**；只声明不演示的选项，正是"配置写着它能用、生产里它不生效"的形状
+（`§10.10` 的 inert-configuration 类）。示例比豁免更便宜，所以这里不给豁免表。
+
+#### 22.60.5 它第一次运行就抓到了什么
+
+`pnpm manual:check` 的首次运行在 `README.md` 报了 **4 个类型错误**，也就是**对外首页的 Quick Start 从来没有编译过**：
+
+| 行 | 错误 | 原文 |
+| --- | --- | --- |
+| 97 | `Argument of type '{}' is not assignable to parameter of type 'MemoryValue'` | `const candidate = { /* a candidate memory */ };` |
+| 99 | `Property 'id' does not exist on type '{}'` | `storage.put('memories', candidate.id, candidate)` |
+| 103 | `Cannot find name 'embedding'` | `index.search(embedding, 10)` |
+| 104 | `Argument of type 'VectorHit[]' is not assignable to parameter of type 'MemoryValue[]'` | `decideRetrieval(retrieved, ...)` |
+
+四行里有三行是"占位符假装成值"（`{}`、未声明的 `embedding`、把 `VectorHit[]` 当 `MemoryValue[]`）。这是文档的
+`inert configuration`：看上去像可运行的示例，实际上一个都跑不起来。修复不是补类型断言，而是把首页缩到**两条真的能跑**
+的路径（价值门 + 检索拒绝），并把完整路径指向手册。
+
+#### 22.60.6 与 ARCHITECTURE.md 的耦合测试
+
+重写 `ARCHITECTURE.md` 时，`cortex-core` 的 `provenance-decision.test.ts` 立刻变红——它断言三件事：图层图里**不能**出现
+`ProvenanceNode`（那个类型已删除）、状态表里**必须**保留它的删除记录、以及"Implementation status"这一节必须存在。
+这是本仓库最好的一类测试：**删除一个符号是一行，删除"曾经做过这个决定"的证据是另一回事**。文档重写因此被迫保留了
+那条历史说明，而不是顺手抹平。
