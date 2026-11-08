@@ -8239,3 +8239,86 @@ audit: a cross-gold introduced "Marcus", which the question itself states -- the
 修法不是收窄豁免，而是**删掉豁免**：`exclude` 条目是一个没人复查的声称，而文件一旦被测就读出 100%。判据与 `02` §22.55 一致——不是"这条豁免是否仍然合理"，而是"这条豁免还债不还债"。
 
 同一轮里还有三处同一形状的东西：`sessionize.ts` 里 `const [first] = ranked; if (first !== undefined)`（`ranked` 是 `sessions` map+sort，空 `sessions` 四行前就 return 了），以及兜底分支里 `scored[0]` 与 `first.turns[0]` 的同类守卫。三处全部**删除**，不写注解、不补测试：到达兜底意味着第一个会话的总代价超过了一个正的预算，而零轮会话总代价是 0，`0 <= budget` 会先把它推进 `chosen`。删完文件的分支从 94.54% 到 100%，没有为不可能的状态写一条测试。
+
+### 22.58 登记册的第三列：制品，而不是第三份文档
+
+#### 22.58.1 为什么"两份文档互相印证"是一个不可用的守卫
+
+`test_preregistration_config.py` 比对 §10.3 与派发表。两者都由人手改，因此有一个无论多小心都关不掉的盲区：
+**两份可以一起过期，然后它们互相印证，而每一次运行都在做另一件事。**
+
+这个类在本项目里出现了三次，全部在同一个概念上：
+
+| 小节 | §10.3 说 | 派发表说 | 运行实际用的 |
+| --- | --- | --- | --- |
+| §13.69 | `relevanceSignal` 同时有 `retrieval-hybrid` 与 `retrieval` 两条 bullet，解析取后者 | `retrieval` | `retrieval-hybrid` |
+| §13.203 | `enumerated` | `enumerated` | `operands` |
+| §13.327 | `verbatim` / `48000` | `verbatim` / `48000` | `verbatim-acts` / `multi-session:48460` |
+
+第三次是最好的反例，因为**描述这个类的段落就写在它旁边**：§10.3 的 `ask` bullet 记录了第二次的教训原文——
+「两者都说是 `enumerated`，没有任何东西失败，因为分歧在文档与运行之间，没有检查看得到」——而四个概念之后，同一件事又发生了一次。
+§13.320 甚至把它写成了散文：「输入是该 commit 的派发表，加上基线制品记录而**表现已不再持有**的两个值」。
+
+一手写覆盖清单，就是这个缺陷的签名：它等于承认表无法表达这个臂，于是操作者凭记忆补上差额，补在一个不与任何东西比对的地方。
+
+#### 22.58.2 三段式契约
+
+```
+§10.3  ──────┐
+             ├──  test_preregistration_config.py          （已有，两份手写文件）
+INPUTS ──────┘
+   │
+   └────────────  arm-config-record.py --check          （新增，第三列）
+                        ↑
+        tools/arm-config-baseline.json  ←── 一个真实制品的 memoryArmConfig
+```
+
+第三列之所以能关掉这个类，是因为它**不是文档**：它来自一次运行，任何手写侧过期都会与它不一致。它之所以必须被提交进库，
+是因为真正的制品是 87 MB 且需要下载；`readout-arm-run.py --registration` 从 §13.203 起就在做同一件事，但只在有人想起来时运行，
+从不进 CI。
+
+#### 22.58.3 投影必须是一个划分，而不是一张清单
+
+制品有 28 个字段，派发表有 22 个输入，两边不是一一对应。所以投影先分类，且分类必须是**划分**：
+
+| 类 | 数量 | 含义 |
+| --- | ---: | --- |
+| `PROJECTED` | 17 | 该字段是某个派发输入在制品里的记录，可以比对 |
+| `UNPROJECTED` | 11 | 不是输入；条目说明它是 `derived`（由投影字段算出）、`constant`（工作流或模块常量固定）、还是 `identity`（运行时从环境解析） |
+
+`--record` **拒绝**一个含有未分类字段的制品。没有这条拒绝，一个新旋钮会落进制品、同时缺席两个类，投影继续在一个没人决定过的
+值上通过——`ask` 就是这么来的。
+
+两类输入按理由豁免而不是静默跳过，且豁免清单被断言**恰好两项**：`cortex_memory`（是开关，不是配置值）与 `limit`
+（§10.3 的 `0` 是整个集合，而制品记录解析后的计数，字符串比对会在每一次绿灯运行上报缺陷——这是会让门禁被删掉的那种误报）。
+一个豁免如果表已经不再送那个键，本身就是违规：否则解释会比它描述的对象活得久。
+
+#### 22.58.4 渲染器必须说输入的语言，不是工具的品味
+
+投影把制品的形状拼成输入的字符串，三处不能想当然：
+
+- **`thinking` 用 `+` 分隔**。`readThinkingReach` 明确拒绝逗号，因为 `multi-session,temporal` 会被读成**一条**名为
+  `multi-session,temporal` 的路由，而不是两条。
+- **route room 定序**。`{multi-session: 48460}` 的键序不是配置差异，`sorted()` 之后 `multi-session:48460` 才是同一个值。
+- **整型浮点印成整数**。派发表写 `'0'`、制品记 `0`，JSON 往返可能给 `0.0`，`"0"` 对 `"0.0"` 是一场关于格式的缺陷报告。
+
+#### 22.58.5 同一类缺陷也出现在读制品的那一侧
+
+`readout-arm-run.py` 的字段映射写 `cortex_memory_max_prompt_chars -> ('maxPromptChars',)`，而发货配置的制品里根本没有
+`maxPromptChars`——它带 `maxPromptCharsByRoute`。于是**唯一一个读制品的工具，会把本臂唯一完全遵守的那个输入报成偏离**。
+三处修法，形状与缺陷本身一致：
+
+1. 别名表加入 `maxPromptCharsByRoute`，两种形状都列，没跑到的那一种计为 **derived** 而不是偏离。
+2. `_flatten_config` 加入 `ATOMIC_CONFIG_FIELDS`：把 map 摊平成 `maxPromptCharsByRoute.multi-session` 之后，没有任何路径能把
+   派发表的字符串解析进去。
+3. `coerce_to_artifact` 学会 map 形状，并用 `_shape_disagrees` 把**不同配置**（登记 map、跑到 scalar）与**字段装不下的值**
+   （`big`）分开：前者是要打印的偏离，后者是拒绝运行。混同这两件事，会把一条可读判决变成一次异常。
+
+修完之后，工具对 `42467392736` 首次输出「this run is the registered configuration, field for field」。
+
+#### 22.58.6 门禁抓不到的那一半
+
+工作流对 `cortex_memory_ask` 与 `cortex_memory_max_prompt_chars` 都声明 `default: ''`，而空默认值的语义是「不干预产品默认」——
+产品的默认是 `verbatim` 与 48,000。于是**按钮运行执行的是已退役的配置**，产出的制品会被新门禁判红，而
+`test_preregistration_config.py` 的默认值类按设计跳过空字符串。这一条本轮记录而不修：把值写进工作流会改变所有经该工作流派发的臂，
+爆炸半径大于本轮的主题。
