@@ -469,7 +469,7 @@ IE 1/150、TR 0/127，是一份"产品默认长什么样"的读数，不是治�
 
 | 维度                              | 值                                                                                   | 出处                                |
 | --------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------- |
-| 端到端（LongMemEval-S，四次均值） | <!-- reading:S1 -->83.5%（**417.25/500**，区间 415–421）                             | `evidence/longmemeval/summary.json` |
+| 端到端（LongMemEval-S，四次重复均值） | <!-- reading:S1 -->92.0%（**459.75/500**，`route-room` 出货配置）                    | `evidence/longmemeval/frontier.json` |
 | 已过线的能力                      | KU <!-- reading:S2 -->87.2%、ABS <!-- reading:S5 -->96.7%                            | 同上                                |
 | 未过线的能力                      | MR <!-- reading:S3 -->71.7%、TR <!-- reading:S4 -->78.3%                             | 同上                                |
 | 验收判据                          | 18 条（13 gate / 5 aim，其中 1 条 accepted）                                         | `cortex/docs/ACCEPTANCE-MATRIX.md`  |
@@ -6252,3 +6252,24 @@ pacing floor 400 min (500 questions x 1 call(s) x 8 passes x 6000 ms), budget 34
 2. **`E7` 确认性派发** —— `ask: verbatim-acts` + 路由房间在 `MR` 上的 9 胜 2 负（p = 0.065）。
 3. **分辨率开关** —— `AUDIT-CODE-VS-DOCS.md` §5 的唯一实 P0：vitest 按包均值检查，30 个文件在线下，需要 `0/0` 规则 + `per-file-baseline.json` 棘轮。
 4. `J8`（`judge-regrade --scorer full`）→ `J9`；`A1` 归因定预算；`letta` 首派。
+
+### 14.64 第三十六轮：把"读错重复次数"修到底，并把出货配置升级
+
+#### 14.64.1 本轮完成的四件事
+
+1. **`signFlipExact`**（`paired-test.ts`）：整数差、按可达和折叠、40 对以内精确、40 对以上正态近似（偏保守）。在 34 对真实案例上给出 0.0211099，与独立实现的精确枚举逐位相同；在单重复退化情形下与 `mcnemarExact` 相等（4 个真实对照断言）。
+2. **`PairedEvidence` 联合类型** + `PairedReading.test` / `.pairs`：两种仪器由数据形状决定，互不替代。
+3. **`noiseFloor`**（policy）+ `belowNoise`（comparison）+ `leading`（comparison）：噪声地板只否决晋级；领先但不够的标签进显式列表而不是消失。
+4. **`attest` + `stale`**（acceptance）：`S1` 重挂到 `frontier.json#shipping.accuracy`，三条自证；阈值 85.0 → **91.0**；类别 `aim` → **`gate`**。
+
+#### 14.64.2 工具侧
+
+`tools/efficiency-frontier.mjs`：从 `ablation.featureCorrectByRun` 构造 `series` 配对（按 `questionId` 联结，从不按位置）；无掩码时退回 `discordant`；`--ship <label>` 输出 `shipping` 块供 `S1` 读；`ladder` 块列出**所有**一对字段之差的臂对（不只对参照），使可加性检查成为算术；`confounded` 与 `incomparable` 分开计数；`showP` 不再把饱和尾打印成 `0.00`。
+
+#### 14.64.3 证据
+
+`evidence/longmemeval/frontier.json` 重算：五臂、四条单变量步、`shipping`（`route-room` 91.95%）、`policy.noiseFloor`（se 0.00427 = 0.43 点）、`summary.confounded = 1`。`summary.matched` 改为只认**更便宜**的单变量臂——第五个臂一加入，"第一个 matched"就指向了没动预算的那一个。
+
+#### 14.64.4 下一轮
+
+**`E11` 所需的派发是本轮唯一没能做的实验**：`42355323615` 同配置重跑一次。它把噪声地板从下界变成真界，也是队列里最便宜的一个。其次是覆盖率棘轮（`acceptance.ts` 66.66% 语句覆盖是数据表，但 `markers.ts` 的 68.75% 分支仍未修）、`J8`→`J9`、`A1` 归因定预算、`letta` 首派（唯一可对表的 438/500）。

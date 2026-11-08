@@ -2,44 +2,53 @@
   "policy": {
     "margin": 0.025,
     "tokenTolerance": 0.05,
-    "alpha": 0.05
+    "alpha": 0.05,
+    "noiseFloor": {
+      "delta": 0.004272001872658769,
+      "source": "per-repetition spread across 4 repetitions, standard error of the mean",
+      "points": {
+        "sd": 0.008544003745317538,
+        "se": 0.004272001872658769,
+        "runs": 4
+      }
+    }
   },
   "reference": {
     "arm": "registered",
     "overall": {
-      "value": 0.908,
-      "lower": 0.8794606777802376,
-      "upper": 0.9303176334985452,
-      "halfWidth": 0.02542847785915381
+      "value": 0.9085000000000001,
+      "lower": 0.8800176775081887,
+      "upper": 0.9307530091520635,
+      "halfWidth": 0.02536766582193739
     },
     "perCapability": [
       {
         "capability": "IE",
-        "value": 0.9533333333333334,
-        "lower": 0.9068124260764263,
-        "upper": 0.9772137410981221,
-        "halfWidth": 0.03520065751084789
+        "value": 0.95,
+        "lower": 0.9025359317223361,
+        "upper": 0.9749900430465169,
+        "halfWidth": 0.03622705566209039
       },
       {
         "capability": "MR",
-        "value": 0.7933884297520661,
-        "lower": 0.7127662199819701,
-        "upper": 0.8559544628673365,
-        "halfWidth": 0.07159412144268318
+        "value": 0.7913223140495868,
+        "lower": 0.7105124902486318,
+        "upper": 0.8542031173693415,
+        "halfWidth": 0.07184531356035484
       },
       {
         "capability": "KU",
-        "value": 0.8888888888888888,
-        "lower": 0.795768557414096,
-        "upper": 0.9426124893992622,
-        "halfWidth": 0.0734219659925831
+        "value": 0.8854166666666666,
+        "lower": 0.7915970024415359,
+        "upper": 0.9401913564538461,
+        "halfWidth": 0.07429717700615512
       },
       {
         "capability": "TR",
-        "value": 0.9606299212598425,
-        "lower": 0.9111425632265358,
-        "upper": 0.9830684522303219,
-        "halfWidth": 0.03596294450189308
+        "value": 0.9625984251968503,
+        "lower": 0.9137807137029559,
+        "upper": 0.9842517163498714,
+        "halfWidth": 0.03523550132345776
       },
       {
         "capability": "ABS",
@@ -57,39 +66,39 @@
     {
       "arm": "registered",
       "overall": {
-        "value": 0.908,
-        "lower": 0.8794606777802376,
-        "upper": 0.9303176334985452,
-        "halfWidth": 0.02542847785915381
+        "value": 0.9085000000000001,
+        "lower": 0.8800176775081887,
+        "upper": 0.9307530091520635,
+        "halfWidth": 0.02536766582193739
       },
       "perCapability": [
         {
           "capability": "IE",
-          "value": 0.9533333333333334,
-          "lower": 0.9068124260764263,
-          "upper": 0.9772137410981221,
-          "halfWidth": 0.03520065751084789
+          "value": 0.95,
+          "lower": 0.9025359317223361,
+          "upper": 0.9749900430465169,
+          "halfWidth": 0.03622705566209039
         },
         {
           "capability": "MR",
-          "value": 0.7933884297520661,
-          "lower": 0.7127662199819701,
-          "upper": 0.8559544628673365,
-          "halfWidth": 0.07159412144268318
+          "value": 0.7913223140495868,
+          "lower": 0.7105124902486318,
+          "upper": 0.8542031173693415,
+          "halfWidth": 0.07184531356035484
         },
         {
           "capability": "KU",
-          "value": 0.8888888888888888,
-          "lower": 0.795768557414096,
-          "upper": 0.9426124893992622,
-          "halfWidth": 0.0734219659925831
+          "value": 0.8854166666666666,
+          "lower": 0.7915970024415359,
+          "upper": 0.9401913564538461,
+          "halfWidth": 0.07429717700615512
         },
         {
           "capability": "TR",
-          "value": 0.9606299212598425,
-          "lower": 0.9111425632265358,
-          "upper": 0.9830684522303219,
-          "halfWidth": 0.03596294450189308
+          "value": 0.9625984251968503,
+          "lower": 0.9137807137029559,
+          "upper": 0.9842517163498714,
+          "halfWidth": 0.03523550132345776
         },
         {
           "capability": "ABS",
@@ -106,34 +115,136 @@
       "cacheHitShare": 0.7820565373546838
     },
     {
-      "arm": "route-room",
+      "arm": "fill-base",
       "overall": {
-        "value": 0.92,
-        "lower": 0.8928931229079627,
-        "upper": 0.9407021975260784,
-        "halfWidth": 0.02390453730905784
+        "value": 0.902,
+        "lower": 0.8727933541017654,
+        "upper": 0.9250764525993884,
+        "halfWidth": 0.026141549248811513
       },
       "perCapability": [
         {
           "capability": "IE",
-          "value": 0.9533333333333334,
-          "lower": 0.9068124260764263,
-          "upper": 0.9772137410981221,
-          "halfWidth": 0.03520065751084789
+          "value": 0.955,
+          "lower": 0.9089649899748204,
+          "upper": 0.9783112734025754,
+          "halfWidth": 0.034673141713877476
         },
         {
           "capability": "MR",
-          "value": 0.8429752066115702,
-          "lower": 0.7677328589335874,
-          "upper": 0.8971096294677146,
-          "halfWidth": 0.06468838526706355
+          "value": 0.78099173553719,
+          "lower": 0.6992829241918378,
+          "upper": 0.8454073072694698,
+          "halfWidth": 0.07306219153881599
         },
         {
           "capability": "KU",
-          "value": 0.8888888888888888,
-          "lower": 0.795768557414096,
-          "upper": 0.9426124893992622,
-          "halfWidth": 0.0734219659925831
+          "value": 0.8680555555555556,
+          "lower": 0.7709962307335544,
+          "upper": 0.9278286885719454,
+          "halfWidth": 0.07841622891919553
+        },
+        {
+          "capability": "TR",
+          "value": 0.9507874015748031,
+          "lower": 0.8981948305636406,
+          "upper": 0.9769091119133698,
+          "halfWidth": 0.03935714067486462
+        },
+        {
+          "capability": "ABS",
+          "value": 1,
+          "lower": 0.8864829086095221,
+          "upper": 1,
+          "halfWidth": 0.05675854569523897
+        }
+      ],
+      "promptTokensPerQuestion": 12082.3025,
+      "billedPromptTokensPerQuestion": 1090.9160099999995,
+      "runs": 4,
+      "accuracySource": "repetition-mean",
+      "cacheHitShare": 0.9282750949167181
+    },
+    {
+      "arm": "ask-acts",
+      "overall": {
+        "value": 0.9135,
+        "lower": 0.8856000947245699,
+        "upper": 0.9350943457503729,
+        "halfWidth": 0.02474712551290148
+      },
+      "perCapability": [
+        {
+          "capability": "IE",
+          "value": 0.9516666666666667,
+          "lower": 0.9046695450678535,
+          "upper": 0.9761065259038473,
+          "halfWidth": 0.035718490417996906
+        },
+        {
+          "capability": "MR",
+          "value": 0.8223140495867769,
+          "lower": 0.7446127612114823,
+          "upper": 0.8801789748764883,
+          "halfWidth": 0.06778310683250299
+        },
+        {
+          "capability": "KU",
+          "value": 0.8784722222222222,
+          "lower": 0.7833069994837998,
+          "upper": 0.9352959835756294,
+          "halfWidth": 0.0759944920459148
+        },
+        {
+          "capability": "TR",
+          "value": 0.9547244094488189,
+          "lower": 0.903328850630072,
+          "upper": 0.9794179210388773,
+          "halfWidth": 0.03804453520440265
+        },
+        {
+          "capability": "ABS",
+          "value": 1,
+          "lower": 0.8864829086095221,
+          "upper": 1,
+          "halfWidth": 0.05675854569523897
+        }
+      ],
+      "promptTokensPerQuestion": 12078.1995,
+      "billedPromptTokensPerQuestion": 1003.3219099999997,
+      "runs": 4,
+      "accuracySource": "repetition-mean",
+      "cacheHitShare": 0.9356440502576564
+    },
+    {
+      "arm": "route-room",
+      "overall": {
+        "value": 0.9195,
+        "lower": 0.8923305957066339,
+        "upper": 0.9402723493459382,
+        "halfWidth": 0.023970876819652154
+      },
+      "perCapability": [
+        {
+          "capability": "IE",
+          "value": 0.95,
+          "lower": 0.9025359317223361,
+          "upper": 0.9749900430465169,
+          "halfWidth": 0.03622705566209039
+        },
+        {
+          "capability": "MR",
+          "value": 0.8388429752066116,
+          "lower": 0.7630815170202385,
+          "upper": 0.8937508209183973,
+          "halfWidth": 0.06533465194907939
+        },
+        {
+          "capability": "KU",
+          "value": 0.8854166666666666,
+          "lower": 0.7915970024415359,
+          "upper": 0.9401913564538461,
+          "halfWidth": 0.07429717700615512
         },
         {
           "capability": "TR",
@@ -157,7 +268,7 @@
       "cacheHitShare": 0.9833817244120173
     },
     {
-      "arm": "reduced",
+      "arm": "half-window",
       "overall": {
         "value": 0.882,
         "lower": 0.8507673840349824,
@@ -181,17 +292,17 @@
         },
         {
           "capability": "KU",
-          "value": 0.875,
-          "lower": 0.7791873780725083,
-          "upper": 0.9328229170689444,
-          "halfWidth": 0.07681776949821806
+          "value": 0.8680555555555556,
+          "lower": 0.7709962307335544,
+          "upper": 0.9278286885719454,
+          "halfWidth": 0.07841622891919553
         },
         {
           "capability": "TR",
-          "value": 0.9212598425196851,
-          "lower": 0.8611126194383686,
-          "upper": 0.9566701040990998,
-          "halfWidth": 0.04777874233036561
+          "value": 0.9173228346456693,
+          "lower": 0.8563165198617043,
+          "upper": 0.953823374483825,
+          "halfWidth": 0.04875342731106036
         },
         {
           "capability": "ABS",
@@ -210,53 +321,220 @@
   ],
   "verdicts": [
     {
-      "arm": "route-room",
+      "arm": "fill-base",
       "outcome": "incomparable",
-      "tokenRatio": 1.0026345337971423,
-      "billedTokenRatio": 0.1557530229382889,
+      "tokenRatio": 0.9981259378365348,
+      "billedTokenRatio": 0.3858182418511193,
       "billComparable": true,
       "blocking": [],
+      "leading": [],
       "unresolvable": [],
+      "belowNoise": [
+        "IE"
+      ],
       "paired": [
         {
           "label": "overall",
-          "wonByA": 12,
-          "wonByB": 6,
-          "pValue": 0.2378845214843749,
+          "test": "sign-flip",
+          "wonByA": 15,
+          "wonByB": 20,
+          "pairs": 35,
+          "pValue": 0.15604019130114466,
           "resolved": false
         },
         {
           "label": "IE",
-          "wonByA": 0,
-          "wonByB": 2,
+          "test": "sign-flip",
+          "wonByA": 3,
+          "wonByB": 1,
+          "pairs": 4,
           "pValue": 0.5,
           "resolved": false
         },
         {
           "label": "ABS",
+          "test": "sign-flip",
           "wonByA": 0,
           "wonByB": 0,
+          "pairs": 0,
           "pValue": 1,
           "resolved": false
         },
         {
           "label": "MR",
-          "wonByA": 9,
-          "wonByB": 2,
-          "pValue": 0.0654296875,
+          "test": "sign-flip",
+          "wonByA": 10,
+          "wonByB": 10,
+          "pairs": 20,
+          "pValue": 0.5540924072265625,
           "resolved": false
         },
         {
           "label": "TR",
+          "test": "sign-flip",
+          "wonByA": 1,
+          "wonByB": 6,
+          "pairs": 7,
+          "pValue": 0.109375,
+          "resolved": false
+        },
+        {
+          "label": "KU",
+          "test": "sign-flip",
+          "wonByA": 1,
+          "wonByB": 3,
+          "pairs": 4,
+          "pValue": 0.25,
+          "resolved": false
+        }
+      ],
+      "pairedUsed": true,
+      "configDelta": [
+        "relevanceUnits"
+      ],
+      "matched": true
+    },
+    {
+      "arm": "ask-acts",
+      "outcome": "incomparable",
+      "tokenRatio": 0.9977869866537663,
+      "billedTokenRatio": 0.3548393201479434,
+      "billComparable": true,
+      "blocking": [],
+      "leading": [],
+      "unresolvable": [],
+      "belowNoise": [
+        "overall",
+        "IE",
+        "MR"
+      ],
+      "paired": [
+        {
+          "label": "overall",
+          "test": "sign-flip",
+          "wonByA": 18,
+          "wonByB": 16,
+          "pairs": 34,
+          "pValue": 0.3535517784766853,
+          "resolved": false
+        },
+        {
+          "label": "IE",
+          "test": "sign-flip",
+          "wonByA": 3,
+          "wonByB": 3,
+          "pairs": 6,
+          "pValue": 1,
+          "resolved": false
+        },
+        {
+          "label": "ABS",
+          "test": "sign-flip",
+          "wonByA": 0,
+          "wonByB": 0,
+          "pairs": 0,
+          "pValue": 1,
+          "resolved": false
+        },
+        {
+          "label": "MR",
+          "test": "sign-flip",
+          "wonByA": 12,
+          "wonByB": 6,
+          "pairs": 18,
+          "pValue": 0.0710906982421875,
+          "resolved": false
+        },
+        {
+          "label": "TR",
+          "test": "sign-flip",
+          "wonByA": 1,
+          "wonByB": 4,
+          "pairs": 5,
+          "pValue": 0.4375,
+          "resolved": false
+        },
+        {
+          "label": "KU",
+          "test": "sign-flip",
           "wonByA": 2,
-          "wonByB": 1,
+          "wonByB": 3,
+          "pairs": 5,
+          "pValue": 0.75,
+          "resolved": false
+        }
+      ],
+      "pairedUsed": true,
+      "configDelta": [
+        "ask"
+      ],
+      "matched": true
+    },
+    {
+      "arm": "route-room",
+      "outcome": "confounded",
+      "tokenRatio": 1.0026345337971423,
+      "billedTokenRatio": 0.1557530229382889,
+      "billComparable": true,
+      "blocking": [],
+      "leading": [
+        "overall",
+        "MR"
+      ],
+      "unresolvable": [],
+      "belowNoise": [],
+      "paired": [
+        {
+          "label": "overall",
+          "test": "sign-flip",
+          "wonByA": 22,
+          "wonByB": 12,
+          "pairs": 34,
+          "pValue": 0.021109900902956724,
+          "resolved": true
+        },
+        {
+          "label": "IE",
+          "test": "sign-flip",
+          "wonByA": 3,
+          "wonByB": 3,
+          "pairs": 6,
+          "pValue": 1,
+          "resolved": false
+        },
+        {
+          "label": "ABS",
+          "test": "sign-flip",
+          "wonByA": 0,
+          "wonByB": 0,
+          "pairs": 0,
+          "pValue": 1,
+          "resolved": false
+        },
+        {
+          "label": "MR",
+          "test": "sign-flip",
+          "wonByA": 16,
+          "wonByB": 5,
+          "pairs": 21,
+          "pValue": 0.0044040679931640625,
+          "resolved": true
+        },
+        {
+          "label": "TR",
+          "test": "sign-flip",
+          "wonByA": 2,
+          "wonByB": 3,
+          "pairs": 5,
           "pValue": 1,
           "resolved": false
         },
         {
           "label": "KU",
+          "test": "sign-flip",
           "wonByA": 1,
           "wonByB": 1,
+          "pairs": 2,
           "pValue": 1,
           "resolved": false
         }
@@ -269,7 +547,7 @@
       "matched": false
     },
     {
-      "arm": "reduced",
+      "arm": "half-window",
       "outcome": "incomparable",
       "tokenRatio": 0.5020439508077167,
       "billedTokenRatio": 1.0736924449522123,
@@ -277,51 +555,67 @@
       "blocking": [
         "overall",
         "IE",
+        "MR",
+        "KU",
         "TR"
       ],
+      "leading": [],
       "unresolvable": [],
+      "belowNoise": [],
       "paired": [
         {
           "label": "overall",
-          "wonByA": 13,
-          "wonByB": 23,
-          "pValue": 0.1324981639627364,
-          "resolved": false
+          "test": "sign-flip",
+          "wonByA": 9,
+          "wonByB": 463,
+          "pairs": 472,
+          "pValue": 0,
+          "resolved": true
         },
         {
           "label": "IE",
+          "test": "sign-flip",
           "wonByA": 3,
-          "wonByB": 6,
-          "pValue": 0.5078125,
-          "resolved": false
+          "wonByB": 144,
+          "pairs": 147,
+          "pValue": 0,
+          "resolved": true
         },
         {
           "label": "ABS",
+          "test": "sign-flip",
           "wonByA": 0,
-          "wonByB": 0,
-          "pValue": 1,
-          "resolved": false
+          "wonByB": 30,
+          "pairs": 30,
+          "pValue": 1.862645149230957e-9,
+          "resolved": true
         },
         {
           "label": "MR",
-          "wonByA": 5,
-          "wonByB": 6,
-          "pValue": 1,
-          "resolved": false
+          "test": "sign-flip",
+          "wonByA": 2,
+          "wonByB": 100,
+          "pairs": 102,
+          "pValue": 0,
+          "resolved": true
         },
         {
           "label": "TR",
+          "test": "sign-flip",
           "wonByA": 0,
-          "wonByB": 5,
-          "pValue": 0.0625,
-          "resolved": false
+          "wonByB": 124,
+          "pairs": 124,
+          "pValue": 0,
+          "resolved": true
         },
         {
           "label": "KU",
-          "wonByA": 5,
-          "wonByB": 6,
-          "pValue": 1,
-          "resolved": false
+          "test": "sign-flip",
+          "wonByA": 4,
+          "wonByB": 65,
+          "pairs": 69,
+          "pValue": 9.769962616701378e-13,
+          "resolved": true
         }
       ],
       "pairedUsed": true,
@@ -334,31 +628,331 @@
   "summary": {
     "dominating": 0,
     "dominated": 0,
-    "incomparable": 2,
+    "incomparable": 3,
+    "confounded": 1,
     "underpowered": 0,
-    "matchedPairs": 1,
+    "belowNoise": 2,
+    "matchedPairs": 3,
     "matched": {
-      "arm": "reduced",
+      "arm": "half-window",
       "outcome": "incomparable",
       "billComparable": false,
       "billedTokenRatio": null
     },
-    "pairedPairs": 2
+    "pairedPairs": 4
   },
   "frontier": {
     "front": [
       "registered",
+      "fill-base",
+      "ask-acts",
       "route-room",
-      "reduced"
+      "half-window"
     ],
     "dominated": [],
-    "underpoweredPairs": 1
+    "underpoweredPairs": 4
+  },
+  "ladder": [
+    {
+      "from": "registered",
+      "to": "fill-base",
+      "variable": "relevanceUnits",
+      "deltaPoints": -0.006500000000000061,
+      "tokenRatio": 0.9981259378365348,
+      "outcome": "incomparable",
+      "blocking": [],
+      "belowNoise": [
+        "IE"
+      ],
+      "paired": [
+        {
+          "label": "overall",
+          "test": "sign-flip",
+          "wonByA": 15,
+          "wonByB": 20,
+          "pairs": 35,
+          "pValue": 0.15604019130114466,
+          "resolved": false
+        },
+        {
+          "label": "IE",
+          "test": "sign-flip",
+          "wonByA": 3,
+          "wonByB": 1,
+          "pairs": 4,
+          "pValue": 0.5,
+          "resolved": false
+        },
+        {
+          "label": "ABS",
+          "test": "sign-flip",
+          "wonByA": 0,
+          "wonByB": 0,
+          "pairs": 0,
+          "pValue": 1,
+          "resolved": false
+        },
+        {
+          "label": "MR",
+          "test": "sign-flip",
+          "wonByA": 10,
+          "wonByB": 10,
+          "pairs": 20,
+          "pValue": 0.5540924072265625,
+          "resolved": false
+        },
+        {
+          "label": "TR",
+          "test": "sign-flip",
+          "wonByA": 1,
+          "wonByB": 6,
+          "pairs": 7,
+          "pValue": 0.109375,
+          "resolved": false
+        },
+        {
+          "label": "KU",
+          "test": "sign-flip",
+          "wonByA": 1,
+          "wonByB": 3,
+          "pairs": 4,
+          "pValue": 0.25,
+          "resolved": false
+        }
+      ]
+    },
+    {
+      "from": "registered",
+      "to": "ask-acts",
+      "variable": "ask",
+      "deltaPoints": 0.004999999999999893,
+      "tokenRatio": 0.9977869866537663,
+      "outcome": "incomparable",
+      "blocking": [],
+      "belowNoise": [
+        "overall",
+        "IE",
+        "MR"
+      ],
+      "paired": [
+        {
+          "label": "overall",
+          "test": "sign-flip",
+          "wonByA": 18,
+          "wonByB": 16,
+          "pairs": 34,
+          "pValue": 0.3535517784766853,
+          "resolved": false
+        },
+        {
+          "label": "IE",
+          "test": "sign-flip",
+          "wonByA": 3,
+          "wonByB": 3,
+          "pairs": 6,
+          "pValue": 1,
+          "resolved": false
+        },
+        {
+          "label": "ABS",
+          "test": "sign-flip",
+          "wonByA": 0,
+          "wonByB": 0,
+          "pairs": 0,
+          "pValue": 1,
+          "resolved": false
+        },
+        {
+          "label": "MR",
+          "test": "sign-flip",
+          "wonByA": 12,
+          "wonByB": 6,
+          "pairs": 18,
+          "pValue": 0.0710906982421875,
+          "resolved": false
+        },
+        {
+          "label": "TR",
+          "test": "sign-flip",
+          "wonByA": 1,
+          "wonByB": 4,
+          "pairs": 5,
+          "pValue": 0.4375,
+          "resolved": false
+        },
+        {
+          "label": "KU",
+          "test": "sign-flip",
+          "wonByA": 2,
+          "wonByB": 3,
+          "pairs": 5,
+          "pValue": 0.75,
+          "resolved": false
+        }
+      ]
+    },
+    {
+      "from": "registered",
+      "to": "half-window",
+      "variable": "maxPromptChars",
+      "deltaPoints": -0.02650000000000008,
+      "tokenRatio": 0.5020439508077167,
+      "outcome": "incomparable",
+      "blocking": [
+        "overall",
+        "IE",
+        "MR",
+        "KU",
+        "TR"
+      ],
+      "belowNoise": [],
+      "paired": [
+        {
+          "label": "overall",
+          "test": "sign-flip",
+          "wonByA": 9,
+          "wonByB": 463,
+          "pairs": 472,
+          "pValue": 0,
+          "resolved": true
+        },
+        {
+          "label": "IE",
+          "test": "sign-flip",
+          "wonByA": 3,
+          "wonByB": 144,
+          "pairs": 147,
+          "pValue": 0,
+          "resolved": true
+        },
+        {
+          "label": "ABS",
+          "test": "sign-flip",
+          "wonByA": 0,
+          "wonByB": 30,
+          "pairs": 30,
+          "pValue": 1.862645149230957e-9,
+          "resolved": true
+        },
+        {
+          "label": "MR",
+          "test": "sign-flip",
+          "wonByA": 2,
+          "wonByB": 100,
+          "pairs": 102,
+          "pValue": 0,
+          "resolved": true
+        },
+        {
+          "label": "TR",
+          "test": "sign-flip",
+          "wonByA": 0,
+          "wonByB": 124,
+          "pairs": 124,
+          "pValue": 0,
+          "resolved": true
+        },
+        {
+          "label": "KU",
+          "test": "sign-flip",
+          "wonByA": 4,
+          "wonByB": 65,
+          "pairs": 69,
+          "pValue": 9.769962616701378e-13,
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "from": "ask-acts",
+      "to": "route-room",
+      "variable": "maxPromptChars",
+      "deltaPoints": 0.006000000000000005,
+      "tokenRatio": 1.0048582986230687,
+      "outcome": "incomparable",
+      "blocking": [],
+      "belowNoise": [
+        "overall",
+        "MR",
+        "KU",
+        "TR"
+      ],
+      "paired": [
+        {
+          "label": "overall",
+          "test": "sign-flip",
+          "wonByA": 18,
+          "wonByB": 11,
+          "pairs": 29,
+          "pValue": 0.17048496007919312,
+          "resolved": false
+        },
+        {
+          "label": "IE",
+          "test": "sign-flip",
+          "wonByA": 3,
+          "wonByB": 3,
+          "pairs": 6,
+          "pValue": 1,
+          "resolved": false
+        },
+        {
+          "label": "ABS",
+          "test": "sign-flip",
+          "wonByA": 0,
+          "wonByB": 0,
+          "pairs": 0,
+          "pValue": 1,
+          "resolved": false
+        },
+        {
+          "label": "MR",
+          "test": "sign-flip",
+          "wonByA": 8,
+          "wonByB": 3,
+          "pairs": 11,
+          "pValue": 0.1171875,
+          "resolved": false
+        },
+        {
+          "label": "TR",
+          "test": "sign-flip",
+          "wonByA": 4,
+          "wonByB": 3,
+          "pairs": 7,
+          "pValue": 0.71875,
+          "resolved": false
+        },
+        {
+          "label": "KU",
+          "test": "sign-flip",
+          "wonByA": 3,
+          "wonByB": 2,
+          "pairs": 5,
+          "pValue": 0.75,
+          "resolved": false
+        }
+      ]
+    }
+  ],
+  "shipping": {
+    "arm": "route-room",
+    "accuracy": 0.9195,
+    "accuracySource": "repetition-mean",
+    "runs": 4,
+    "promptTokensPerQuestion": 12136.879
   },
   "provenance": {
-    "referenceArmsTheProjectCallsRegistered": [
-      "42310779222",
-      "42355323615"
+    "referenceArm": "registered",
+    "armOrder": [
+      "registered",
+      "fill-base",
+      "ask-acts",
+      "route-room",
+      "half-window"
     ],
-    "whyTwo": "the second adopts `ask: verbatim-acts` and a route room on top of the first, and no dispatch has measured the pair at equal repetitions with a one-field difference"
+    "accuracySource": "repetition-mean",
+    "whyTheReferenceIsTheReference": "the first path on the command line, and the only arm every other one is read against; a candidate that differs from it in two fields is `confounded` rather than incomparable, and its attribution is the ladder one row down",
+    "whatTheLadderIsNot": "not a path. Two single-variable steps only add up when nothing interacts, and the check is arithmetic rather than an assumption: 0.50 for `ask` plus 0.60 for the room is 1.10, which is what the pair that moves both reads"
   }
 }
