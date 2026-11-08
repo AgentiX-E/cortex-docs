@@ -19490,7 +19490,7 @@ Memind 1,617 chars 拿 84.20%——这一轴此前从未被量化。
 
 | 项 | 值 |
 | --- | --- |
-| oracle 二抽 | `42521885948`，同一 commit `faca8f95`，绿色门禁，用于确认 92.90 不是抽样噪声 |
+| oracle 二抽 | `42521885948`，同一 commit，**绿色**：门禁第一次打印 `21 field(s) compared` 与 `declared evidenceSource`；读数 **92.90% / 468 题**，与第一抽**均值相同**，逐题一致 **491/500** |
 | `E2` | `relevance_top_k=32`（≈ oracle 池 15 轮 × 2），三档判据 + 免费召回测量，派发前写好 |
 | pytest | **2,062 passed / 1 skipped / 222 subtests**（+11） |
 | 新增测试 | 门禁 5 条、派发器 1 条 |
