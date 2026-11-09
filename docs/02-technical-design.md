@@ -8647,3 +8647,46 @@ knowledge-update         → answerKnowledgeUpdate
 回合。**实现层没有任何缺陷**——`effectivePromptChars` 逐路由正确，`prompt-room-by-route.test.ts` 7/7
 覆盖了"抬升 `multi-session` 而其余五条逐字节不变"。缺陷在**配对的选择**，而这类缺陷只有靠下载两个
 产物的 `memoryArmConfig` 逐字段比才能发现，靠读文档不能。
+
+### 22.64 一次咨询的两种修复：可选项的撤销，与形状的不可分离
+
+`replyRepair` 是本仓第二个「第二遍咨询」机制（第一个是 `reviewBareDecline`）。它和第一个的区别是**触发条件
+写在回复里而不是写在路由上**，这一节记录实现层为什么必须是这个样子。
+
+#### 22.64.1 三个既有层为什么都看不见这两种形状
+
+| 层 | 判断依据 | 对散文弃答的结果 |
+| --- | --- | --- |
+| `parseAnswer` | 最后一行是否落在 `INSUFFICIENT_EVIDENCE` | 无 token 时返回**整段文字**，即「答了」 |
+| `reviewPass: 'recover'` | `answered = parseAnswer(raw) !== null` | 被告知「这题答过了」，返回 `none` |
+| `reviewBareDecline` | `isBareDecline`（token 之外别无内容） | 不是裸的，不触发 |
+
+第三行是机制性的：recovery 不是「拒绝行动」，它是**被告知无事可做**。这三个判断合起来解释了为什么同一份产物
+里裸重试报 `83/83`，而那几条散文弃答一条没动。
+
+#### 22.64.2 分类顺序就是互斥性证明
+
+`classifyReply` 的四态按 `bare-decline → prose-decline → shape-failed → committed` 读，顺序本身就是契约：
+
+- **`bare-decline` 先读**，所以属于 `reviewBareDecline` 的回复永远不会成为本机制的计划——两个开关同时打开，
+  一次问题最多一次额外调用。这条不靠调用点的自觉，靠函数内部的顺序，并由回复表测试断言。
+- **`prose-decline` 先于 `shape-failed`**，所以一条写成列表的弃答会被当作弃答再问一次，而不是被要求给形状。
+
+#### 22.64.3 证据块由 `renderCarried` 统一，因为复制会漂移
+
+三个修复构造器（`buildRetryPrompt` / `buildCommitPrompt` / `buildShapePrompt`）共用同一个渲染函数。这不是
+整洁问题：`formatEvidence` 的两个参数（`maxTurnChars`、`turnCutMarker`）都经 `capOption` 进入，任何一份复制
+只要漏掉其中一个，第二次调用读到的证据就和第一次不同，而此时每一个「重试的证据块是首块的前缀」的测试仍然
+会通过——因为它比的是同一个构造器内部的两次渲染。
+
+#### 22.64.4 计数按种类分，且总数是派生的
+
+`replyRepairCensus()` 返回 `{attempted, answered, commitment:{...}, shape:{...}}`，其中总数由两个种类相加
+得到，不单独维护。产物侧 `ReplyRepairCensus` 的校验也因此多一步：形状对（payload）里**每一半**都必须是两个
+非负整数，缺一半就整份丢弃——一个只有总数没有分项的普查，会让读者把转化记到没触发的那一种上。
+
+#### 22.64.5 为什么 `shape` 这个值留着却不出货
+
+`shape` 仍然是选项的合法取值，仍然进产物，仍然有测试。留下它不是为了将来，而是因为**被拒绝的机制也必须
+可测量**：`tools/reply-shape-census.mjs` 正是用同一个分类器在真实产物上数出「47 条、9 条错」的数字，而那个
+数字就是拒绝的理由。删掉这个值，理由就只剩下一句注释。
