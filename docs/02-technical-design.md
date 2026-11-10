@@ -9590,3 +9590,88 @@ organization hint**（后者量到：有提示 / 无提示的差距常常**大�
 - **不做多操作组合**：`group-count` 之外的组合（如「先按类分组再取最大」）不进本轮，避免人口膨胀与拒绝率上升。
 - **失败即归档**：若 `P1` 不成立，`spec` 与 `tally` 一样留在产品里作为 off-by-default 取值，并在
   `MEASURE-MR-CEILING` 上再加一条已关闭的门。
+
+### 22.88 规格层落地：账本、plan、执行器、渲染器，以及它们各自拒绝什么
+
+§22.87 是设计，这一节是**已实现**的形态，以及实现过程中被测量推翻/修正的三处。
+
+#### 22.88.1 四个文件与依赖方向
+
+| 文件 | 导出 | 依赖 | 明确不做 |
+| --- | --- | --- | --- |
+| `aggregation/ledger.ts` | `buildLedger(sessions)`、`ledgerVocabulary(ledger)` | 无（纯程序） | 不调模型、不摘要、不丢轮次；无时间戳的轮次变成 `date: null` 的行而不是缺口 |
+| `aggregation/spec.ts` | `parseEventSpec(raw, steps, sessions)` | 无 | 不兜底：9 个拒绝码（`unparsed` / `empty-scope` / `out-of-scope` / `empty-predicate` / `too-many-predicates` / `unknown-field` / `unknown-operation` / `bad-predicate` / `missing-group`） |
+| `aggregation/execute.ts` | `executeSpec(ledger, spec)`、`mentions(text, value)` | ledger / spec（类型） | 不猜单位：两种单位相加置 `mixed`，渲染器拒绝 |
+| `aggregation/render.ts` | `renderAggregate(result)` | execute（类型） | 不在该放数字的地方放引文（`37f165cf` 的失败形态） |
+| `aggregation/plan-prompt.ts` | `buildSpecPrompt(question, ledger)`、`buildPlanTable(ledger, keywords)` | ledger / execute / keywords | **不发证据**：只发 schema + 关键词表 |
+
+`memory.ts` 单向依赖 `aggregation/*`；`aggregation/*` 不依赖 `memory.ts`，因此执行器可以在完全不涉模型的情况下
+被属性测试。
+
+#### 22.88.2 语法（写进派发说明的那一份）
+
+- `scope`：`[from, to]`，闭区间，必须落在 `0..steps-1` 内，否则 `out-of-scope`。
+- `predicates`：1–4 个**合取**；字段与算子：`text/contains`、`role/is`、`session/in`、`date/on-or-after|on-or-before`、
+  `number/unit-is|at-least|at-most`；数字谓词作用于**行内的数字**，行只有至少一个数字通过才留下。
+- `operation`：`count`、`sum`、`list`、`first`、`last`、`group-count`（后者需 `groupBy: role|session`）。
+- **可渲染的只有 `count` 与 `sum`**：其余四种可执行但不可作答，`renderAggregate` 返回 `null`，第一遍答案保留。
+
+#### 22.88.3 被推翻/修正的三处（都是实现期发现的，不是设计期想到的）
+
+1. **子串匹配是错的**。第一版 `text.includes(value)`；关键词表里 `read` 命中了「I baked bread」并把 2 小时计入求和。
+   改为**词首前缀**匹配（`mentions`）：`bake`→`baked`、`bread`↛`read`。**限制写明**：够不到 `baking`（词干 `bak`），
+   没有公共前缀的形式靠问题自己提供。
+2. **表与执行器必须共用谓词**。表若用 `includes` 而执行器用词首，就会「报一个数、算另一个数」。`buildPlanTable`
+   现在直接调用 `mentions`，并有一条测试从「表格里的每一个和」反查 `executeSpec` 的同值。
+3. **`first`/`last` 的 `reduce` 有一侧是死分支**。行按 step 升序由构造保证，比较器永远答同一侧。改为取两端，
+   并把理由写进注释——一个读起来像通用、实际测不到东西的分支，是本项目反复记为缺陷的形态。
+
+#### 22.88.4 天花板：为什么这层只值 12 道题，以及剩下的在哪
+
+`MEASURE-SPEC-CEILING.md`（cortex 仓）是全文读数。要点：
+
+| | 命中 | /17 |
+| --- | ---: | ---: |
+| plan 只用问题自己的词 | 8 | 47.1% |
+| plan 用历史里任何词（500 稀有词） | 12 | 70.6%（下界） |
+| 单轮已含金标数字 | 11 | 64.7% |
+
+够不到的 5 道全是「操作数与干扰数字同轮」的求和。结论写成一条设计约束：**轮次粒度无法表达交易**，
+下一层是**事件级注释账本**（TallyMem 的 targets/outcomes/changes 行、StructMemEval 的交易账本），
+不是更长的 plan 语言。
+
+#### 22.88.5 检验方法（已执行）
+
+| 层 | 方法 | 结果 |
+| --- | --- | --- |
+| 账本 | 前缀/无前缀/多数字/货币/百分号/千分位/小数/比率/带连字符词 16 条 | 全过；文本逐字符保留 |
+| 解析 | 21 条：五字段 × 合法算子、9 个拒绝码各至少一条、围栏/裸文本/带散文 | 全过 |
+| 执行器 | 26 条含**1000 组随机账本 × 随机合取的属性测试**，与手写参考实现逐例比对 | 0 差异 |
+| 渲染 | 2 种可渲染 + 4 种不可渲染 + 混合单位拒绝 + 空选择拒绝 | 全过 |
+| 路由 | 11 条：只在 `isTallyQuestion` 人口上多一次调用、拒答不调用、散文/空选择/混合单位保留第一遍、普查恒等式 | 全过 |
+| 覆盖 | vitest v8，`src/aggregation/**` | 语句 100 / 分支 99.05–100 / 函数 100 / 行 100（逐文件） |
+
+#### 22.88.6 验证时抓到的一个真实缺陷：容差是按 300 秒校准的
+
+全量 `pnpm check` 让 `deadline-loss.test.ts` 的一例变红：第二次 `runBenchmark` 抛出裸的
+`DOMException: The operation was aborted due to timeout`，而不是预期的 `CORTEX_READER_TIMEOUT_MS` 报错。
+单独跑三次全绿，五个包并行时必红——这是**负载相关缺陷**的形状，不是坏测试。
+
+根因是一处标定：`deadlineExhaustion` 用「每次尝试的时长 ≥ 截止时间的 99%」来判定截止损失，而这个 1% 是按
+**300,000 ms** 的真实读数写的（1% = 3 秒余量）。套件自己的截止测试跑在 **500 ms**，1% = **5 毫秒**——比满载
+时事件循环的调度抖动还小。于是定时器晚触发、记录到的时长差几毫秒，分类失败，调用方 `exhaustion === null`
+分支**重新抛出**（对畸形响应体是设计正确的，对截止损失是致命的）：**一次本该计入损失的问题，直接把整趟跑挂掉。**
+
+修法是给容差加下限并抽成可测函数 `deadlineReached(attemptMs, timeoutMs) = attempt ≥ deadline −
+max(25 ms, 1% × deadline)`：
+
+| 尝试 | 截止 | 修前 | 修后 | 理由 |
+| --- | --- | --- | --- | --- |
+| 495 ms | 500 ms | 非截止 | **截止** | 5 ms 余量低于调度抖动 |
+| 480 ms | 500 ms | 非截止 | **截止** | 20 ms 仍在忙碌机器抖动内 |
+| 474 ms | 500 ms | 非截止 | 非截止 | 26 ms 是真实的早失败 |
+| 297,500 ms | 300,000 ms | 截止 | **截止** | 大截止场景仍由比例项主导 |
+| 3,000 ms | 300,000 ms | 线路故障 | **线路故障** | 3 秒就被 reset 不能读成「模型慢」 |
+
+比例项不撤、只补下限，是这条修复的关键：**撤掉比例会把「3 秒 reset」误判成「300 秒超时」**，而那正是这条
+规则存在的理由。
