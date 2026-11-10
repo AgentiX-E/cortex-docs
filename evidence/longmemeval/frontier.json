@@ -14,41 +14,41 @@
     }
   },
   "reference": {
-    "arm": "registered",
+    "arm": "route-room",
     "overall": {
-      "value": 0.9085000000000001,
-      "lower": 0.8800176775081887,
-      "upper": 0.9307530091520635,
-      "halfWidth": 0.02536766582193739
+      "value": 0.9105000000000001,
+      "lower": 0.8822479013361619,
+      "upper": 0.9324922868499665,
+      "halfWidth": 0.025122192756902306
     },
     "perCapability": [
       {
         "capability": "IE",
-        "value": 0.95,
-        "lower": 0.9025359317223361,
-        "upper": 0.9749900430465169,
-        "halfWidth": 0.03622705566209039
+        "value": 0.9416666666666667,
+        "lower": 0.8919943047706639,
+        "upper": 0.9692811889839513,
+        "halfWidth": 0.03864344210664372
       },
       {
         "capability": "MR",
-        "value": 0.7913223140495868,
-        "lower": 0.7105124902486318,
-        "upper": 0.8542031173693415,
-        "halfWidth": 0.07184531356035484
+        "value": 0.8305785123966942,
+        "lower": 0.7538205828712747,
+        "upper": 0.8869914541420285,
+        "halfWidth": 0.06658543563537689
       },
       {
         "capability": "KU",
-        "value": 0.8854166666666666,
-        "lower": 0.7915970024415359,
-        "upper": 0.9401913564538461,
-        "halfWidth": 0.07429717700615512
+        "value": 0.8715277777777778,
+        "lower": 0.7750839552090195,
+        "upper": 0.9303336520144568,
+        "halfWidth": 0.07762484840271866
       },
       {
         "capability": "TR",
-        "value": 0.9625984251968503,
-        "lower": 0.9137807137029559,
-        "upper": 0.9842517163498714,
-        "halfWidth": 0.03523550132345776
+        "value": 0.9507874015748031,
+        "lower": 0.8981948305636406,
+        "upper": 0.9769091119133698,
+        "halfWidth": 0.03935714067486462
       },
       {
         "capability": "ABS",
@@ -58,13 +58,64 @@
         "halfWidth": 0.05675854569523897
       }
     ],
-    "promptTokensPerQuestion": 12104.988,
-    "billedPromptTokensPerQuestion": 2827.5387,
+    "promptTokensPerQuestion": 9200.5205,
+    "billedPromptTokensPerQuestion": 381.38044999999966,
     "runs": 4
   },
   "arms": [
     {
-      "arm": "registered",
+      "arm": "route-room",
+      "overall": {
+        "value": 0.9105000000000001,
+        "lower": 0.8822479013361619,
+        "upper": 0.9324922868499665,
+        "halfWidth": 0.025122192756902306
+      },
+      "perCapability": [
+        {
+          "capability": "IE",
+          "value": 0.9416666666666667,
+          "lower": 0.8919943047706639,
+          "upper": 0.9692811889839513,
+          "halfWidth": 0.03864344210664372
+        },
+        {
+          "capability": "MR",
+          "value": 0.8305785123966942,
+          "lower": 0.7538205828712747,
+          "upper": 0.8869914541420285,
+          "halfWidth": 0.06658543563537689
+        },
+        {
+          "capability": "KU",
+          "value": 0.8715277777777778,
+          "lower": 0.7750839552090195,
+          "upper": 0.9303336520144568,
+          "halfWidth": 0.07762484840271866
+        },
+        {
+          "capability": "TR",
+          "value": 0.9507874015748031,
+          "lower": 0.8981948305636406,
+          "upper": 0.9769091119133698,
+          "halfWidth": 0.03935714067486462
+        },
+        {
+          "capability": "ABS",
+          "value": 1,
+          "lower": 0.8864829086095221,
+          "upper": 1,
+          "halfWidth": 0.05675854569523897
+        }
+      ],
+      "promptTokensPerQuestion": 9200.5205,
+      "billedPromptTokensPerQuestion": 381.38044999999966,
+      "runs": 4,
+      "accuracySource": "repetition-mean",
+      "cacheHitShare": 0.9781101514854513
+    },
+    {
+      "arm": "registered-48k",
       "overall": {
         "value": 0.9085000000000001,
         "lower": 0.8800176775081887,
@@ -217,7 +268,7 @@
       "cacheHitShare": 0.9356440502576564
     },
     {
-      "arm": "route-room",
+      "arm": "wide-room-pre",
       "overall": {
         "value": 0.9195,
         "lower": 0.8923305957066339,
@@ -321,12 +372,99 @@
   ],
   "verdicts": [
     {
-      "arm": "fill-base",
-      "outcome": "incomparable",
-      "tokenRatio": 0.9981259378365348,
-      "billedTokenRatio": 0.3858182418511193,
+      "arm": "registered-48k",
+      "outcome": "confounded",
+      "tokenRatio": 1.315685128901131,
+      "billedTokenRatio": 7.413958161725391,
       "billComparable": true,
-      "blocking": [],
+      "blocking": [
+        "MR"
+      ],
+      "leading": [],
+      "unresolvable": [],
+      "belowNoise": [
+        "IE",
+        "KU",
+        "TR"
+      ],
+      "paired": [
+        {
+          "label": "overall",
+          "test": "sign-flip",
+          "wonByA": 22,
+          "wonByB": 24,
+          "pairs": 46,
+          "pValue": 0.8297351648525748,
+          "resolved": false
+        },
+        {
+          "label": "IE",
+          "test": "sign-flip",
+          "wonByA": 6,
+          "wonByB": 5,
+          "pairs": 11,
+          "pValue": 0.7119140625,
+          "resolved": false
+        },
+        {
+          "label": "ABS",
+          "test": "sign-flip",
+          "wonByA": 0,
+          "wonByB": 0,
+          "pairs": 0,
+          "pValue": 1,
+          "resolved": false
+        },
+        {
+          "label": "MR",
+          "test": "sign-flip",
+          "wonByA": 4,
+          "wonByB": 12,
+          "pairs": 16,
+          "pValue": 0.036590576171875,
+          "resolved": true
+        },
+        {
+          "label": "TR",
+          "test": "sign-flip",
+          "wonByA": 6,
+          "wonByB": 2,
+          "pairs": 8,
+          "pValue": 0.1875,
+          "resolved": false
+        },
+        {
+          "label": "KU",
+          "test": "sign-flip",
+          "wonByA": 6,
+          "wonByB": 5,
+          "pairs": 11,
+          "pValue": 0.876953125,
+          "resolved": false
+        }
+      ],
+      "pairedUsed": true,
+      "configDelta": [
+        "ask",
+        "evidenceSource",
+        "judge.model",
+        "judge.providerId",
+        "judge.source",
+        "judge.temperature",
+        "maxPromptChars",
+        "reader.deadlineMs"
+      ],
+      "matched": false
+    },
+    {
+      "arm": "fill-base",
+      "outcome": "confounded",
+      "tokenRatio": 1.3132194531820236,
+      "billedTokenRatio": 2.860440303114647,
+      "billComparable": true,
+      "blocking": [
+        "MR"
+      ],
       "leading": [],
       "unresolvable": [],
       "belowNoise": [
@@ -336,170 +474,19 @@
         {
           "label": "overall",
           "test": "sign-flip",
-          "wonByA": 15,
-          "wonByB": 20,
-          "pairs": 35,
-          "pValue": 0.15604019130114466,
+          "wonByA": 26,
+          "wonByB": 32,
+          "pairs": 58,
+          "pValue": 0.3825369154840172,
           "resolved": false
         },
         {
           "label": "IE",
           "test": "sign-flip",
-          "wonByA": 3,
-          "wonByB": 1,
-          "pairs": 4,
-          "pValue": 0.5,
-          "resolved": false
-        },
-        {
-          "label": "ABS",
-          "test": "sign-flip",
-          "wonByA": 0,
-          "wonByB": 0,
-          "pairs": 0,
-          "pValue": 1,
-          "resolved": false
-        },
-        {
-          "label": "MR",
-          "test": "sign-flip",
-          "wonByA": 10,
-          "wonByB": 10,
-          "pairs": 20,
-          "pValue": 0.5540924072265625,
-          "resolved": false
-        },
-        {
-          "label": "TR",
-          "test": "sign-flip",
-          "wonByA": 1,
-          "wonByB": 6,
-          "pairs": 7,
-          "pValue": 0.109375,
-          "resolved": false
-        },
-        {
-          "label": "KU",
-          "test": "sign-flip",
-          "wonByA": 1,
-          "wonByB": 3,
-          "pairs": 4,
-          "pValue": 0.25,
-          "resolved": false
-        }
-      ],
-      "pairedUsed": true,
-      "configDelta": [
-        "relevanceUnits"
-      ],
-      "matched": true
-    },
-    {
-      "arm": "ask-acts",
-      "outcome": "incomparable",
-      "tokenRatio": 0.9977869866537663,
-      "billedTokenRatio": 0.3548393201479434,
-      "billComparable": true,
-      "blocking": [],
-      "leading": [],
-      "unresolvable": [],
-      "belowNoise": [
-        "overall",
-        "IE",
-        "MR"
-      ],
-      "paired": [
-        {
-          "label": "overall",
-          "test": "sign-flip",
-          "wonByA": 18,
-          "wonByB": 16,
-          "pairs": 34,
-          "pValue": 0.3535517784766853,
-          "resolved": false
-        },
-        {
-          "label": "IE",
-          "test": "sign-flip",
-          "wonByA": 3,
-          "wonByB": 3,
-          "pairs": 6,
-          "pValue": 1,
-          "resolved": false
-        },
-        {
-          "label": "ABS",
-          "test": "sign-flip",
-          "wonByA": 0,
-          "wonByB": 0,
-          "pairs": 0,
-          "pValue": 1,
-          "resolved": false
-        },
-        {
-          "label": "MR",
-          "test": "sign-flip",
-          "wonByA": 12,
-          "wonByB": 6,
-          "pairs": 18,
-          "pValue": 0.0710906982421875,
-          "resolved": false
-        },
-        {
-          "label": "TR",
-          "test": "sign-flip",
-          "wonByA": 1,
+          "wonByA": 7,
           "wonByB": 4,
-          "pairs": 5,
-          "pValue": 0.4375,
-          "resolved": false
-        },
-        {
-          "label": "KU",
-          "test": "sign-flip",
-          "wonByA": 2,
-          "wonByB": 3,
-          "pairs": 5,
-          "pValue": 0.75,
-          "resolved": false
-        }
-      ],
-      "pairedUsed": true,
-      "configDelta": [
-        "ask"
-      ],
-      "matched": true
-    },
-    {
-      "arm": "route-room",
-      "outcome": "confounded",
-      "tokenRatio": 1.0026345337971423,
-      "billedTokenRatio": 0.1557530229382889,
-      "billComparable": true,
-      "blocking": [],
-      "leading": [
-        "overall",
-        "MR"
-      ],
-      "unresolvable": [],
-      "belowNoise": [],
-      "paired": [
-        {
-          "label": "overall",
-          "test": "sign-flip",
-          "wonByA": 22,
-          "wonByB": 12,
-          "pairs": 34,
-          "pValue": 0.021109900902956724,
-          "resolved": true
-        },
-        {
-          "label": "IE",
-          "test": "sign-flip",
-          "wonByA": 3,
-          "wonByB": 3,
-          "pairs": 6,
-          "pValue": 1,
+          "pairs": 11,
+          "pValue": 0.51171875,
           "resolved": false
         },
         {
@@ -514,27 +501,27 @@
         {
           "label": "MR",
           "test": "sign-flip",
-          "wonByA": 16,
-          "wonByB": 5,
-          "pairs": 21,
-          "pValue": 0.0044040679931640625,
+          "wonByA": 7,
+          "wonByB": 17,
+          "pairs": 24,
+          "pValue": 0.030193328857421875,
           "resolved": true
         },
         {
           "label": "TR",
           "test": "sign-flip",
-          "wonByA": 2,
-          "wonByB": 3,
-          "pairs": 5,
+          "wonByA": 6,
+          "wonByB": 5,
+          "pairs": 11,
           "pValue": 1,
           "resolved": false
         },
         {
           "label": "KU",
           "test": "sign-flip",
-          "wonByA": 1,
-          "wonByB": 1,
-          "pairs": 2,
+          "wonByA": 6,
+          "wonByB": 6,
+          "pairs": 12,
           "pValue": 1,
           "resolved": false
         }
@@ -542,15 +529,189 @@
       "pairedUsed": true,
       "configDelta": [
         "ask",
-        "maxPromptChars"
+        "evidenceSource",
+        "judge.model",
+        "judge.providerId",
+        "judge.source",
+        "judge.temperature",
+        "maxPromptChars",
+        "reader.deadlineMs",
+        "relevanceUnits"
+      ],
+      "matched": false
+    },
+    {
+      "arm": "ask-acts",
+      "outcome": "confounded",
+      "tokenRatio": 1.3127735001514316,
+      "billedTokenRatio": 2.630763873711934,
+      "billComparable": true,
+      "blocking": [],
+      "leading": [],
+      "unresolvable": [],
+      "belowNoise": [
+        "overall",
+        "IE",
+        "KU",
+        "TR"
+      ],
+      "paired": [
+        {
+          "label": "overall",
+          "test": "sign-flip",
+          "wonByA": 21,
+          "wonByB": 23,
+          "pairs": 44,
+          "pValue": 0.7245893228745645,
+          "resolved": false
+        },
+        {
+          "label": "IE",
+          "test": "sign-flip",
+          "wonByA": 7,
+          "wonByB": 6,
+          "pairs": 13,
+          "pValue": 0.650634765625,
+          "resolved": false
+        },
+        {
+          "label": "ABS",
+          "test": "sign-flip",
+          "wonByA": 0,
+          "wonByB": 0,
+          "pairs": 0,
+          "pValue": 1,
+          "resolved": false
+        },
+        {
+          "label": "MR",
+          "test": "sign-flip",
+          "wonByA": 4,
+          "wonByB": 8,
+          "pairs": 12,
+          "pValue": 0.48876953125,
+          "resolved": false
+        },
+        {
+          "label": "TR",
+          "test": "sign-flip",
+          "wonByA": 4,
+          "wonByB": 2,
+          "pairs": 6,
+          "pValue": 0.78125,
+          "resolved": false
+        },
+        {
+          "label": "KU",
+          "test": "sign-flip",
+          "wonByA": 6,
+          "wonByB": 7,
+          "pairs": 13,
+          "pValue": 0.93505859375,
+          "resolved": false
+        }
+      ],
+      "pairedUsed": true,
+      "configDelta": [
+        "evidenceSource",
+        "judge.model",
+        "judge.providerId",
+        "judge.source",
+        "judge.temperature",
+        "maxPromptChars",
+        "reader.deadlineMs"
+      ],
+      "matched": false
+    },
+    {
+      "arm": "wide-room-pre",
+      "outcome": "confounded",
+      "tokenRatio": 1.3191513458396185,
+      "billedTokenRatio": 1.1547463956267292,
+      "billComparable": true,
+      "blocking": [],
+      "leading": [],
+      "unresolvable": [],
+      "belowNoise": [
+        "overall",
+        "IE",
+        "MR",
+        "KU",
+        "TR"
+      ],
+      "paired": [
+        {
+          "label": "overall",
+          "test": "sign-flip",
+          "wonByA": 26,
+          "wonByB": 19,
+          "pairs": 45,
+          "pValue": 0.29708174846321966,
+          "resolved": false
+        },
+        {
+          "label": "IE",
+          "test": "sign-flip",
+          "wonByA": 6,
+          "wonByB": 5,
+          "pairs": 11,
+          "pValue": 0.70703125,
+          "resolved": false
+        },
+        {
+          "label": "ABS",
+          "test": "sign-flip",
+          "wonByA": 0,
+          "wonByB": 0,
+          "pairs": 0,
+          "pValue": 1,
+          "resolved": false
+        },
+        {
+          "label": "MR",
+          "test": "sign-flip",
+          "wonByA": 9,
+          "wonByB": 8,
+          "pairs": 17,
+          "pValue": 0.61676025390625,
+          "resolved": false
+        },
+        {
+          "label": "TR",
+          "test": "sign-flip",
+          "wonByA": 5,
+          "wonByB": 2,
+          "pairs": 7,
+          "pValue": 0.40625,
+          "resolved": false
+        },
+        {
+          "label": "KU",
+          "test": "sign-flip",
+          "wonByA": 6,
+          "wonByB": 4,
+          "pairs": 10,
+          "pValue": 0.86328125,
+          "resolved": false
+        }
+      ],
+      "pairedUsed": true,
+      "configDelta": [
+        "evidenceSource",
+        "judge.model",
+        "judge.providerId",
+        "judge.source",
+        "judge.temperature",
+        "maxPromptChars",
+        "reader.deadlineMs"
       ],
       "matched": false
     },
     {
       "arm": "half-window",
-      "outcome": "incomparable",
-      "tokenRatio": 0.5020439508077167,
-      "billedTokenRatio": 1.0736924449522123,
+      "outcome": "confounded",
+      "tokenRatio": 0.6605317601324837,
+      "billedTokenRatio": 7.960310865436345,
       "billComparable": false,
       "blocking": [
         "overall",
@@ -566,19 +727,19 @@
         {
           "label": "overall",
           "test": "sign-flip",
-          "wonByA": 9,
-          "wonByB": 463,
-          "pairs": 472,
-          "pValue": 0,
+          "wonByA": 3,
+          "wonByB": 461,
+          "pairs": 464,
+          "pValue": 1.6496156268950722e-97,
           "resolved": true
         },
         {
           "label": "IE",
           "test": "sign-flip",
-          "wonByA": 3,
-          "wonByB": 144,
-          "pairs": 147,
-          "pValue": 0,
+          "wonByA": 0,
+          "wonByB": 142,
+          "pairs": 142,
+          "pValue": 1.436357930020301e-32,
           "resolved": true
         },
         {
@@ -593,10 +754,10 @@
         {
           "label": "MR",
           "test": "sign-flip",
-          "wonByA": 2,
-          "wonByB": 100,
-          "pairs": 102,
-          "pValue": 0,
+          "wonByA": 3,
+          "wonByB": 101,
+          "pairs": 104,
+          "pValue": 5.5370578001689e-21,
           "resolved": true
         },
         {
@@ -605,56 +766,70 @@
           "wonByA": 0,
           "wonByB": 124,
           "pairs": 124,
-          "pValue": 0,
+          "pValue": 9.34398541181517e-28,
           "resolved": true
         },
         {
           "label": "KU",
           "test": "sign-flip",
-          "wonByA": 4,
-          "wonByB": 65,
-          "pairs": 69,
-          "pValue": 9.769962616701378e-13,
+          "wonByA": 0,
+          "wonByB": 64,
+          "pairs": 64,
+          "pValue": 2.0877165871195436e-15,
           "resolved": true
         }
       ],
       "pairedUsed": true,
       "configDelta": [
-        "maxPromptChars"
+        "ask",
+        "evidenceSource",
+        "judge.model",
+        "judge.providerId",
+        "judge.source",
+        "judge.temperature",
+        "maxPromptChars",
+        "reader.deadlineMs"
       ],
-      "matched": true
+      "matched": false
     }
   ],
   "summary": {
     "dominating": 0,
     "dominated": 0,
-    "incomparable": 3,
-    "confounded": 1,
+    "incomparable": 0,
+    "confounded": 5,
     "underpowered": 0,
-    "belowNoise": 2,
-    "matchedPairs": 3,
-    "matched": {
-      "arm": "half-window",
-      "outcome": "incomparable",
-      "billComparable": false,
-      "billedTokenRatio": null
-    },
-    "pairedPairs": 4
+    "belowNoise": 4,
+    "matchedPairs": 0,
+    "matched": null,
+    "pairedPairs": 5
   },
   "frontier": {
     "front": [
-      "registered",
-      "fill-base",
-      "ask-acts",
       "route-room",
+      "registered-48k",
+      "fill-base",
       "half-window"
     ],
-    "dominated": [],
-    "underpoweredPairs": 4
+    "dominated": [
+      {
+        "arm": "ask-acts",
+        "by": [
+          "route-room"
+        ]
+      },
+      {
+        "arm": "wide-room-pre",
+        "by": [
+          "route-room"
+        ]
+      }
+    ],
+    "underpoweredPairs": 6
   },
   "ladder": [
     {
-      "from": "registered",
+      "from": "registered-48k",
       "to": "fill-base",
       "variable": "relevanceUnits",
       "deltaPoints": -0.006500000000000061,
@@ -722,7 +897,7 @@
       ]
     },
     {
-      "from": "registered",
+      "from": "registered-48k",
       "to": "ask-acts",
       "variable": "ask",
       "deltaPoints": 0.004999999999999893,
@@ -792,7 +967,7 @@
       ]
     },
     {
-      "from": "registered",
+      "from": "registered-48k",
       "to": "half-window",
       "variable": "maxPromptChars",
       "deltaPoints": -0.02650000000000008,
@@ -813,7 +988,7 @@
           "wonByA": 9,
           "wonByB": 463,
           "pairs": 472,
-          "pValue": 0,
+          "pValue": 1.116137644824385e-93,
           "resolved": true
         },
         {
@@ -822,7 +997,7 @@
           "wonByA": 3,
           "wonByB": 144,
           "pairs": 147,
-          "pValue": 0,
+          "pValue": 1.023020608272405e-30,
           "resolved": true
         },
         {
@@ -840,7 +1015,7 @@
           "wonByA": 2,
           "wonByB": 100,
           "pairs": 102,
-          "pValue": 0,
+          "pValue": 4.4240432558305524e-21,
           "resolved": true
         },
         {
@@ -849,7 +1024,7 @@
           "wonByA": 0,
           "wonByB": 124,
           "pairs": 124,
-          "pValue": 0,
+          "pValue": 4.088852807441454e-28,
           "resolved": true
         },
         {
@@ -858,14 +1033,14 @@
           "wonByA": 4,
           "wonByB": 65,
           "pairs": 69,
-          "pValue": 9.769962616701378e-13,
+          "pValue": 9.768953383628467e-13,
           "resolved": true
         }
       ]
     },
     {
       "from": "ask-acts",
-      "to": "route-room",
+      "to": "wide-room-pre",
       "variable": "maxPromptChars",
       "deltaPoints": 0.006000000000000005,
       "tokenRatio": 1.0048582986230687,
@@ -937,18 +1112,20 @@
   ],
   "shipping": {
     "arm": "route-room",
-    "accuracy": 0.9195,
+    "accuracy": 0.9105000000000001,
     "accuracySource": "repetition-mean",
     "runs": 4,
-    "promptTokensPerQuestion": 12136.879
+    "promptTokensPerQuestion": 9200.5205,
+    "configurationFingerprint": "sha256:0c6c25e7dfe5602c74e394ed41ff1c4913b38513478122340a2efeb74b480075"
   },
   "provenance": {
-    "referenceArm": "registered",
+    "referenceArm": "route-room",
     "armOrder": [
-      "registered",
+      "route-room",
+      "registered-48k",
       "fill-base",
       "ask-acts",
-      "route-room",
+      "wide-room-pre",
       "half-window"
     ],
     "accuracySource": "repetition-mean",

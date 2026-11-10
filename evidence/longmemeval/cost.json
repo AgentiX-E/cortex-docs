@@ -1,34 +1,43 @@
 {
   "primary": "perQuestionPerRun",
   "readings": {
-    "perCall": 11720.790922259777,
-    "perQuestionPerRun": 12136.879,
-    "perQuestion": 48547.516
+    "perCall": 8863.699903660887,
+    "perQuestionPerRun": 9200.5205,
+    "perQuestion": 36802.082
   },
   "inputs": {
-    "promptTokens": 24273758,
-    "calls": 2071,
+    "promptTokens": 18401041,
+    "calls": 2076,
     "questionCount": 500,
     "runs": 4,
-    "cacheHitPromptTokens": 23870370
+    "cacheHitPromptTokens": 17998245
   },
-  "retries": 71,
+  "retries": 76,
   "comparableTo": "prompt tokens delivered for one question, one repetition",
   "cap": {
     "maxPromptChars": 48460,
-    "minRoom": 48460,
+    "minRoom": 24000,
     "maxRoom": 48460,
     "rooms": {
-      "maxPromptCharsByRoute": {
-        "multi-session": 48460
-      }
+      "multi-session": 48460,
+      "temporal": 48000,
+      "flat": 24000,
+      "knowledge-update": 24000,
+      "abstention": 24000,
+      "assistant": 24000
     },
-    "roomSource": "maxPromptCharsByRoute",
-    "impliedCharsPerToken": 4.13,
-    "reading": "at-cap",
+    "roomSource": "effectivePromptChars",
+    "impliedCharsPerToken": 2.71,
+    "reading": "below-cap",
     "band": "3.5-4.7 characters per token, English prose",
-    "status": "inferred",
-    "caveat": "the routes this map does not name took the product default, which the artifact does not record; the fill is computed at the widest named room and is therefore a ceiling on it rather than a measurement. Artifacts written after \u00a713.299 carry `effectivePromptChars` and do not have this limitation."
+    "status": "inferred"
   },
-  "run": "42355323615"
+  "efficiency": {
+    "state": "measured",
+    "accuracy": 0.9105000000000001,
+    "accuracySource": "all-runs",
+    "correct": null,
+    "perCorrectAnswerPromptTokens": 10104.90993959363
+  },
+  "run": "42533236864"
 }
