@@ -1,0 +1,63 @@
+{
+  "control": {
+    "accuracy": 0.9105,
+    "questionCount": 500,
+    "run": "42533236864",
+    "runs": 4
+  },
+  "deltaPoints": -0.04349999999999998,
+  "perCapability": [
+    {
+      "capability": "ABS",
+      "control": 1.0,
+      "delta": 0.0,
+      "questions": 30,
+      "treatment": 1.0
+    },
+    {
+      "capability": "IE",
+      "control": 0.9416666666666667,
+      "delta": -0.01,
+      "questions": 150,
+      "treatment": 0.9316666666666666
+    },
+    {
+      "capability": "KU",
+      "control": 0.8715277777777778,
+      "delta": 0.006944444444444444,
+      "questions": 72,
+      "treatment": 0.8784722222222222
+    },
+    {
+      "capability": "MR",
+      "control": 0.8305785123966942,
+      "delta": -0.04132231404958678,
+      "questions": 121,
+      "treatment": 0.7892561983471075
+    },
+    {
+      "capability": "TR",
+      "control": 0.9507874015748031,
+      "delta": -0.12401574803149606,
+      "questions": 127,
+      "treatment": 0.8267716535433071
+    }
+  ],
+  "promptIdentity": {
+    "admissible": true,
+    "differ": 0,
+    "identical": 500,
+    "missing": 0,
+    "shared": 500
+  },
+  "reasoningGainPoints": 0.04349999999999998,
+  "reasoningSide": "control",
+  "treatment": {
+    "accuracy": 0.867,
+    "questionCount": 500,
+    "run": "42826272421",
+    "runs": 4
+  },
+  "unit": "accuracy fraction",
+  "unitNote": "the row's unit is an accuracy fraction: 0.03 is 3.0 points"
+}
