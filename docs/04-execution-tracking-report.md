@@ -20675,3 +20675,77 @@ SOTA。**
 4. **`P1`**：前提已修（§13.350），读数仍欠；阻塞是节奏。
 5. **`C3`**：投影双侧区间（0 元，纯仪表）。
 6. **`K1`**：`KU` 日期顺序——**与 `H2` 同人群**，应先合并再判，否则两条臂在同一 6 道题上互相污染。
+
+## 第 54 轮（2026-11-10）：机制落地，可达性先量后派
+
+### 54.1 触发
+
+第 53 轮把 `H2`（`KU` 旧值选取）提到队首，判据「≥ 4 / 6 稳定转化」是从测出来的零假设推出来的。但那个数字是**上限的算术**，
+不是**机制的能力**：六道题里有多少道是「同一件事说过两次、后一句在窗内」——这个还没量过。本轮先把这个量了，再决定派不派。
+
+### 54.2 交付物
+
+**库** `packages/cortex-memory/src/conflict.ts`：
+
+| 导出 | 做什么 |
+| --- | --- |
+| `contentTerms(text)` | 问题/句子 → 折叠复数并去停用词后的词项，数字保留 |
+| `conflictStatements(question, turns, options)` | 每轮取最佳句，保留最早 + 最晚 + 最相关（≤6），按证据顺序返回 |
+| `renderConflicts(statements)` | 渲染成块；<2 句时返回空串 |
+| `conflictBlock(question, turns, options)` | 上面两步的合成，供 `CortexMemory` 单点调用 |
+
+块的形状（`ce6d2d27` 的真窗口）：
+
+```
+RELATED STATEMENTS (the same ones appear in the evidence, in this order):
+- [2023/06/16 (Fri) 13:26] And by the way, I have a cocktail-making class on Thursday, …
+- [2023/06/30 (Fri) 22:49] By the way, I have a cocktail-making class on Fridays, …
+When two of these state different values for the same thing, the later statement is the later
+value and the earlier statement is the earlier one. If the question asks about a previous state,
+the earlier statement is the answer.
+```
+
+**它不判断哪个值是当前的。** 方向在问题里：`0977f2af` 问的是 Air Fryer **之前**那台，即两个值里较早的那个。把后一句标成
+「当前」会让它在四道题上对、在那一道上错——一个伪装成功能的回归。
+
+**接线**：`CortexMemoryOptions.conflicts`（默认关，关掉时提示词逐字节不变）+ `#withConflicts`（插在 `fitToBudget` **之后**）
++ `CORTEX_MEMORY_CONFLICTS` 仓库变量 + 制品 `memoryArmConfig.conflicts` / `featureConfig.conflicts`。
+
+### 54.3 读数：4 / 7 可达
+
+| 题目 | 语句 | 块字符 | 含金标 | 金标在旧值后 | 可达 |
+| --- | ---: | ---: | :---: | :---: | :---: |
+| `ce6d2d27` | 6 | 984 | 是 | 是 | **是** |
+| `9ea5eabc` | 6 | 1,005 | 是 | 是 | **是** |
+| `ed4ddc30` | 5 | 721 | 是 | 是 | **是** |
+| `59524333` | 6 | 1,203 | 是 | 是 | **是** |
+| `a2f3aa27` | 2 | 584 | 否 | — | 否 |
+| `69fee5aa` | 6 | 1,154 | 否 | — | 否 |
+| `0977f2af` | 5 | 935 | 否 | — | 否 |
+
+72 道 `KU`：块非空 **69**，均 **1,104** 字符（中位 1,139、最大 1,392），占 47,542 字符提示词的 **2.3%**，41 道块内出现金标。
+
+### 54.4 三条落空，三个原因——以及上一轮的一处误判
+
+- **`a2f3aa27`：切句。** 替换句是一段长轮次的末句，该轮次开头是「I'm looking to create a new Instagram post」，所以按词项
+  重叠选出的最佳句是开头（1 个共享词），而被替换那句共享 2 个。放宽阈值能捞到它，代价是 72 题里另外 31 道开始出现无金标的块。
+  **这是量出来的，不是推出来的**：第一版把「严格带为空才放宽」当作保护，而真窗口上严格带里就有两句 1250，于是放宽从未触发，
+  块里出现两次 `1250`、一次 `1300` 都没有。
+- **`69fee5aa` 不是替换，是增量。** 「37 coins」→「just added a new coin」，金标 38 **不在文本里**。上一轮 §53.5 把它写成
+  「六道里的第五道旧值」是错的；更正后那个 6.00 题的天花板在此机制的定义下是 5.00，在可达范围下是 4.00。
+- **`0977f2af`：关系命名。** `Instant Pot` 与问题零共同词项。
+
+### 54.5 判据与派发
+
+4 题 = `KU` **5.56 分** / 全文件 **0.80 分**；`KU` 2 sd = **2.52 题 = 3.50 分**。天花板在噪声之上，且机制花 **0 次模型调用**
+——§13.118 以来第一个「成本不构成推迟理由」的臂。
+
+- 判据：**≥ 3 / 4 稳定转化**、证伪 **≤ 1**（3 题 = 4.17 分 > 3.50 分噪声，是能站住的最小结果；4 是天花板）。
+- 派发：`capability=KU`、4 轮、72 题 × 2 臂 × 4 轮，成对检验在同跑内。
+- 两条排除：弃答（金标是拒答、30/30，给它两句陈述等于请它开口）与多会话（块会拍平它唯一的用处）。都由
+  `conflict-reach.test.ts` 守住——**删掉块必须逐字节还原对照提示词**。
+
+### 54.6 输入面板到顶
+
+`cortex_memory_conflicts` 作为第 25 个输入只活了十分钟，被 `test_no_workflow_sits_at_the_input_ceiling` 拒掉（贴着 25
+等于下一次注册必然 422）。开关改读仓库变量 `vars.CORTEX_MEMORY_CONFLICTS`；「哪条臂」由制品回答而非派发历史，跑完必须清掉。
