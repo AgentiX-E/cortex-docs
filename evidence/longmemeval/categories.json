@@ -1,0 +1,143 @@
+{
+  "$comment": "Per-capability accuracy for one dispatch, computed from ablation.featureCorrectByRun by tools/capability-ledger.py. Every number here is a repetition mean over the masks: ablation.featureByCapability carries min/avg/max across repetitions and only `avg` is the repetition mean, while `min` and `max` read 3 to 4 questions apart on the same population. Intervals are Clopper-Pearson rather than Wilson because the denominators are 72 to 127, where a normal approximation under-covers. `resolution` is the smallest true difference the population detects at 80% power and depends on the denominator, not on the repetition count.",
+  "run": "42355323615",
+  "arm": "route-room",
+  "benchmark": "LongMemEval-S",
+  "accuracySource": "repetition-mean",
+  "runs": 4,
+  "questionCount": 500,
+  "interval": {
+    "method": "clopper-pearson",
+    "level": 0.95,
+    "note": "exact at every n; wider than Wilson on purpose"
+  },
+  "resolution": {
+    "form": "2.8016 * sqrt(p(1-p)/n), 80% power at 5% significance",
+    "source": "arXiv:2411.00640",
+    "units": "points",
+    "note": "a conservative substitute for the paired floor: p(1-p) is Wang's rule of thumb for the paired variance, so a real pair with a low disagreement rate resolves less than this, and no number here shrinks with the repetition count"
+  },
+  "pooled": {
+    "denominator": 500,
+    "perRun": [
+      457,
+      466,
+      457,
+      459
+    ],
+    "passes": 459.75,
+    "mean": 0.9195,
+    "lower": 0.890401056889037,
+    "upper": 0.9405145362644118,
+    "halfWidth": 0.0250567396876874,
+    "resolution": 3.408730042861319
+  },
+  "categories": {
+    "IE": {
+      "denominator": 150,
+      "perRun": [
+        140,
+        143,
+        143,
+        144
+      ],
+      "passes": 142.5,
+      "mean": 0.95,
+      "lower": 0.8976181039766762,
+      "upper": 0.97669618980353,
+      "halfWidth": 0.039539042913426914,
+      "perRunMin": 0.9333333333333333,
+      "perRunMax": 0.96,
+      "perRunSd": 0.011547005383792506,
+      "repetitionSeOfMean": 0.005773502691896253,
+      "itemVariance": 0.04110738255033573,
+      "itemSeOfMean": 0.016554431944414107,
+      "resolution": 4.985457045786193
+    },
+    "MR": {
+      "denominator": 121,
+      "perRun": [
+        101,
+        104,
+        102,
+        99
+      ],
+      "passes": 101.5,
+      "mean": 0.8388429752066116,
+      "lower": 0.7563317619886512,
+      "upper": 0.8960152147199287,
+      "halfWidth": 0.06984172636563879,
+      "perRunMin": 0.8181818181818182,
+      "perRunMax": 0.859504132231405,
+      "perRunSd": 0.01720385123525728,
+      "repetitionSeOfMean": 0.00860192561762864,
+      "itemVariance": 0.11443698347107428,
+      "itemSeOfMean": 0.030753214368189556,
+      "resolution": 9.364316306671377
+    },
+    "KU": {
+      "denominator": 72,
+      "perRun": [
+        64,
+        64,
+        62,
+        65
+      ],
+      "passes": 63.75,
+      "mean": 0.8854166666666666,
+      "lower": 0.7759280642567468,
+      "upper": 0.9412166829434396,
+      "halfWidth": 0.08264430934334643,
+      "perRunMin": 0.8611111111111112,
+      "perRunMax": 0.9027777777777778,
+      "perRunSd": 0.017476468600163747,
+      "repetitionSeOfMean": 0.008738234300081874,
+      "itemVariance": 0.09319982394366189,
+      "itemSeOfMean": 0.035978354592970566,
+      "resolution": 10.51652182991373
+    },
+    "TR": {
+      "denominator": 127,
+      "perRun": [
+        122,
+        125,
+        120,
+        121
+      ],
+      "passes": 122.0,
+      "mean": 0.9606299212598425,
+      "lower": 0.9105148521026871,
+      "upper": 0.98709504489828,
+      "halfWidth": 0.03829009639779646,
+      "perRunMin": 0.9448818897637795,
+      "perRunMax": 0.984251968503937,
+      "perRunSd": 0.017009818106057395,
+      "repetitionSeOfMean": 0.008504909053028697,
+      "itemVariance": 0.028199600049993855,
+      "itemSeOfMean": 0.014901144079628295,
+      "resolution": 4.834628852716649
+    },
+    "ABS": {
+      "denominator": 30,
+      "perRun": [
+        30,
+        30,
+        30,
+        30
+      ],
+      "passes": 30.0,
+      "mean": 1.0,
+      "lower": 0.8842966917779722,
+      "upper": 1.0,
+      "halfWidth": 0.057851654111013895,
+      "perRunMin": 1.0,
+      "perRunMax": 1.0,
+      "perRunSd": 0.0,
+      "repetitionSeOfMean": 0.0,
+      "itemVariance": 0.0,
+      "itemSeOfMean": 0.0,
+      "resolution": null
+    }
+  },
+  "grouping": "these are the local regrouping, 150 / 121 / 72 / 127 / 30, not the published 150 / 133 / 78 / 133 / 30; a category percentage here is not comparable with one quoted from a paper that used the published grouping"
+}
