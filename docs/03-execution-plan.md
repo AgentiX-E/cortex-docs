@@ -7564,7 +7564,7 @@ prompt 身份 **500/500 逐字节相同**、0 差异、0 缺失，所以这是�
 | **TallyMem**（arXiv 2610.19474） | MINTEval 99 仓 **+13.8**，受控探针 +11.0，**全量 AMA-Bench 69.8→71.1（+1.3）** | 同一机制的完整版：问题前建事件账本 + 规格编译 + 确定性执行器 |
 | **MemTrace**（arXiv 2605.28732，Deng 等） | 七类错误（五类记忆特有）、归因驱动提示词优化 **+7.62**；但 *aggregation and counting failures* 全文只出现一次、是 §6.1 对 EverMemOS 的描述性观察，**不是定义的类别** | 本文档上一稿把它写成「命名成子类」= 过度声称，已修正 |
 | **MemTrace**（arXiv 2606.17328，Long 等，MSU）——**同名不同篇** | 知识点级 benchmark，13 配置 × 4 范式；「证据可检索是证据缺失的 **10 倍**」 | 与 `MEASURE-MR-CEILING` §1 同形（0/20 是检索失败） |
-| **StructMemEval**（Shutova 等，2026） | count 子集要维护账本 + 运行聚合：top-20 检索在 **50 笔交易上 0.0**，markdown 记忆代理 0.20（无提示）/ **0.27（有提示）** | 它才真正命名了账本失败类（omission / duplication / hallucination），且给出了下一轮的设计指令 |
+| **StructMemEval**（Shutova 等，*Evaluating Memory Structure in LLM Agents*，arXiv **2602.11243**） | count 子集要维护账本 + 运行聚合：top-20 检索在 **50 笔交易上 0.0**，markdown 记忆代理 0.20（无提示）/ **0.27（有提示）** | 它才真正命名了账本失败类（omission / duplication / hallucination），且给出了下一轮的设计指令 |
 | 模式目录 *Tool-Output Arithmetic Trust* | 命名「在脑子里对工具数据求和」这一反模式 | 与本轮取舍同构 |
 
 而且它的负载曲线在本仓**零派发**复现：`goldOverlap.total` 作负载代理，≤14 金标轮 **90.7%**（n=75）、>14

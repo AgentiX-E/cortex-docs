@@ -4941,7 +4941,7 @@ Michigan State University，2026-06-15）是**另一篇论文、同一个名字*
 
 ### 1.50.1 它测的正是我们失败的东西
 
-**StructMemEval**（Shutova 等，2026）的立论是：LoCoMo、LongMemEval 这些主流测评集测的是「能不能把事实取
+**StructMemEval**（Alina Shutova、Alexandra Olenina、Ivan Vinogradov、Anton Sinitsin，*Evaluating Memory Structure in LLM Agents*，arXiv **2602.11243**，v1 2026-02-11 / v4 2026-10-01）的立论是：LoCoMo、LongMemEval 这些主流测评集测的是「能不能把事实取
 回来」，而不是「能不能为任务维持正确的结构」。于是它构造了三个任务族——**树状**（族谱、公司层级）、
 **状态跟踪**（5 次相关更新）、**计数 / 账本**（对账结算 + 推荐统计）——共 **73 个会话场景、544 道题**，
 判分只看最终任务表现，不要求任何特定内部表示。
@@ -4995,7 +4995,7 @@ operation），再由确定性执行器在账本上求值——StructMemEval 的
 
 | 材料 | 是什么 | 与本仓的关系 |
 | --- | --- | --- |
-| **AMB**（2026） | 中立聚合「健身房」，100k–10M token 分档，计分透明 | 与 MLCommons 的形状相近，太新、尚未定论；**可作长上下文分档的第三方口径** |
+| **AMB**（`agentmemorybenchmark.ai`） | 100k–10M token 分档的长上下文榜 | **一处冲突，按本文档自己的记录为准**：外部博客称它「中立、计分透明」，而 §3 已记 AMB 由 Vectorize（Hindsight 的东家）主办、榜首是主办方系统。**「中立」是别人的描述，不是本仓核实过的事实**，因此不采纳；可用作长上下文分档口径，但必须标注主办方 |
 | **LoCoMo 的分歧** | Mem0 自报 **92.5%**，独立学术复现 **77–81%** | 与本文档 §1.4x 的「同系统三个分」是同一现象：**厂商臂与独立臂必须分开记** |
 | **Zep / Graphiti** | 独立复现 LoCoMo **55–56%**，但 LongMemEval 上 **63.8%** 对 Mem0 的 **49.0%** | 排序随测评集的「记忆定义」翻转——**任何单一榜单都不能当结论** |
 

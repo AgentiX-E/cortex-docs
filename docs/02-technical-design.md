@@ -9516,7 +9516,7 @@ fixture 上变红，而那段代码自己的文档就写着"一个在好产物�
 
 §22.86.6 的读数是：三条机制全部按设计工作，`MR` 却净 −9（p = 0.0117）。失败点不在执行，在**规格**——读者
 被要求「标出这一条贡献的数」，而「哪一个量才算这一条的事件」从未被说出来。两份外部材料给出了同一件事的
-两种廉价实现：**TallyMem 的 event specification（scope + predicate + operation）**与 **StructMemEval 的
+两种廉价实现：**TallyMem 的 event specification（scope + predicate + operation）**（arXiv 2610.19474）与 **StructMemEval 的
 organization hint**（后者量到：有提示 / 无提示的差距常常**大于** Mem0 与记忆代理之间的差距）。
 
 本节定义 `reviewPass: spec`，它是 `tally` 的上移一层，而不是它的加强版。
