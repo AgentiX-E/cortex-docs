@@ -9184,7 +9184,7 @@ fingerprint(config) = "sha256:" + sha256(json.dumps(config, sort_keys=True,
 | `registration-attest.py` 的 `attestation()` / `differences()` | 判定 + 诊断 | 判定只用指纹；差异列表只用来把 `cortex_memory_max_prompt_chars` 这种输入名说出来 |
 | 三个 `--write`（cost / evidence-budget / capability） | **拒绝**写出 | `--write` 是"别的配置"变成"被发表的数字"的唯一一道边界 |
 | `efficiency-frontier.mjs --ship` 写 `shipping.configurationFingerprint` | 出货臂的配置 | `S1` 读这个文件；指纹由它从自己加载的产物上算 |
-| `CONFIGURATION_ATTESTED` + `acceptance-check.mjs` | **构建失败** | 两个仓库根，`attestationOf` 的解析器跨不过去；而一份描述别的配置的文件"根本没在比"，与一条 gate 同级 |
+| `CONFIGURATION_ATTESTED` + `acceptance-check.mjs` | **检查失败** | 两个仓库根，`attestationOf` 的解析器跨不过去；而一份描述别的配置的文件"根本没在比"，与一条 gate 同级。文件**不在** checkout 里（CI 只检出一个仓库）时印 skip 而不是失败，理由是那五行的 `unrun` 是同一种状态 |
 
 三个性质由测试钉住，而不是由散文声明：
 

@@ -20985,7 +20985,7 @@ configuration has not moved."* 发货配置在 2026-11-09 动了。
 | `registration-attest.py` `attestation()` / `differences()` | 判定 + 诊断 | 判定只用指纹，差异列表把 `cortex_memory_max_prompt_chars` 这类输入名说出来 |
 | 三个 `--write`（cost / evidence-budget / capability） | **拒绝写出** | 这是"别的配置"变成"被发表的数字"的唯一边界 |
 | `efficiency-frontier.mjs --ship` 写 `shipping.configurationFingerprint` | 出货臂 | `S1` 读这个文件，指纹由它从加载的产物上算 |
-| `CONFIGURATION_ATTESTED` + `acceptance-check.mjs` | **构建失败** | 两个仓库根，`attestationOf` 跨不过去 |
+| `CONFIGURATION_ATTESTED` + `acceptance-check.mjs` | **检查失败** | 两个仓库根，`attestationOf` 跨不过去；文件不在 checkout 里时印 skip（CI 只检出一个仓库） |
 
 三条性质由测试钉住：指纹判定而差异列表只诊断（AND 起来会把一份正确记录报成缺陷）；拒绝没有 override
 （`--json` 仍读任何产物，被拒的只是"搬成判据读的那份"）；指纹**跨语言**一致（Node 与 Python 在同一 fixture
