@@ -9786,3 +9786,72 @@ SURE-RAG 的另一个结论同向：一个校准过的小验证器（Macro-F1 0.
 计划选中的行里"这件事今天**无法从任何产物里读出来**——离线无法证伪，派发就只能靠猜。仪器是对既有 census 通道
 （`recoveryCensus` / `auditCensus`）加四个字段：`selected`、`ledgerRows`、`supportHits`、`authorized`。
 这四列落地后，`V1`–`V4`（§13.365）才可判。
+
+### 22.91 取代通行：把「哪句话被后来改写了」做成一次可审计的比较
+
+`22.90` 的授权门回答的是「两个答案之间有没有关系」。这一节回答的是另一件事，而且它是本仓库第一个**先有授权、
+后有机理**的增量：`tally` 没有门，丢了 9.5 题；`spec` 没有门，丢了 39 题、46 次翻转里 43 次是破坏
+（`MEASURE-PLAN-SHAPE.md`）。`supersede` 的每一次替换都必须先通过三项检查，检查对象是**证据文本本身**。
+
+#### 22.91.1 为什么不是一次更强的提示词
+
+`MEASURE-FAILURE-STABILITY.md` §3：`42355323615` 四轮全错的七道 KU 题里六道是同一个模式——回答用了一句被后来的话
+改写过的陈述。而 `knowledge-update` 契约**每一道题上都在说这条规则**：
+
+> Some evidence may state a value that was later changed... Use the evidence with the latest date in the evidence
+> that is consistent with the time qualifier in the question.
+
+**24 次机会，24 次失败。** 一条在场且全败的规则不是措辞问题，是**在 23,084 字符的窗口上要求做一次比较**。而
+`852ce960` 证明 reader 做得出这次比较又把它丢掉：它的回答里写着「A later message (2023/11/30) mentions a pre-approval
+for $400,000, but that message also states...」。所以机制不问第二遍答案，只问**那一对**。
+
+外部证据同向：Supersede（arXiv 2606.27472）量到全上下文在 KU 子集上饱和在 92%，有界记忆掉到 77%，
+**更强的模型不收敛这个缺口**——瓶颈是维护，不是理解。
+
+#### 22.91.2 判定是函数，不是第二次判断
+
+`temporality.ts` 引用 Prospective Intention Store 的结论：把状态显式化、把转移确定化，让模型只做语言那部分。这里是
+同一个分工——语言部分是「把那一句抄回来，连同它所在行的日期」，其余全是子串判定：
+
+```ts
+adjudicateSupersession(report, firstAnswer, evidence) -> { kind: 'keep', reason } | { kind: 'replace', value, record }
+```
+
+三项检查，每一项都对应一个具名拒绝：
+
+| 检查 | 拒绝 | 它挡住的失败 |
+| --- | --- | --- |
+| 抄回的片段必须在证据里**逐字符**出现 | `not-in-evidence` | reader 编了一个值 |
+| 片段声称的日期必须出现在**片段所在的每一条证据记录**上 | `date-not-on-line` | 真值被一个编造的日期抬高 |
+| 片段不得等于它要替换的那个答案 | `agrees` | 消耗一次调用、报告一次不存在的替换 |
+
+「每一条记录」而不是「最后一条」是刻意的：一个值若也出现在更早的、日期不同的地方，正是这条通行要判对的那种
+歧义，所以它**失败关闭**。另外两条边界同样是读数决定的：片段长度上限是 `max(20, 2×当前答案长度)` 且不超过 80
+字符（六道目标题的答案是 `Friday`/`Paris`/`20`/`6:00 pm`/`38`/`1300`，最长六个字符；一条 47 字符的句子在短答案上
+会被绝对上限放进来的那个洞，是相对上限补上的）；证据里没有任何日期括号时，整段算一条无日期记录，因此任何授权
+都失败。
+
+#### 22.91.3 为什么不维护一张带键的当前值表
+
+`Stale, Misattributed, or Late`（arXiv 2610.10265）量到：键正确时把检索限制在 active facts 上能消除全部观测到的
+stale exposure；但**LongMemEval 不提供槽位词表时，merge recall ≤ 0.062**，而 key recall 0.980 的 LLM 分配器
+因为偶尔跨槽合并，clean-retrieval 仍低于规则抽取器。也就是说失败点不在「有没有当前值表」，而在**给修订分配键**。
+
+本通行绕开键：它不判断「哪两个陈述说的是同一个槽」，只判断「你刚依据的那句话有没有被后来的一句改写」。这个
+选择是被那条 0.062 支持的，不是省事。
+
+#### 22.91.4 代价与位置
+
+一次额外调用，`knowledge-update` 路由、且第一遍非拒答才发。证据块与第一遍**逐字节相同**（同一个 `renderCarried`），
+所以增加的是每个 KU 题一个指令块，不是一个窗口，provider 的前缀缓存可以命中公共头部。判定在 `memory.ts` 的
+`#supersede` 里，纯函数，零模型调用。
+
+计数器是 `attempted / replaced / refused + 七个具名原因`，恒等式 `attempted = replaced + refused` 由产物自身可验；
+跨 worker 求和是全有或全无，并且**拒绝发布一个恒等式不成立的 census**（`supersessionAcross`）——一个说不清自己
+population 的产物不应该说出一个数字。
+
+#### 22.91.5 下一步的仪器：提示词层面的 stale exposure
+
+同一条文献给出的度量口径，是我们下一件该做的事。`goldOverlap` 回答「金标轮在不在窗口里」，缺的另一半是
+「**窗口里有没有一个与答案矛盾的、更晚的值**」。`supersede` 通行的 `CHANGED` 判定本身就是这个事实，可以在离线
+产物上直接数出来，零额外调用——而它每道题一个布尔，功率远高于 72 道题的准确率（`MEASURE-PAIRED-POWER.md` §4）。
