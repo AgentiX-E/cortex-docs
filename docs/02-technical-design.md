@@ -10147,3 +10147,69 @@ substitutedValue(span, firstAnswer):
 拒答，且在调用点排除 `abstention`，因此在可达路线上**不存在被误伤的正确答案**——这是队列里唯一一笔不能亏的实验。
 接收字段：`replyRepair.commitment.attempted` / `.converted` 与那四个 `questionId`；判据：总体 ≥92.0%、`ABS` 30/30、
 prompt token/题 ≤9,250。
+
+#### 22.101 回复形态是独立于推理能力的一层：`evidence-echo` 与它的确定性判据
+
+**问题。** §22.99 的闭池与 §22.100 的换手分解都在回答「证据送得对不对」。本轮拿到竞品逐题记录后，
+36 道「他们对、我们错」里有一类无法用这两层解释：**回复本身不是答案，而是证据原文的转写。**
+
+**读数。** 用产品自己的 `classifyReply` 跑控制臂 500 条 `rawOutput`：
+
+| 形态 | n | 错 | 错误率 | 平均字符 |
+| --- | ---: | ---: | ---: | ---: |
+| `committed` | 425 | 30 | 7.1% | 207 |
+| `bare-decline` | 30 | 0 | 0% | 21 |
+| `shape-failed`（非转储） | 28 | 4 | 14.3% | 617 |
+| **`evidence-echo`** | **15** | **8** | **53.3%** | **2,952** |
+| `no-evidence-prose` | 3 | 3 | 100% | 281 |
+| `prose-decline` | 1 | 1 | 100% | 288 |
+
+**设计判断：判据必须是确定性的，不能是模型判断。**
+
+1. **判据用产品自己的渲染标记。** `formatEvidence` 每条证据以 `[YYYY/MM/DD ...]` 开头，**答案不会**。500 条
+   回复里 425 条 `committed` 没有一行这样开头，16 条 echo 全部有。所以 `EVIDENCE_STAMP` 是一个可判定的正则，
+   不是一次 LLM 分类。
+2. **`至少半数行` 而不是 `至少一行`。** 答案里引用一句证据是正常的（"as you said on 2023/05/01: ran 5 km"），
+   那是支撑不是回复。半数规则把这种排除在外，并且是一条可写的测试（本轮已加）。
+3. **它与 `shape-failed` 必须分开。** `shape` 覆盖 41 道（15 echo + 28 其它），其中 28 道只错 4 道——
+   `replyRepair: 'shape'` 的「44 次重问换 12 道错」正是这个混淆造成的。分开之后，`echo` 的人群错误率
+   53.3%，`shape` 的 14.3%，**两个修法可以分别定价**。
+4. **修法是「点名」而不是「重算」。** `buildEchoPrompt` 只做一件事：告诉读者上一轮把证据抄回来了、复述不是
+   答案、只给答案。不要求列表（`commitment` 要求，因为那类人群需要先枚举才能算），因为这里读者**已经枚举了
+   ——它枚举的是证据**。
+
+**为什么不扩 `commitment`。** `commitment` 在 `43051879550` 派发过，读数（91.35%、`attempted` 9）属于它注册的
+九道散文拒答。把 echo 并进去会让**一个已发布的数字描述两群人**——这正是 §13.192 花一页纠正的 `reader` 字段
+缺陷的同一形状。
+
+**实现落点**（全部已通过类型检查与 17 条单测）：
+
+| 层 | 改动 |
+| --- | --- |
+| 分类器 | `reply-repair.ts`：`evidence-echo` 种类、`EVIDENCE_STAMP`、`isEvidenceEcho`，判定置于 `shape-failed` 之前 |
+| 提示 | `prompt.ts`：`buildEchoPrompt` |
+| 编排 | `memory.ts`：`#repairs.echo` 槽、`#repairReply` 三分支、`repairCensus` 三子项 |
+| 契约 | `types.ts`：`ReplyRepair` 加 `'echo'` |
+| 计量 | `report.ts` `ReplyRepairCensus.echo`；`bench-memory-arm.ts` 两处聚合/提取 |
+| 派发 | `dispatch-cortex-memory-ab.py` 的 `REPLY_REPAIRS` |
+
+#### 22.102 证据渲染作为独立变量：`evidenceShape: 'turns' | 'cards'`
+
+`22.101` 把回复形态从推理能力里分了出来。这一节把**输入的形态**也分成一层，因为 `MEASURE-COMPETITOR-PAIRING.md`
+§6 量到两家最结构性的差别就在这一层：对方读者收到的是写期事实卡（`[n] (said <date>) [thing N] <fact>`，附
+`said_at` / `event_date` / `event_precision` / `valid_until`），本仓读者收到的是原始转写（`[date] speaker: …`）。
+指令长度不是原因（本仓 229–580 字符，他们 21,366 字符）；原因是**读者被要求在一趟里做的事**。
+
+设计约束（全部为的是「单变量可归因」）：
+
+1. 新增 `evidenceShape`，默认 `'turns'`，历史产物逐字复现；`'cards'` 只在显式命名时生效。
+2. 渲染是**确定性**的：每行 `[n] (said <YYYY/MM/DD>) [<speaker>] <句>`，句取该轮中命中问题内容词最多的一句，
+   按句切分超长轮；取代对复用 `conflict.ts` 已判定的 `superseded-by [m]` 标注，不新增判定。
+3. 窗口预算、`relevanceSignal`、合同文本、`parseAnswer`、judge、读者模型**一律不动**，否则一次派发里有两个变量。
+4. `promptDigest` 必须逐题与 `'turns'` 不同——它是渲染真的发生了的构造性证据。
+5. 卡片渲染不得改变**准入**：`turns` / `offered` / `offeredChars` 三个量在两臂之间保持同分布，`windowComposition`
+   是这一条的读数。
+
+判据（预注册，先入库再派发）：全量 500 题净 ≥ +6（噪声地板 ±2）；12 道目标题（5 `preference` + 7 `KU`）
+转化 ≥ 5；`bare-decline` 不少于 28 道；交付 token ≤ +3%；四轮重复下 `MR` ≥ 84。任一未达即关闭该方向，且
+**写期 LLM 抽取不启动**——确定性卡片检验的是同一个假设，先付一次免费的钱。
