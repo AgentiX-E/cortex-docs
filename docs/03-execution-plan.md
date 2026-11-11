@@ -9014,3 +9014,27 @@ Synap 在 `maximem-ai/eval_benchmark_runs_output` 公开了 500 道题的逐题�
 渲染**不增加任何调用**就能检验同一假设（「读者失败是因为它必须在一趟里同时做抽取、消解实体、消解取代、
 算日期」）。若确定性卡片已经把 12 道中的 5 道拿回来，写期抽取的边际价值就只剩 `preference` 的索引问题，
 而那需要的是**不同的索引**，不是不同的证据形态。
+
+#### 14.117.1 适配器已落地（有测试，未跑分发）
+
+§14.117 的两个文件已写出并通过测试，落在 `cortex` 仓：
+
+| 文件 | 作用 |
+| --- | --- |
+| `tools/competitor-adapter/bridge.mjs` | 本仓存储实现 `tools/competitor-sut/PROTOCOL.md`，**我们是子进程** |
+| `tools/competitor-adapter/cortex_adapter.py` | 实现他们的 `Provider` ABC：`initialize` / `ingest` / `await_indexing` / `search` / `clear` |
+| `tools/__tests__/test_competitor_adapter.py` | 7 条测试：五个 op、`{"ok": false}` 拒绝信封、`search` 的 limit 天花板 |
+
+**协议沿用而非另造**：一个文档已经写好「存储如何被问三个问题」，第二份实现就是两个协议漂移的开始。适配器
+自带五条拒绝：`search` 内不得生成答案、manifest 里 `build: none`、`clear` 换一个全新存储、出口硬性截断
+top-k（他们的 `limit` 是会话数，本仓的命中是轮次——`provider.ts` 记过 25.4% recall 的那个单位错误）。
+
+**能说什么、不能说什么**：他们公开那一臂是 `gemini-3.8-flash` 作答 + `gpt-4o` 判分；本沙箱两个 key 都没有，
+所以两个角色都用本战役已付费的读者。因此**有效的比较发生在这一次运行内部**（他们的适配器 vs 我们的，
+同一作答模型、同一判官、同一语料）；若他们的适配器根本跑不起来（需要托管 Synap 实例与 `instance_id`），
+剩下能说的只有「**本仓在他们流水线下的分数**」，且必须在同一句里写明模型替换。**它不是 SOTA 行，也不按
+SOTA 行来写。**
+
+**已验证**：bridge 五个 op 全过（7 条测试）；Python 适配器在其 `runner.types` 下跑通
+initialize → ingest → search → clear → close。**未验证**：计分运行——需要他们的树、
+`requirements-longmemeval.txt`，以及 README 规定的 20 题冒烟，然后才全量。

@@ -22010,3 +22010,9 @@ Synap 公开了 500 道题的逐题记录（`maximem-ai/eval_benchmark_runs_outp
 - **已核对待写码**：`cortex_adapter` 接对方 harness（§14.117，先 20 题冒烟）；其判官可用 `OPENAI_BASE_URL`
   指向 DeepSeek，不需 OpenAI key。
 - **未运行**：BEAM-10M、`C2`、`D1`、`C3`。
+
+### 67.5 顺手落地的一件事：竞品 harness 能读本仓了
+
+`tools/competitor-adapter/` 三件文件 + 7 条测试已入库并推送（master `d5a408a`）。这一步不产出分数，但它把
+§14.117 从「可行性已核对」变成「代码已存在、只有运行没做」：下一次派发只需装他们那份 20 行的
+`requirements-longmemeval.txt`、拷两个文件、跑 20 题冒烟。
