@@ -21640,3 +21640,24 @@ coverage / acceptance / docs-crosscheck 60-of-65 / format）。
 4. **0 元仪器**：事件级注释账本（5 道不可达 `MR`）、`C2` 重定基的房间预算表。
 5. **BEAM-10M / `C2` / `D1` / `C3`**：仍 `unrun`；MINTEval 的读数（全上下文在 180 万 token 上最差）说明它们的前置
    设计不能沿用「把更多证据塞进窗口」。
+
+### 63.7 本轮 CI：一条基础设施失败，以及它暴露的一处多余依赖
+
+`Verify` 在 `c5b3eb8a` 上连失三次，三次都死在同一步、且**一条断言都没跑**：
+
+```text
+E: Failed to fetch .../fonts-ipafont-gothic_...deb  Temporary failure resolving 'security.ubuntu.com'
+Failed to install browsers
+Error: Installation process exited with code: 100
+```
+
+同一步在 8 分钟前的 `69163b47` 上成功装好并启动了同一个浏览器，因此这是 runner 侧 apt 镜像的解析故障，不是仓库
+缺陷。但它暴露了仓库自己的一个多余依赖：`playwright install --with-deps` 会为一个已经自带这些库的 `ubuntu-latest`
+镜像去 `apt-get install` 字体与依赖，代价是**当镜像不可达时整个浏览器套件跑不起来**。
+
+改法只有一处（`verify.yml`）：`install chromium`，去掉 `--with-deps`。这**不是放水**——套件自己会启动浏览器，缺库
+时会当场在 `spawn` 处报出库名，比在解析器处超时更容易定位。改后 `Verify`（`43038657182`）两个作业全绿：
+`Verify library` success、`Verify browser suites` success。
+
+`43031679630`（`KU` 房间臂）截至本轮收尾仍在运行（13:43 起，4 轮 × 500 题），其读数按 §14.112.3 的判据在下一轮
+读取；本轮不给任何关于它的结论。
