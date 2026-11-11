@@ -5453,3 +5453,55 @@ reader、judge、top-k、每题交付量四项**一项未披露**，与 `Recalli
    答了被取代的值」，而那正是机制要修的那一类。
 3. **`ABS` 100% 不再是「这一类已经解决」的证据。** STALE 的 Premise Resistance 是另一件事：问题预设了旧值时，正确
    行为是拒绝这个预设，而不是拒绝回答。本仓 30 道拒答题没有一道测这个。
+
+### 1.58 第 68 轮：`KU` 的差距在「送到」而不在「告诉它哪个新」，四份外部证据
+
+本轮的检索由一个很具体的数字触发：控制臂（`42533236864`，注册配置）72 道 `KU` 错 9 道，用 §1.57 的闭池仪器拆开
+之后，**没有一道是「答了更新的值」**——4 道答了被取代的值、4 道答了窗口里根本没出现的值、1 道金标是短语。上一
+轮关掉的替换机制，恰恰只会对着第一类发力，而它自己在打开时制造了第二类。于是本轮去找：别人把 `KU` 做到高分靠
+的是什么。
+
+#### 1.58.1 Oracle Agent Memory：94.9% 的 `KU` 用的是 top-K=200，不是更好的提示词（自报，B 级）
+
+arXiv **2607.13157** 的 LongMemEval 高精度配置：整体 **93.8%（469/500）**，`knowledge update` **94.9%**，
+`multi-session` **88.0%**，reader 为 `gpt-5.5` + xhigh reasoning，embeddings `nomic-embed-v1.5`，**top-K=200**。
+同一篇给出 BEAM 的检索诊断表，`knowledge update` 的 **top-40 recall 0.9000、prompt recall 0.9542**，并自己写明
+「window expansion recovers substantial additional evidence, but it also increases prompt size」。
+
+对本仓的三条直接读数：
+
+- **它是「更大窗口 + 更多候选」的路线**，与本仓 `evidence-depth` 的曲线是同一根轴，而不是提示词路线；
+- 它的 `KU`（94.9%）与本仓（87.5%）差 **7.4 点**，而 `multi-session`（88.0%）与本仓（82.6%）差 **5.4 点**——两个
+  最大值都落在「候选宽度」这一侧；
+- 它的错误描述里有一句和本仓同形："knowledge updates are sometimes **treated as contradictions**"——即把「值变了」
+  读成「两句话矛盾」。本仓上一轮的替换臂正是这个错误的另一种写法。
+
+#### 1.58.2 MEMTIER：瓶颈是注入粒度，不是会话召回（N=500，7B，C 级）
+
+Sidik 等（2026，`a19070607`）在 LongMemEval-S 上用 7B 模型做分层记忆，整体 0.382 / F1 0.412（+33 点到无检索
+基线），但真正可搬的是它的诊断：
+
+> session coverage **90.9%** 对 fact recall@2 **4.5%**；"the bottleneck is injection granularity, not session
+> recall"；把 top-k 检索到的会话里**全部事实**注入，`multi-session` **+0.120**、`knowledge update` **+0.205**。
+
+这条与本仓 §14.6 的读数咬合得很紧：本仓 `knowledge-update` 路线窗深 28 轮（783 字/轮），而金标会话往往有 22–24
+轮——**会话在窗口里，值不在**。他们用「整天会话全注入」买到的 +20.5 点，是本仓 `relevance_units=session` 在 MR
+上试过并输掉的那条规则（已冻结，§13.27/§13.31）；差别在于他们不排序、直接注入，而本仓当时是「按最佳轮为会话排序
+后取前缀」。**同一规则在 MR 上失败，不等于它在 KU 上失败，但它必须先被单独定价**——本轮不做，登记为候选。
+
+#### 1.58.3 三份横评：Zep 领先 `KU` 靠的是「标记失效」而不是「删掉」，而本仓的成本仍是 2.1 倍
+
+| 来源 | 读数 | 对本仓的含义 |
+| --- | --- | --- |
+| arXiv **2606.24775** 的横评（agentrex 摘要） | Zep 在 `knowledge update` 上领先（**44.4** substring exact match）；只追加的存储在更新后继续答旧值，被作者命名为 "**hallucinations of the past**"；同时「raw long context still beats most memory systems on time-dependent queries」 | 本仓不做写期失效（语料无写期），读期只能靠证据顺序；「时间类问题上全上下文仍更强」与本仓 temporal 94.5% 同向 |
+| particula.tech 2026-09 横评 | Mem0 自报 **94.4%（472/500）**，GPT-5 兼 reader 与 judge，约 **6.8k** tokens/query；Zep **90.2%**，**4.4k–5.8k** tokens/query | 本仓 **9,200** tokens/题、91.2%：比 Zep 贵 **2.1 倍**，准确率高 1 点。成本轴仍是最大单点差距 |
+| memoryatlas 2026-11 综述 | StateMemBench 最强同骨干基线 **20.5%**（current-state accuracy），显式取代 + 依赖追踪把它抬 1.8×；另一条线索（arXiv **2606.15903**）把更新失败写成「与 merge-assignment 错误率近似线性」 | 闭池判分已被本仓搬成仪器（§1.57.2 → `tools/state-relation.py`）；「线性于合并错误率」提示写期，而本仓无写期 |
+
+#### 1.58.4 这一节改了计划里的两件事
+
+1. **位置/标注臂撤销，换成房间臂。** 控制臂上 0 道 `newer`、4 道 `gold-not-in-window`，而 Oracle 的 94.9% 与
+   MEMTIER 的 +20.5 点都长在「候选宽度/注入粒度」这一侧。`03 §14.112` 因此只登记一个变量：
+   `knowledge-update` 的房间 24,000 → **49,400**（`evidence-depth` 给出的 80% 覆盖率房间），其余五条路线逐字不变。
+2. **「答了旧值」这一类不再指望提示词。** 上一轮关掉的替换机制在 KU 上是 3 换 3、净 0，且 3 处损伤里有 2 处是
+   「问题问的是更早的那段」而机制把更新的值推了上去。这类问题要的是**限定词理解**（"first three months"、
+   "earlier trip"），不是一条更响的取代指令；它被移出机制队列，转入 reader 轴的登记项。
