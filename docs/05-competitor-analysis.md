@@ -5129,3 +5129,85 @@ ARCHITECTURE 的句子，而不是当前树——也正好解释了它为什么�
 | **部分** | #6 四路 RRF → **先做 BM25 单臂**（`reciprocalRankFusion` 已在 `fuse.ts`，缺的是通道）；#7 cross-encoder → **只需一次同房间读数**，实现已在且默认关；#5 渐进加载 → **换成「杀掉 63.5% 未打分邻域」** |
 | **不采纳** | #1 KU date frame（已证伪）、#2 quote dump 重问（算术否决）、#4 speaker 过滤改 boost（本仓 `evidenceRoles=user` 实测 MR +7 / TR +5，方向相反）、#8 additive 抽取（本仓无写入路径）、#9 两阶段 hybrid（与 #6 重叠）、「追 95.6 这个数字」（单位不一致且 leader 设置未披露） |
 | **推迟** | #3 `sourceIds`、#10 实体边、#11 `derivedFrom` DAG、#12 mental model 页、#13 contradiction+FSRS、#15/#17 server 与 MCP —— 全是产品差异化，不产生评测点数 |
+
+### 1.53 关于 Hindsight 架构价值的一次往返：结论对了，但归属错了一半
+
+一份对上一轮核验的再核验（元宝「基于 AI 报告优化技术设计的探讨」）提出了一个战略异议，原文值得完整引用：
+
+> 把 `derivedFrom` DAG、mental model 页、contradiction+FSRS、server、MCP 全推迟，理由是「产品差异化，不产点数」——
+> 如果目标是「最低成本获取 SOTA」，这判断对。但 A/B/C 三条线**全是同一 harness 内的考卷线**，等于把「超越竞品」
+> 缩窄成「同场考更高」。而 Hindsight 94.6 的架构价值恰恰来自 observation / mental model / reflect 这些「不产点数」的结构。
+
+**前半段成立，后半段是归类错误。** 这一节记录往返的净结果，以及我们因此修正的三处自身错误。
+
+#### 1.53.1 它认下的四条，与它保留的一条
+
+| 它认的 | 依据 |
+| --- | --- |
+| 「`decideWrite` 未进生产链路」写反了 | `ARCHITECTURE.md` L43/L162 明写 `admission` 是它的 first production caller；它把「预注册 A/B 尚未测出收益」读成了「待办」 |
+| P0 #2（quote-dump 重问）是建议了已被算术否掉的方案 | 引号清单 42–47/趟、只 7–13 错；`E3.2` 实派 `42791109966`，+0.25 点、p = 0.607（`MEASURE-FAILURE-STABILITY.md` L186） |
+| 90.15% 过时 | shipped 是 91.05% @ 9,201 token/问（`MEASURE-COST-LEVER.md` L197–199，run `42533236864`） |
+| 跨系统 token 结论外推过度 | `MEASURE-TOKEN-BASIS.md` §1.1：`MR/TR` 已用到 room cap 的 99.7%，`the cost is the cap, not the selection` |
+
+它保留的一条，**我们接受**：KU 不是「完全不成立」，而是双方各说了一半——date frame 的两半确实已在 prompt 里
+（`PREREG-DATE-FRAME.md` L31–32），但 `MEASURE-ORACLE-CEILING.md` L239 确有 5 道 `superseded value won`，
+L252 定性为 `a route contract, not a prompt-wording question`。所以是 **scoped A/B，限 6 道稳定 stale-value 题、上限 8.33 点**，
+不是「不采纳」。上一轮把整条线划掉，划得太宽。
+
+#### 1.53.2 我们因此认下的三处，全部同一方向
+
+它对同一批读数要求「给 run-id」，这个要求是对的，而按这个标准自查，我们有三处站不住：
+
+| 上一轮的说法 | 实际 |
+| --- | --- |
+| 「`expandTyped` 实现已在且默认关」 | 唯一的非测试调用者是 `tools/knowledge-probe.mjs`——**一个打印读数的探针**。探针不是链路 |
+| 「token budget 已在跑，且更严格」 | `assemble()` 确实实现且**有理由拒绝** `fillBudget`（渲染边际成本不可加），但 `assemble` 的唯一生产调用者是合成消融 `assumption-ablation.ts` |
+| 「Mem0 `56.00` 见 `LANDSCAPE-CONTROLLED-BOARD.md`」 | 在 `MEASURE-COST-LEVER.md` L114 |
+
+三处错误方向一致：**都把「更靠近分数」写成了实际位置**。这不是笔误，是缺一个仪器——于是有了
+`cortex` 仓的 `docs/AUDIT-CHANNEL-REACH.md`。
+
+#### 1.53.3 为什么「observation 不产点数」是错的
+
+`observation` 是 Hindsight 四条主张里**最产点数**的一条，不是最不产的：
+
+| 我们的 grade-A 差距 | 机制对应物 |
+| --- | --- |
+| `MR` 83.88% 对 Synap 92.6%（**−8.7**） | 5 道不可达题的诊断是「一轮不是一笔交易」→ 需要事件级账本 → **就是 observation 层** |
+| `KU` 差距 | 5 道稳定 stale-value 题 → 「精炼而非覆盖 + proof count」→ 就是 `revision.ts` 的 `confirmed`/`refuted` |
+
+真正不产点数的是 **server / MCP / pages UI / bank disposition traits**。它把后两者并入「架构价值」，
+才得出「只能保留一条 `derivedFrom` 单测臂」的结论，而 `derivedFrom` 恰是选错的机制——LongMemEval 的题不问
+「这个事实从哪推导来」。
+
+它**说对了一半的地方**是：mental model 的**零 LLM 读取**（读是数据库读，非检索+合成）确实是 Hindsight 最优雅的一处，
+而且不是产品差异化，是 C 线的极端形态。但它在这套考卷上测不到——每题一个独立 history，没有「跨会话稳定的答案页」
+这类题。所以它该进产品路线，不该进评测路线。
+
+#### 1.53.4 四条主张的真实位置（见 `cortex/docs/AUDIT-CHANNEL-REACH.md`）
+
+| Hindsight 的主张 | 本仓实现 | 最远的调用者 | 状态 |
+| --- | --- | --- | --- |
+| 多通道 **RRF** | `reciprocalRankFusion` | `retrieveTopKByQueriesHybrid`（dense + lexical） | **在评分链路**，四路里的两路 |
+| 冲突事实**保留两态**带时间戳 | `conflict.ts` | `CortexMemory` 在 `conflicts === true` 时插入块 | **在评分链路**，且已有 reach limit 记录 |
+| **token budget 而非 top-K** | `fillBudget` + `assemble` §5 | `assemble()` → 合成消融 | **离线 harness** |
+| **observations** | `revision.ts` / `assumption.ts` | `reviseAssumptions` **无调用者** | **仅声明** |
+| **typed entity-graph 通道** | `expandTyped`（33 测试） | `knowledge-probe.mjs` | **仅探针** |
+
+第三行的注脚值得单独说：`assemble.ts` §5 不是「实现了 budget」，而是**用写明的理由拒绝** `fillBudget`——
+`renderBlocks` 每块只说一次 frame、同块内按 id 指另一端点，所以一条事实的边际成本取决于已在块内的内容，
+加一条可能让块**变短**；不可加的成本不能求和，于是逐步 render-and-measure。**这比 Hindsight 那版更好，
+而它从未在真实语料上与简单版对过价。**
+
+第四行的陈述分量最重：`reviseAssumptions` 是一个「专职处理 KU 失败形态」的模块，且没有调用者。
+
+#### 1.53.5 于是方案变了：不是接线，是替换一个有读数的机制
+
+`expandTyped` 不是在与「空缺」竞争。`conflict.ts` 已经占着那个位置——**找出与问题相关的其他陈述、连同日期放进提示块**——
+它用句级术语重叠而不是类型化边，**在评分链路上，且有测量过的 reach limit**（`MEASURE-CONFLICT-SURFACING.md` §2）。
+
+所以接 `expandTyped` 的举证责任不是「它存在」，而是「它在同一批题上打得过术语重叠」。
+
+这也给出了一条便宜得多的路：`conflict.ts` 已经可开关（`conflicts: true | false`），是一个现成的对照臂。
+**把证据块路由过 `assemble()`——ledger、window、uniqueness、budget、typed relations 一次全上——
+用一笔 500×4 对现有 untyped 插入读**，就是一次派发给四件事定价。分四次做要四倍的钱，且每次都是一个新的混杂。

@@ -7870,3 +7870,51 @@ Gemini 3.8 Flash / Gemini 4 Argon）。**这是 91.95 与 95.6 之间唯一没�
 3. additive 抽取与事实压缩（本仓 LongMemEval 无写入路径，语料给定）；
 4. speaker/scope 硬过滤改 boost（本仓 `evidenceRoles=user` 实测 `MR +7` / `TR +5`，方向相反）；
 5. 把 95.6% 当数字追（单位不一致 + leader 设置未披露 + 同 harness 折扣 22–38 点）。
+
+### 14.102 第 63 轮（续）：把「学 Hindsight」从判断变成一次派发
+
+#### 14.102.1 状态表
+
+| 项 | 状态 | 证据 |
+| --- | --- | --- |
+| `spec` 派发 | **成功结束，产物下载中** | run `42930900136`，00:23→03:07（2h44m），artifact 19.1 MB，代理约 10 KB/s 分块拉取 |
+| 到达性审计 | **完成** | `cortex/docs/AUDIT-CHANNEL-REACH.md`；四条主张的最远调用者逐一定位 |
+| 四条主张的真实位置 | **已定位** | 两条在评分链路、一条在离线 harness、一条仅声明、一条仅探针 |
+| `reviseAssumptions` | **零调用者** | `grep` 全 workspace 只有自身与测试 |
+| `assemble()` | **唯一生产调用者是合成消融** | `cortex-eval/src/assumption-ablation.ts:680` |
+| `conflict.ts` | **在评分链路** | `memory.ts` 在 `conflicts === true` 时调 `insertRelatedStatements` |
+| `assemble()` 路由替换 untyped 插入 | **未开工** | 本轮新识别的最优增量 |
+| 事件级注释账本 | **未开工** | 等 `spec` 读数 |
+
+#### 14.102.2 三处自我纠正，方向一致
+
+| 上一轮 | 实际 |
+| --- | --- |
+| `expandTyped`「实现已在且默认关」 | 唯一非测试调用者是 `tools/knowledge-probe.mjs`（探针） |
+| token budget「已在跑」 | `assemble()` 实现且有理由拒绝 `fillBudget`，但 `assemble` 唯一生产调用者是合成消融 |
+| Mem0 `56.00` 出自 `LANDSCAPE` | 出自 `MEASURE-COST-LEVER.md` L114 |
+
+三处都把「更靠近分数」写成了实际位置。修法不是更小心，而是补仪器：**一个符号有三种状态——在评分链路 /
+在离线 harness / 仅声明——而导出普查只回答「有没有非测试调用者」。「有调用者」不等于「在链路上」：
+`knowledge-probe.mjs` 是非测试调用者，它调的一切都不能移动一个数字。**
+
+#### 14.102.3 修正后的增量顺序（按每元换到的可判性排序）
+
+| 序 | 事项 | 价格 | 判据 |
+| --- | --- | --- | --- |
+| 1 | 读 `spec`：`P1`–`P5` + 四组分解 | 已付 14.26 | 恒等式 PASS；四组方向能解释总位移 |
+| 2 | **`assemble()` 路由替换 `conflict.ts` 的 untyped 插入** | 14 元 | 一笔派发同时定价 **ledger / window / uniqueness / budget / typed relations** 五件事；对照组是现成的 `conflicts: false` |
+| 3 | `reviseAssumptions` 从 S3 移到 S1（KU 6 道稳定题） | 0（离线） | 6 道题上 stale-value 选择正确率；上限 8.33 点 |
+| 4 | **frontier reader 一条臂** | 30–120 元 | A 线从「未测」变「可判」；一换 reader 所有旧基线锚点失效，越晚换返工面越大 |
+| 5 | typed 边 vs 术语重叠的对照 | 并入序 2 | 打得过术语重叠才留；打不过就记否决，不留默认关的开关 |
+| 6 | 事件级注释账本 | 0（离线） | 5 道不可达题上 copy 天花板 ≥ 3/5 |
+| 7 | 未打分邻域 → 打分选择 | 14 元 | −40% prompt token 且 accuracy ≥ −1.0 |
+
+**序 2 是这一轮真正的产出**：它把「学 Hindsight」从一条设计意愿变成一次带对照组的派发，而且对照组
+（`conflicts: false`）今天就在仓库里。
+
+#### 14.102.4 明确不再重复的三句话
+
+1. 「token budget 已在生产」——它在 `assemble`，`assemble` 在消融里；
+2. 「`expandTyped` 已接、只是默认关」——什么都没接；探针不是链路，默认值是调用方传的数，不是测试传的数；
+3. 「竞品的 94.6 是要追的目标」——同 harness 读 72.20，且 `neither is grade A against us`，因为我们的 reader 不是 `gpt-4.1-mini`。
