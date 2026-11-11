@@ -5070,3 +5070,62 @@ HSE / Yandex / YSDA / NES。此前记的「73 场景 544 题」是二手页面�
 它的方法论有一条值得本仓直接借用：**「有提示 / 无提示」的差值被用于归因**——某系统无提示失败、有提示稳定成功，
 说明错在知识结构；两者都失败，说明错在执行。本轮的 8 vs 12 是这个方法论的一个变体：**换更宽的词汇表仍然失败**
 的 5 道，才是真正卡在结构上的那部分。这条判据比「准确率高低」更能定位下一层，已写进执行计划 §14.99.3 的读产物要求。
+
+### 1.52 一份外部报告的逐条核验：事实层可信，结论层分母错，建议层一半已被我们实测过
+
+一份题为《四大 AI 记忆系统源码级比较与 Cortex 超越路线》的报告（370 行，MemPalace / Hindsight / Mem0 /
+cortex 四仓源码级比较，附 18 条建议）在本轮被逐条核验。核验方式不是读二手页面：三个竞品仓库经 GitHub API
+直接拉取元数据与关键文件原文，论文核到 arXiv 摘要，cortex 一侧核到源码与 artifact。
+
+#### 1.52.1 事实层：可以放心引用
+
+| 报告断言 | 核验 |
+| --- | --- |
+| 四仓身份：cortex TS/MIT/0★、MemPalace Python/MIT/`develop`、Hindsight 843MB/MIT、Mem0 Apache-2.0 | **四条全对**（API 实测 60,509 / 60,322 / 68,774 星） |
+| Mem0 `92.5 / 94.4 / 64.1 / 48.6`，6.7–7.0K token，top_200，单次检索 | **全对**，官方 docs 逐项一致 |
+| Mem0 OSS **无属性图**：`enable_graph` 与 `graph_store` 已从 OSS 移除 | **全对**，迁移文档原文 *"Graph memory is removed from OSS"* |
+| Mem0 主流程 = single-pass ADD-only | **全对**，README *"one LLM call, no UPDATE/DELETE"* |
+| Hindsight 论文 `83.6 / 91.4`，供应商 `94.6` 是两种口径 | **全对**，arXiv 2512.12818 摘要 + 供应商基准页 |
+| MemPalace `96.6%` 是 R@5 零 API；`84.2%` 是 AAAK；LoCoMo top-50 `100%` 是饱和集 | **全对** |
+| `wings v1` 用 speaker 硬过滤，R@10 58.0%、覆盖 5.4% | **全对**，`BENCHMARKS.md` 第 142 行原文 |
+
+#### 1.52.2 它没核到、而源码里写着的一条
+
+报告把「palace 结构 +34%」归因于标准元数据过滤，来源是宣发稿。仓库里没有这个数；真正的增益来自 **hybrid
+打分**（引号短语 / 人名 / 时间邻近 boost），而同一文件第 502 行写着：
+
+> *"The hybrid v4 improvements … were developed by directly examining the three specific questions that
+> failed in every prior mode … **This is teaching to the test.** … The 99.4% → 100% step is three targeted
+> fixes for three known failures."*
+
+**竞品最高分不是追击目标**：它测检索成员资格，且最后 0.6 点是对三道具名错题的特调。这句话同时是本轮最值得学的
+一条纪律——MemPalace 主动把污染写进仓库，而不是把 100% 写成 headline。
+
+#### 1.52.3 结论层：两条 P0 已经被我们自己的读数否掉
+
+| 报告建议 | 本仓读数 | 判定 |
+| --- | --- | --- |
+| KU 注入 date frame、按 valid time 取当前值 | KU 全部 **72/72 交付已严格非降序日期**，提示块已有规则，每轮已带时间戳；反转最多救 5 道、危及 11 道已对题 | **不成立**（`K1` 已撤回） |
+| 「14 道确定性修复 = KU 5 + 拒绝 8 + quote dump 6」 | 分母补齐后：`prose-decline` 每趟 **3–5** 且 100% 错；`shape-failed` 每趟 **42–47** 却只 **7–13** 错；`E3` 派发实测 **+0.25 点、p=0.607** | **错在分母**，正是 `RETRACTIONS` #3 的同一种错误 |
+| 「先修精度，不要扩召回；不要盲目缩预算」 | 与本仓 `MEASURE-ORACLE-CEILING` §7 / `MEASURE-COST-LEVER` 一致 | **正确** |
+
+报告还引用了两个过时数字：cortex 的 `90.15%`（当前 shipped 是 **91.05% @ 9,201 token/问**）与
+「`decideWrite` 未进生产链路」（`admission.ts` 是它的第一个生产调用者）。这说明它读的是 README 与
+ARCHITECTURE 的句子，而不是当前树——也正好解释了它为什么会推荐那两条已被派发过的 P0。
+
+#### 1.52.4 报告缺的三层，正是决定结论的三层
+
+1. **单位**：Synap 的 7,391 token 只算 `memory + source_evidence`，本仓 12,137 算系统提示 + 上下文 + 问题。
+   换到同一 basis 后，剩下的 3.65 点落在 `KU −8.3` 与 `MR −9.1` 两个**聚合类**上。
+2. **同 harness 折扣**：OmniMemEval 一套设定跑 14 个 backend，Hindsight 94.6 → **72.20**（−22.4），
+   Mem0 94.4 → **56.00**。竞品自报数字不是同一量纲。
+3. **我们唯一的 grade-A 差距**：`MR` 83.88%（shipping）对 Synap 92.6%，**−8.7**；`ABS` 我们 **+6.7** 领先。
+
+#### 1.52.5 建议层：采纳 3 条、部分 3 条、不采纳 6 条、推迟 6 条
+
+| 判定 | 条目 |
+| --- | --- |
+| **采纳** | #18 把竞品做成同 harness driver（本仓已有 Mem0/Letta/stub，**缺 MemPalace**，且它零 API 可零成本接入）；#14 图只做 top-N 后局部扩展；「组合而非复制」的战略框 |
+| **部分** | #6 四路 RRF → **先做 BM25 单臂**（`reciprocalRankFusion` 已在 `fuse.ts`，缺的是通道）；#7 cross-encoder → **只需一次同房间读数**，实现已在且默认关；#5 渐进加载 → **换成「杀掉 63.5% 未打分邻域」** |
+| **不采纳** | #1 KU date frame（已证伪）、#2 quote dump 重问（算术否决）、#4 speaker 过滤改 boost（本仓 `evidenceRoles=user` 实测 MR +7 / TR +5，方向相反）、#8 additive 抽取（本仓无写入路径）、#9 两阶段 hybrid（与 #6 重叠）、「追 95.6 这个数字」（单位不一致且 leader 设置未披露） |
+| **推迟** | #3 `sourceIds`、#10 实体边、#11 `derivedFrom` DAG、#12 mental model 页、#13 contradiction+FSRS、#15/#17 server 与 MCP —— 全是产品差异化，不产生评测点数 |
