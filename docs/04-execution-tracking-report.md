@@ -21741,8 +21741,10 @@ coverage / acceptance / docs-crosscheck / format 全过；`test:tools` 2,530 条
 ### 64.6 位置与剩余步骤
 
 1. **`43051879550` 读数（下一轮，0 元）**：`attempted/converted` → 总体 ≥92.0% → 四条未动路线是否落在 ±2 道地板内。
-2. **selector 指标（0 元设计）**：从产物计算「承载金标的那一句在送达列表里的名次分布」，先证明名次可测且与控制臂
-   可复现，再谈机制。
+2. **selector 指标（0 元设计，已核对可行性）**：本轮核对后确认**归档产物算不出名次**——`windowComposition` 只有
+   `turns / offered / offeredChars / unscoredChars`，没有名次、没有未送达的候选轮；`gold-not-in-window` 的那道题，
+   金标轮根本不在 `turns` 里。所以下一步是加**一个评测侧字段** `windowComposition.goldRank`（评测侧持有金标，
+   产品不持有），一个整数、不改产品接口；有了逐题名次，selector 才第一次可被定价。
 3. **reader 轴登记（0 元）**：`older` 2 道、`both`/`overlap` 3 道，需要限定词与竞争值判别。
 4. **0 元仪器**：事件级注释账本（5 道不可达 `MR`）、`C2` 重定基的房间预算表。
 5. **BEAM-10M / `C2` / `D1` / `C3`**：仍 `unrun`。
