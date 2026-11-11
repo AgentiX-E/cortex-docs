@@ -5361,6 +5361,22 @@ Vedant Patel；代码与环境 `github.com/Vrin-cloud/supersede`）。四个数�
 作为比较键，而我们的窗口里 `valid_at` 不存在，只有渲染进每一行的日期；因此我们的日期校验是「同一记录上出现」，
 而不是「时间戳比较」——这条差异在读数里表现为 `date-not-on-line` 这个理由，它在上一轮是 **0**。
 
-来源：Graphiti 仓库 `edge_operations.py` / `edges.py`；Zep 官方 provenance 长文（2026-11，关于失效记录写入
-`invalid_at` 与「删除 episode 时不删仍被支持的事实」）；两篇第三方架构对照文（Maximem 2026、Wise Hustlers 2026）
-对字段与两遍消解的描述与源码一致，故按 **B** 级登记（第三方复述但可直接对源码核验）。
+**源码级复核（2026-11-11，`getzep/graphiti@main`）**：`graphiti_core/utils/maintenance/edge_operations.py`
+的 `_apply_temporal_invalidation`（行 715–745）与 `resolve_edge_contradictions`（行 748–783）与上表逐条一致，
+并暴露一处**与我们本轮修复同构**的设计：
+
+```
+# pass 1: 候选比新边更晚 -> 过期新边（挡住"迟到的旧消息"）
+if candidate.valid_at > resolved_edge.valid_at: resolved_edge.invalid_at = candidate.valid_at
+# pass 2: 旧边比新边更早 -> 过期旧边
+elif edge.valid_at < resolved_edge.valid_at: edge.invalid_at = resolved_edge.valid_at
+```
+
+第一条正是我们 `§13.371` 新增的 `not-later`：**先判断谁更晚，再判断该过期谁**。差别只在时机（写入期 vs 读期）
+与依据（`valid_at` 字段 vs 渲染进每一行的日期戳）。这不是借鉴，是同一条正确性条件在两种架构下各自被推导出来；
+把它写进竞品分析的价值在于：**方向校验不是我们独有的谨慎，而是这一族的必要条件**。
+
+来源：上述源码位置（直接读取 `main` 分支文件，非二手复述）；`graphiti_core/edges.py`（`EntityEdge` 的四个日期
+字段）；Zep 官方 provenance 长文（2026-11，失效写入 `invalid_at`、删除 episode 时不删仍被支持的事实）。机制条
+按 **A** 级登记（源码可读、行为可核验）；两篇第三方架构对照文（Maximem 2026、Wise Hustlers 2026）仍按 **B** 级
+登记为旁证。
