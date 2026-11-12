@@ -9694,6 +9694,13 @@ embedding 调用数下界。若复用率 < 2×，本条关闭，队列成本原�
 因为 `sqlite3.connect` 不建父目录，晚一步就是几分钟后报 `unable to open database file`、且以「嵌入失败」
 的形式出现。
 
+**一次自己抓到、且会让下一轮派发直接失败的缺陷**：代理最初把上行体重建成 `{"model", "input"}`，**丢掉了
+`dimensions`**。智谱 `embedding-3` 是变维模型，Mem0 会从自己的 `embedding_dims` 发这个字段；缺了它，要么 400，
+要么按厂商默认宽度返回——而后者更危险，它表现为「摄取失败」而不是「请求错了」，且发生在运行几分钟之后。
+现在除 `input` 外全部字段原样转发（带白名单的代理，是一个会悄悄收窄每个未来客户端请求的代理），三条新断言
+双向验证（回退修复 → 3 红）。**发现方式**：拿新代码去对 `OpenAIEmbedding` 自己的注释（`embedding-3` 省略
+`dimensions` 会 400），而不是对着自己的测试。
+
 **一次被既有守卫抓住的错误**：缓存键最初写成 `hashFiles('data/longmemeval_s_cleaned.json')`，
 `test_embedding_cache_key.py::test_no_cache_key_hashes_the_corpus_itself` 立刻红——`hashFiles` 由**模板服务**
 在 120 秒总预算内求值，语料 100+ MB，事故先例是 `41842684629`（三分钟死亡、零测量）。改为下载步骤写 64 字节
