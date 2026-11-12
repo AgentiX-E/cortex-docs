@@ -1,0 +1,79 @@
+{
+ "reading": "t1-first-row",
+ "runs": {
+  "a": "43170314351",
+  "b": "43178388235"
+ },
+ "relation": "A is the same protocol one dispatch earlier; its reading stage never launched the competitor, so the table it printed has no mem0 row. B is the first run where a competitor answered.",
+ "arm": "cortex-session",
+ "sut": {
+  "name": "mem0",
+  "version": "2.2.1",
+  "build": "embedding",
+  "infer": false,
+  "vectorStore": "faiss",
+  "embedder": {
+   "model": "embedding-3",
+   "dims": 1024,
+   "base_url": "https://open.bigmodel.cn/api/paas/v4"
+  }
+ },
+ "instrument": {
+  "reader": "deepseek-chat (chain-of-note/con, one request)",
+  "judge": "deepseek-chat",
+  "judgePolicy": "longmemeval-official-per-type",
+  "topK": 10,
+  "scoring": "single",
+  "dataset": "longmemeval/s/20",
+  "mode": "isolated"
+ },
+ "resultB": {
+  "cortexSession": {
+   "correct": 11,
+   "of": 20,
+   "accuracy": 0.55,
+   "tokensPerQuestion": 33556
+  },
+  "mem0": {
+   "correct": 12,
+   "of": 20,
+   "accuracy": 0.6,
+   "tokensPerQuestion": 1768
+  },
+  "pairing": {
+   "mem0Wins": 2,
+   "cortexWins": 1,
+   "ties": 10,
+   "bothWrong": 7,
+   "mcnemarExactP": 1.0,
+   "named": {
+    "mem0": "031748ae,07b6f563",
+    "cortex": "00ca467f"
+   }
+  }
+ },
+ "repeatability": {
+  "sameArmTwoRuns": {
+   "a": 13,
+   "b": 11,
+   "perQuestionAgreement": 0.8,
+   "flips": [
+    "0100672e",
+    "031748ae",
+    "031748ae_abs",
+    "09ba9854_abs"
+   ]
+  },
+  "criterion": "H5 requires >= 90%; 80.0% fails, so no ranking may be taken from one 20-question pass"
+ },
+ "timings": {
+  "sutStageSeconds": 2982,
+  "readStageSeconds": 54,
+  "ingestOverRead": 55.2
+ },
+ "ingest": {
+  "sessions": 972,
+  "stored": 972,
+  "refused": 0
+ }
+}

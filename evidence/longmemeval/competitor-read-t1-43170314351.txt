@@ -1,0 +1,29 @@
+retrieval + reading comparison — longmemeval/s/20
+gold: Question.goldTurns from answer_session_ids (500 instances in file, 20 sampled round-robin across capabilities)
+
+provider            build  recall@k  all-gold  mrr     acc      ~tok    unmeasurable
+lexical-reference   none   85.0%     75.0%     0.787   —        34629   0
+cortex-session      none   85.0%     80.0%     0.792   65.0% (13/20)33556   0
+cortex/whole-8t     none   0.0%      0.0%      0.000   —        3003    0
+cortex/trim-8t      none   75.0%     0.0%      0.750   —        2712    0
+cortex/trim-2.8k    none   85.0%     0.0%      0.800   —        2799    0
+null-floor          none   0.0%      0.0%      0.000   —        0       0
+
+capability  lexical-reference   cortex-session      cortex/whole-8t     cortex/trim-8t      cortex/trim-2.8k    null-floor          
+ABS         4/4                 4/4 a3/4            0/4                 3/4                 4/4                 0/4                 
+IE          1/4                 1/4 a1/4            0/4                 1/4                 1/4                 0/4                 
+KU          4/4                 4/4 a4/4            0/4                 4/4                 4/4                 0/4                 
+MR          4/4                 4/4 a4/4            0/4                 3/4                 4/4                 0/4                 
+TR          4/4                 4/4 a1/4            0/4                 4/4                 4/4                 0/4                 
+
+configuration: k=10, mode=isolated, reader/judge=none
+comparability(identical): A
+
+scope: lexical-reference covers ordering and the empty store; cortex-session covers admission, the
+session budget, the relevance key and the hit order. Both declare build=none, so neither row was
+produced by a model.
+
+Gold here is annotated (`answer_session_ids`), not derived, and the corpus is not one we wrote. What this
+table still cannot say: a hit is counted when its session text contains a gold turn, so a provider that
+returns whole sessions is scored on recall of evidence, not on answer accuracy. There is no reader and no
+judge on this path, which is why the numbers are not comparable with a QA benchmark's accuracy.

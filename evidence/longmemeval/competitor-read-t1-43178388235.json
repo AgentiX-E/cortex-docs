@@ -1,0 +1,1561 @@
+{
+  "config": {
+    "dataset": "longmemeval/s/20",
+    "questions": 20,
+    "reader": "deepseek-chat (chain-of-note/con, one request)",
+    "judge": "deepseek-chat (official per-type templates)",
+    "judgePolicy": "longmemeval-official-per-type",
+    "topK": 10,
+    "tokenBudget": 0,
+    "scoring": "single"
+  },
+  "scores": [
+    {
+      "provider": "lexical-reference",
+      "build": "none",
+      "questions": 20,
+      "measured": 20,
+      "unmeasurable": 0,
+      "found": 17,
+      "foundAll": 15,
+      "empty": 0,
+      "recallAtK": 0.85,
+      "recallAllAtK": 0.75,
+      "mrr": 0.7875,
+      "sessions": 972,
+      "turns": 9824,
+      "meanContextChars": 138515.05,
+      "correct": null,
+      "read": 0,
+      "accuracy": null,
+      "abstained": 0,
+      "skipped": [],
+      "byCapability": {
+        "ABS": {
+          "questions": 4,
+          "measured": 4,
+          "found": 4,
+          "read": 0,
+          "correct": 0
+        },
+        "IE": {
+          "questions": 4,
+          "measured": 4,
+          "found": 1,
+          "read": 0,
+          "correct": 0
+        },
+        "KU": {
+          "questions": 4,
+          "measured": 4,
+          "found": 4,
+          "read": 0,
+          "correct": 0
+        },
+        "MR": {
+          "questions": 4,
+          "measured": 4,
+          "found": 4,
+          "read": 0,
+          "correct": 0
+        },
+        "TR": {
+          "questions": 4,
+          "measured": 4,
+          "found": 4,
+          "read": 0,
+          "correct": 0
+        }
+      },
+      "ingestSkipped": 0,
+      "records": [
+        {
+          "id": "031748ae_abs",
+          "capability": "ABS",
+          "found": true,
+          "foundAll": true,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "001be529",
+          "capability": "IE",
+          "found": true,
+          "foundAll": true,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "01493427",
+          "capability": "KU",
+          "found": true,
+          "foundAll": true,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "00ca467f",
+          "capability": "MR",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "08f4fc43",
+          "capability": "TR",
+          "found": true,
+          "foundAll": true,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0862e8bf_abs",
+          "capability": "ABS",
+          "found": true,
+          "foundAll": true,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "06878be2",
+          "capability": "IE",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "031748ae",
+          "capability": "KU",
+          "found": true,
+          "foundAll": true,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0100672e",
+          "capability": "MR",
+          "found": true,
+          "foundAll": true,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0bb5a684",
+          "capability": "TR",
+          "found": true,
+          "foundAll": true,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "09ba9854_abs",
+          "capability": "ABS",
+          "found": true,
+          "foundAll": true,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "06f04340",
+          "capability": "IE",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "06db6396",
+          "capability": "KU",
+          "found": true,
+          "foundAll": true,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "078150f1",
+          "capability": "MR",
+          "found": true,
+          "foundAll": true,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0bc8ad92",
+          "capability": "TR",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0ddfec37_abs",
+          "capability": "ABS",
+          "found": true,
+          "foundAll": true,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "07b6f563",
+          "capability": "IE",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "07741c44",
+          "capability": "KU",
+          "found": true,
+          "foundAll": true,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "099778bb",
+          "capability": "MR",
+          "found": true,
+          "foundAll": true,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0bc8ad93",
+          "capability": "TR",
+          "found": true,
+          "foundAll": true,
+          "read": false,
+          "correct": false
+        }
+      ]
+    },
+    {
+      "provider": "cortex-session",
+      "build": "none",
+      "questions": 20,
+      "measured": 20,
+      "unmeasurable": 0,
+      "found": 17,
+      "foundAll": 16,
+      "empty": 0,
+      "recallAtK": 0.85,
+      "recallAllAtK": 0.8,
+      "mrr": 0.7916666666666667,
+      "sessions": 972,
+      "turns": 9824,
+      "meanContextChars": 134224.55,
+      "correct": 11,
+      "read": 20,
+      "accuracy": 0.55,
+      "abstained": 9,
+      "skipped": [],
+      "byCapability": {
+        "ABS": {
+          "questions": 4,
+          "measured": 4,
+          "found": 4,
+          "read": 4,
+          "correct": 3
+        },
+        "IE": {
+          "questions": 4,
+          "measured": 4,
+          "found": 1,
+          "read": 4,
+          "correct": 1
+        },
+        "KU": {
+          "questions": 4,
+          "measured": 4,
+          "found": 4,
+          "read": 4,
+          "correct": 3
+        },
+        "MR": {
+          "questions": 4,
+          "measured": 4,
+          "found": 4,
+          "read": 4,
+          "correct": 3
+        },
+        "TR": {
+          "questions": 4,
+          "measured": 4,
+          "found": 4,
+          "read": 4,
+          "correct": 1
+        }
+      },
+      "ingestSkipped": 0,
+      "records": [
+        {
+          "id": "031748ae_abs",
+          "capability": "ABS",
+          "found": true,
+          "foundAll": true,
+          "read": true,
+          "correct": false
+        },
+        {
+          "id": "001be529",
+          "capability": "IE",
+          "found": true,
+          "foundAll": true,
+          "read": true,
+          "correct": true
+        },
+        {
+          "id": "01493427",
+          "capability": "KU",
+          "found": true,
+          "foundAll": true,
+          "read": true,
+          "correct": true
+        },
+        {
+          "id": "00ca467f",
+          "capability": "MR",
+          "found": true,
+          "foundAll": false,
+          "read": true,
+          "correct": true
+        },
+        {
+          "id": "08f4fc43",
+          "capability": "TR",
+          "found": true,
+          "foundAll": true,
+          "read": true,
+          "correct": false
+        },
+        {
+          "id": "0862e8bf_abs",
+          "capability": "ABS",
+          "found": true,
+          "foundAll": true,
+          "read": true,
+          "correct": true
+        },
+        {
+          "id": "06878be2",
+          "capability": "IE",
+          "found": false,
+          "foundAll": false,
+          "read": true,
+          "correct": false
+        },
+        {
+          "id": "031748ae",
+          "capability": "KU",
+          "found": true,
+          "foundAll": true,
+          "read": true,
+          "correct": false
+        },
+        {
+          "id": "0100672e",
+          "capability": "MR",
+          "found": true,
+          "foundAll": true,
+          "read": true,
+          "correct": false
+        },
+        {
+          "id": "0bb5a684",
+          "capability": "TR",
+          "found": true,
+          "foundAll": true,
+          "read": true,
+          "correct": true
+        },
+        {
+          "id": "09ba9854_abs",
+          "capability": "ABS",
+          "found": true,
+          "foundAll": true,
+          "read": true,
+          "correct": true
+        },
+        {
+          "id": "06f04340",
+          "capability": "IE",
+          "found": false,
+          "foundAll": false,
+          "read": true,
+          "correct": false
+        },
+        {
+          "id": "06db6396",
+          "capability": "KU",
+          "found": true,
+          "foundAll": true,
+          "read": true,
+          "correct": true
+        },
+        {
+          "id": "078150f1",
+          "capability": "MR",
+          "found": true,
+          "foundAll": true,
+          "read": true,
+          "correct": true
+        },
+        {
+          "id": "0bc8ad92",
+          "capability": "TR",
+          "found": true,
+          "foundAll": true,
+          "read": true,
+          "correct": false
+        },
+        {
+          "id": "0ddfec37_abs",
+          "capability": "ABS",
+          "found": true,
+          "foundAll": true,
+          "read": true,
+          "correct": true
+        },
+        {
+          "id": "07b6f563",
+          "capability": "IE",
+          "found": false,
+          "foundAll": false,
+          "read": true,
+          "correct": false
+        },
+        {
+          "id": "07741c44",
+          "capability": "KU",
+          "found": true,
+          "foundAll": true,
+          "read": true,
+          "correct": true
+        },
+        {
+          "id": "099778bb",
+          "capability": "MR",
+          "found": true,
+          "foundAll": true,
+          "read": true,
+          "correct": true
+        },
+        {
+          "id": "0bc8ad93",
+          "capability": "TR",
+          "found": true,
+          "foundAll": true,
+          "read": true,
+          "correct": false
+        }
+      ]
+    },
+    {
+      "provider": "cortex/whole-8t",
+      "build": "none",
+      "questions": 20,
+      "measured": 20,
+      "unmeasurable": 0,
+      "found": 0,
+      "foundAll": 0,
+      "empty": 0,
+      "recallAtK": 0,
+      "recallAllAtK": 0,
+      "mrr": 0,
+      "sessions": 972,
+      "turns": 9824,
+      "meanContextChars": 12013.25,
+      "correct": null,
+      "read": 0,
+      "accuracy": null,
+      "abstained": 0,
+      "skipped": [],
+      "byCapability": {
+        "ABS": {
+          "questions": 4,
+          "measured": 4,
+          "found": 0,
+          "read": 0,
+          "correct": 0
+        },
+        "IE": {
+          "questions": 4,
+          "measured": 4,
+          "found": 0,
+          "read": 0,
+          "correct": 0
+        },
+        "KU": {
+          "questions": 4,
+          "measured": 4,
+          "found": 0,
+          "read": 0,
+          "correct": 0
+        },
+        "MR": {
+          "questions": 4,
+          "measured": 4,
+          "found": 0,
+          "read": 0,
+          "correct": 0
+        },
+        "TR": {
+          "questions": 4,
+          "measured": 4,
+          "found": 0,
+          "read": 0,
+          "correct": 0
+        }
+      },
+      "ingestSkipped": 0,
+      "records": [
+        {
+          "id": "031748ae_abs",
+          "capability": "ABS",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "001be529",
+          "capability": "IE",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "01493427",
+          "capability": "KU",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "00ca467f",
+          "capability": "MR",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "08f4fc43",
+          "capability": "TR",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0862e8bf_abs",
+          "capability": "ABS",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "06878be2",
+          "capability": "IE",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "031748ae",
+          "capability": "KU",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0100672e",
+          "capability": "MR",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0bb5a684",
+          "capability": "TR",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "09ba9854_abs",
+          "capability": "ABS",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "06f04340",
+          "capability": "IE",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "06db6396",
+          "capability": "KU",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "078150f1",
+          "capability": "MR",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0bc8ad92",
+          "capability": "TR",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0ddfec37_abs",
+          "capability": "ABS",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "07b6f563",
+          "capability": "IE",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "07741c44",
+          "capability": "KU",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "099778bb",
+          "capability": "MR",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0bc8ad93",
+          "capability": "TR",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        }
+      ]
+    },
+    {
+      "provider": "cortex/trim-8t",
+      "build": "none",
+      "questions": 20,
+      "measured": 20,
+      "unmeasurable": 0,
+      "found": 15,
+      "foundAll": 0,
+      "empty": 0,
+      "recallAtK": 0.75,
+      "recallAllAtK": 0,
+      "mrr": 0.75,
+      "sessions": 972,
+      "turns": 9824,
+      "meanContextChars": 10849.05,
+      "correct": null,
+      "read": 0,
+      "accuracy": null,
+      "abstained": 0,
+      "skipped": [],
+      "byCapability": {
+        "ABS": {
+          "questions": 4,
+          "measured": 4,
+          "found": 3,
+          "read": 0,
+          "correct": 0
+        },
+        "IE": {
+          "questions": 4,
+          "measured": 4,
+          "found": 1,
+          "read": 0,
+          "correct": 0
+        },
+        "KU": {
+          "questions": 4,
+          "measured": 4,
+          "found": 4,
+          "read": 0,
+          "correct": 0
+        },
+        "MR": {
+          "questions": 4,
+          "measured": 4,
+          "found": 3,
+          "read": 0,
+          "correct": 0
+        },
+        "TR": {
+          "questions": 4,
+          "measured": 4,
+          "found": 4,
+          "read": 0,
+          "correct": 0
+        }
+      },
+      "ingestSkipped": 0,
+      "records": [
+        {
+          "id": "031748ae_abs",
+          "capability": "ABS",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "001be529",
+          "capability": "IE",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "01493427",
+          "capability": "KU",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "00ca467f",
+          "capability": "MR",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "08f4fc43",
+          "capability": "TR",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0862e8bf_abs",
+          "capability": "ABS",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "06878be2",
+          "capability": "IE",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "031748ae",
+          "capability": "KU",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0100672e",
+          "capability": "MR",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0bb5a684",
+          "capability": "TR",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "09ba9854_abs",
+          "capability": "ABS",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "06f04340",
+          "capability": "IE",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "06db6396",
+          "capability": "KU",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "078150f1",
+          "capability": "MR",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0bc8ad92",
+          "capability": "TR",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0ddfec37_abs",
+          "capability": "ABS",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "07b6f563",
+          "capability": "IE",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "07741c44",
+          "capability": "KU",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "099778bb",
+          "capability": "MR",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0bc8ad93",
+          "capability": "TR",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        }
+      ]
+    },
+    {
+      "provider": "cortex/trim-2.8k",
+      "build": "none",
+      "questions": 20,
+      "measured": 20,
+      "unmeasurable": 0,
+      "found": 17,
+      "foundAll": 0,
+      "empty": 0,
+      "recallAtK": 0.85,
+      "recallAllAtK": 0,
+      "mrr": 0.8,
+      "sessions": 972,
+      "turns": 9824,
+      "meanContextChars": 11195.15,
+      "correct": null,
+      "read": 0,
+      "accuracy": null,
+      "abstained": 0,
+      "skipped": [],
+      "byCapability": {
+        "ABS": {
+          "questions": 4,
+          "measured": 4,
+          "found": 4,
+          "read": 0,
+          "correct": 0
+        },
+        "IE": {
+          "questions": 4,
+          "measured": 4,
+          "found": 1,
+          "read": 0,
+          "correct": 0
+        },
+        "KU": {
+          "questions": 4,
+          "measured": 4,
+          "found": 4,
+          "read": 0,
+          "correct": 0
+        },
+        "MR": {
+          "questions": 4,
+          "measured": 4,
+          "found": 4,
+          "read": 0,
+          "correct": 0
+        },
+        "TR": {
+          "questions": 4,
+          "measured": 4,
+          "found": 4,
+          "read": 0,
+          "correct": 0
+        }
+      },
+      "ingestSkipped": 0,
+      "records": [
+        {
+          "id": "031748ae_abs",
+          "capability": "ABS",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "001be529",
+          "capability": "IE",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "01493427",
+          "capability": "KU",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "00ca467f",
+          "capability": "MR",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "08f4fc43",
+          "capability": "TR",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0862e8bf_abs",
+          "capability": "ABS",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "06878be2",
+          "capability": "IE",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "031748ae",
+          "capability": "KU",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0100672e",
+          "capability": "MR",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0bb5a684",
+          "capability": "TR",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "09ba9854_abs",
+          "capability": "ABS",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "06f04340",
+          "capability": "IE",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "06db6396",
+          "capability": "KU",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "078150f1",
+          "capability": "MR",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0bc8ad92",
+          "capability": "TR",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0ddfec37_abs",
+          "capability": "ABS",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "07b6f563",
+          "capability": "IE",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "07741c44",
+          "capability": "KU",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "099778bb",
+          "capability": "MR",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0bc8ad93",
+          "capability": "TR",
+          "found": true,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        }
+      ]
+    },
+    {
+      "provider": "null-floor",
+      "build": "none",
+      "questions": 20,
+      "measured": 20,
+      "unmeasurable": 0,
+      "found": 0,
+      "foundAll": 0,
+      "empty": 20,
+      "recallAtK": 0,
+      "recallAllAtK": 0,
+      "mrr": 0,
+      "sessions": 0,
+      "turns": 0,
+      "meanContextChars": 0,
+      "correct": null,
+      "read": 0,
+      "accuracy": null,
+      "abstained": 0,
+      "skipped": [],
+      "byCapability": {
+        "ABS": {
+          "questions": 4,
+          "measured": 4,
+          "found": 0,
+          "read": 0,
+          "correct": 0
+        },
+        "IE": {
+          "questions": 4,
+          "measured": 4,
+          "found": 0,
+          "read": 0,
+          "correct": 0
+        },
+        "KU": {
+          "questions": 4,
+          "measured": 4,
+          "found": 0,
+          "read": 0,
+          "correct": 0
+        },
+        "MR": {
+          "questions": 4,
+          "measured": 4,
+          "found": 0,
+          "read": 0,
+          "correct": 0
+        },
+        "TR": {
+          "questions": 4,
+          "measured": 4,
+          "found": 0,
+          "read": 0,
+          "correct": 0
+        }
+      },
+      "ingestSkipped": 0,
+      "records": [
+        {
+          "id": "031748ae_abs",
+          "capability": "ABS",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "001be529",
+          "capability": "IE",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "01493427",
+          "capability": "KU",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "00ca467f",
+          "capability": "MR",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "08f4fc43",
+          "capability": "TR",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0862e8bf_abs",
+          "capability": "ABS",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "06878be2",
+          "capability": "IE",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "031748ae",
+          "capability": "KU",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0100672e",
+          "capability": "MR",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0bb5a684",
+          "capability": "TR",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "09ba9854_abs",
+          "capability": "ABS",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "06f04340",
+          "capability": "IE",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "06db6396",
+          "capability": "KU",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "078150f1",
+          "capability": "MR",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0bc8ad92",
+          "capability": "TR",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0ddfec37_abs",
+          "capability": "ABS",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "07b6f563",
+          "capability": "IE",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "07741c44",
+          "capability": "KU",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "099778bb",
+          "capability": "MR",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        },
+        {
+          "id": "0bc8ad93",
+          "capability": "TR",
+          "found": false,
+          "foundAll": false,
+          "read": false,
+          "correct": false
+        }
+      ]
+    },
+    {
+      "provider": "mem0",
+      "build": "embedding",
+      "questions": 20,
+      "measured": 20,
+      "unmeasurable": 0,
+      "found": 20,
+      "foundAll": 0,
+      "empty": 0,
+      "recallAtK": 1,
+      "recallAllAtK": 0,
+      "mrr": 0.9083333333333332,
+      "sessions": 972,
+      "turns": 9824,
+      "meanContextChars": 7072.85,
+      "correct": 12,
+      "read": 20,
+      "accuracy": 0.6,
+      "abstained": 9,
+      "skipped": [],
+      "byCapability": {
+        "ABS": {
+          "questions": 4,
+          "measured": 4,
+          "found": 4,
+          "read": 4,
+          "correct": 3
+        },
+        "IE": {
+          "questions": 4,
+          "measured": 4,
+          "found": 4,
+          "read": 4,
+          "correct": 2
+        },
+        "KU": {
+          "questions": 4,
+          "measured": 4,
+          "found": 4,
+          "read": 4,
+          "correct": 4
+        },
+        "MR": {
+          "questions": 4,
+          "measured": 4,
+          "found": 4,
+          "read": 4,
+          "correct": 2
+        },
+        "TR": {
+          "questions": 4,
+          "measured": 4,
+          "found": 4,
+          "read": 4,
+          "correct": 1
+        }
+      },
+      "ingestSkipped": 0,
+      "records": [
+        {
+          "id": "031748ae_abs",
+          "capability": "ABS",
+          "found": true,
+          "foundAll": false,
+          "read": true,
+          "correct": false
+        },
+        {
+          "id": "001be529",
+          "capability": "IE",
+          "found": true,
+          "foundAll": false,
+          "read": true,
+          "correct": true
+        },
+        {
+          "id": "01493427",
+          "capability": "KU",
+          "found": true,
+          "foundAll": false,
+          "read": true,
+          "correct": true
+        },
+        {
+          "id": "00ca467f",
+          "capability": "MR",
+          "found": true,
+          "foundAll": false,
+          "read": true,
+          "correct": false
+        },
+        {
+          "id": "08f4fc43",
+          "capability": "TR",
+          "found": true,
+          "foundAll": false,
+          "read": true,
+          "correct": false
+        },
+        {
+          "id": "0862e8bf_abs",
+          "capability": "ABS",
+          "found": true,
+          "foundAll": false,
+          "read": true,
+          "correct": true
+        },
+        {
+          "id": "06878be2",
+          "capability": "IE",
+          "found": true,
+          "foundAll": false,
+          "read": true,
+          "correct": false
+        },
+        {
+          "id": "031748ae",
+          "capability": "KU",
+          "found": true,
+          "foundAll": false,
+          "read": true,
+          "correct": true
+        },
+        {
+          "id": "0100672e",
+          "capability": "MR",
+          "found": true,
+          "foundAll": false,
+          "read": true,
+          "correct": false
+        },
+        {
+          "id": "0bb5a684",
+          "capability": "TR",
+          "found": true,
+          "foundAll": false,
+          "read": true,
+          "correct": true
+        },
+        {
+          "id": "09ba9854_abs",
+          "capability": "ABS",
+          "found": true,
+          "foundAll": false,
+          "read": true,
+          "correct": true
+        },
+        {
+          "id": "06f04340",
+          "capability": "IE",
+          "found": true,
+          "foundAll": false,
+          "read": true,
+          "correct": false
+        },
+        {
+          "id": "06db6396",
+          "capability": "KU",
+          "found": true,
+          "foundAll": false,
+          "read": true,
+          "correct": true
+        },
+        {
+          "id": "078150f1",
+          "capability": "MR",
+          "found": true,
+          "foundAll": false,
+          "read": true,
+          "correct": true
+        },
+        {
+          "id": "0bc8ad92",
+          "capability": "TR",
+          "found": true,
+          "foundAll": false,
+          "read": true,
+          "correct": false
+        },
+        {
+          "id": "0ddfec37_abs",
+          "capability": "ABS",
+          "found": true,
+          "foundAll": false,
+          "read": true,
+          "correct": true
+        },
+        {
+          "id": "07b6f563",
+          "capability": "IE",
+          "found": true,
+          "foundAll": false,
+          "read": true,
+          "correct": true
+        },
+        {
+          "id": "07741c44",
+          "capability": "KU",
+          "found": true,
+          "foundAll": false,
+          "read": true,
+          "correct": true
+        },
+        {
+          "id": "099778bb",
+          "capability": "MR",
+          "found": true,
+          "foundAll": false,
+          "read": true,
+          "correct": true
+        },
+        {
+          "id": "0bc8ad93",
+          "capability": "TR",
+          "found": true,
+          "foundAll": false,
+          "read": true,
+          "correct": false
+        }
+      ]
+    }
+  ]
+}
