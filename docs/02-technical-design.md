@@ -10267,3 +10267,75 @@ ask 都写 `Step 1 —` / `Step 2 —`，于是列表被剥掉；`buildRetryProm
 **非劣性**（≥455，控制 456）而不是提升：一次解析修复若带来 +4，说明判官此前在给转写打分，那要单独解释。
 
 三个边界的顺序不能颠倒：先让解析可信，再让渲染有信息，最后才谈判定标准。本轮把第一个做实、第二个定价。
+
+#### 22.105 写期槽位：为什么「当前值」必须是存储的属性，以及它该落在哪一层
+
+§22.104 把边界分成解析、渲染、判定三处。这一节补第四处，也是前三处都不成立时唯一还成立的一处：
+**「哪个值是当前值」不是渲染的判定，是写入时就能确定的属性。**
+
+##### 22.105.1 三次读侧尝试的失败形状，是同一个
+
+| 尝试 | 机制 | 结果 |
+| --- | --- | --- |
+| `conflicts: true`（块） | 把两句并列给读者看，让读者选 | `42754985453` 84.03%（−2 题）；`42758152902` 90.28%（+1.74 点）但假证触发 |
+| `supersede: 'mark'` | 给旧轮次加 `[superseded by <date>]` | 撤回：与块是同一种动作，只是字号更小 |
+| `supersede: 'drop'` | 把旧轮次从渲染里移除 | 撤回（未派发）：触达 3 道、修好 0 道，`goldLost` 36/77 |
+
+三者都在回答「读者怎么选」。而 `MemoryAgentBench` FactConsolidation 的读数是：最好的专用记忆系统单跳 54%，
+22 个系统多跳 ≤28%；**确定性聚合（抽候选、取最大序号、用代码判）78.0%（gpt-4o-mini）/ 94.8%（gpt-4o）**。
+差 24–40 点，而这 24–40 点不来自更好的提示，来自**「当前值」被移出了读者的判断题**。
+
+##### 22.105.2 依赖分层的现状与缺口
+
+```
+cortex-core
+  ├─ knowledge/  FactFrame(subject, predicate, at) · Edge(supersedes) · deriveSupersedes
+  │              ↑ 已实现、已测试；typed.ts 已拒绝沿 supersedes 边遍历
+  └─ value/      decideWrite · decideRetrieval · ValueFunction
+                 ↑ 唯一被 cortex-memory 使用的部分
+
+cortex-memory
+  └─ 只有 turns。[AdmittedTurn] 里没有 subject/predicate，也没有 serial。
+```
+
+`packages/cortex-memory/src/` 从 `cortex-core` 引入 `createMemory`、`decideWrite`、`decideRetrieval`、
+`LLM`、`MemoryValue`、`ValueFunction`，从 `knowledge/` 引入**零个符号**。所以「当前值」在这条链路上不是
+一个没被渲染的属性，**而是一个从未被产出的属性**。
+
+##### 22.105.3 契约（未实现，先定形状）
+
+```ts
+/** One assertion a turn makes, with the slot it is about and where it sits in the corpus. */
+export type Slot = {
+  readonly subject: string;      // "pre-approval"
+  readonly predicate: string;    // "amount"
+  readonly value: string;        // "$400,000"
+  readonly serial: number;       // corpus order — the tie-break, not a timestamp
+  readonly turn: number;         // which turn it came from, so a reader can audit it
+};
+
+/** What the read path consumes instead of two candidate turns. */
+export type Resolved = {
+  readonly slot: Slot;
+  readonly superseded: readonly Slot[];  // kept for audit, never rendered
+};
+```
+
+三条契约条款，与 §22.104 同一形状：
+
+1. **写入期一次**：`Slot` 由写入路径产出，紧邻 `decideWrite`。读路径不得再抽。
+2. **判定在代码里**：`resolve(slots)` 取 `serial` 最大者，纯函数，无模型调用。`deriveSupersedes` 已经是这个
+   函数的一半——它从 subject/predicate 推出取代边，只是从来没有被喂过数据。
+3. **渲染已解析值的槽位，而不是候选轮次**：`prompt.ts` 的一个渲染分支读 `Resolved[]`，与被替代的两轮**同
+   时在场**的那一版逐字节不同，且差异只在被判为有取代对的槽位上。
+
+##### 22.105.4 成本落点，以及为什么它是唯一可承受的形状
+
+| | 读期 | 写期 |
+| --- | --- | --- |
+| 当前 | 1 次/题 | 0 |
+| 槽位抽取（本设计） | 1 次/题（不变） | 1 次/轮，每语料一次 |
+
+275k 次抽取是 Mem0 `infer=1` 被拒绝的那个价（`PROTOCOL.md`）。这里之所以不同，是因为它**不进评测的
+重复循环**：抽取是语料的函数，不是题的函数，所以 4 重复不乘 4。这是本设计相对「读期让模型判定」的唯一
+结构性优势，也是 §22.104 三条边界的自然推论——**凡是一次性的属性，都不该放在每题都要走的路径上**。
