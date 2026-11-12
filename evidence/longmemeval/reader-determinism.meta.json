@@ -37,7 +37,10 @@
   "wallClockSeconds": [
    187,
    282
-  ]
+  ],
+  "artifactSha256": "e27e242f8ac15dadc28091cbf575077f64fb4ed656e60e2bde3ceb2da9199cf5",
+  "artifactsIdentical": true,
+  "whatIsIdentical": "The whole competitor-read.json: the run configuration, the 20 per-question records (retrieved window, answer text, verdict), and the aggregate. Two runs of one configuration produced one digest, so no field had to be excluded before comparing."
  },
  "instrument": {
   "reader": "deepseek-chat",
