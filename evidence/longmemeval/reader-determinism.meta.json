@@ -1,0 +1,66 @@
+{
+ "reading": "reader-determinism",
+ "question": "Does the reading stage produce the same per-question verdicts twice at temperature 0?",
+ "before": {
+  "runs": [
+   "43170314351",
+   "43178388235"
+  ],
+  "reader": "deepseek-chat (chain-of-note/con, one request)",
+  "temperature": null,
+  "correct": [
+   13,
+   11
+  ],
+  "perQuestionAgreement": 0.8,
+  "flips": [
+   "0100672e",
+   "031748ae",
+   "031748ae_abs",
+   "09ba9854_abs"
+  ],
+  "cause": "competitor-retrieval.yml forwarded no TEMPERATURE, so createLlmFromEnv built the reader with temperature: null and the request carried no sampling field."
+ },
+ "after": {
+  "runs": [
+   "43197264759",
+   "43198214714"
+  ],
+  "reader": "deepseek-chat (chain-of-note/con, temp=0, one request)",
+  "temperature": 0,
+  "correct": [
+   13,
+   13
+  ],
+  "perQuestionAgreement": 1.0,
+  "flips": [],
+  "wallClockSeconds": [
+   187,
+   282
+  ]
+ },
+ "instrument": {
+  "reader": "deepseek-chat",
+  "judge": "deepseek-chat",
+  "judgePolicy": "longmemeval-official-per-type",
+  "dataset": "longmemeval/s/20",
+  "topK": 10,
+  "scoring": "single",
+  "arm": "cortex-session",
+  "readPrompts": "con",
+  "sut": ""
+ },
+ "residual": {
+  "source": "PREREGISTRATION section 13.127",
+  "value": "19 of 379 verdicts move on byte-identical prompts (5.0%)",
+  "note": "That is the judge sampling its own verdict, which pinning the reader temperature cannot remove. A 20-question arm carries about one such flip, so 0 is inside the floor and 4 was the unpinned rate."
+ },
+ "withdrawn": {
+  "cells": [
+   "cortex-session 11/20 = 55.0%",
+   "mem0 12/20 = 60.0%"
+  ],
+  "reason": "read at temp=default, and the control arm's own two readings differed by more than the inter-arm difference",
+  "replacedBy": "43199357450"
+ }
+}
