@@ -1,0 +1,67 @@
+{
+  "what": "How often the judge changes its verdict on the same answer, re-read with the same template.",
+  "artifact": "readings/artifact/benchmark-cortex-memory-ablation-report.json",
+  "generatedAt": "2026-11-12T06:01:38.148Z",
+  "passes": 2,
+  "scorer": "full",
+  "channels": {
+    "structural": 0,
+    "exact": 356,
+    "numeric": 70,
+    "judge": 508,
+    "verdicts": 934,
+    "unjudged": 0
+  },
+  "judge": {
+    "artifact": {
+      "provider": "deepseek",
+      "model": "deepseek-chat",
+      "temperature": 0
+    },
+    "regrade": {
+      "selection": "deepseek-v4-pro",
+      "temperature": "0",
+      "thinking": "disabled"
+    },
+    "matchesArtifact": false
+  },
+  "reading": {
+    "judged": 467,
+    "flips": 2,
+    "rate": 0.004282655246252677,
+    "up": 2,
+    "down": 0,
+    "p": 0.5,
+    "agreesWithArtifact": 452,
+    "regradedCorrect": 412,
+    "artifactOnlyCorrect": 13,
+    "regradeOnlyCorrect": 0,
+    "ties": 2,
+    "byCapability": {
+      "IE": {
+        "n": 150,
+        "flips": 1,
+        "rate": 0.006666666666666667
+      },
+      "KU": {
+        "n": 72,
+        "flips": 0,
+        "rate": 0
+      },
+      "MR": {
+        "n": 118,
+        "flips": 0,
+        "rate": 0
+      },
+      "TR": {
+        "n": 127,
+        "flips": 1,
+        "rate": 0.007874015748031496
+      }
+    },
+    "flippedIds": [
+      "d6233ab6",
+      "6613b389"
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+artifact        readings/artifact/benchmark-cortex-memory-ablation-report.json
+questions       467
+passes          2
+recorded correct 427 / 467
+artifact judge  model=deepseek-chat temperature=0
+re-grade scorer full
+re-grade judge  model=deepseek-v4-pro temperature=0 matchesArtifact=false
+WARNING: this reading describes a different judge than the one that graded the artifact. It is a measurement of that judge, not a correction of the artifact.
+pass 1/2 done
+pass 2/2 done
+
+judge flips on byte-identical questions
+  2/467 = 0.4%   up 2 / down 0   exact sign test p = 0.500
+  first pass agrees with the artifact on 452/467
+  re-graded correct 412 / 467  (artifact 427, artifact-only 13, re-grade-only 0, ties 2)
+  IE     n=150 flips= 1 =   0.7%
+  KU     n= 72 flips= 0 =   0.0%
+  MR     n=118 flips= 0 =   0.0%
+  TR     n=127 flips= 1 =   0.8%
+  scorer channels: structural 0, exact 356, numeric 70, judge 508/934 = 54.4%, unjudged 0
+wrote readings/judge-verdicts.json (467 question(s))
+
+wrote readings/judge-regrade.json

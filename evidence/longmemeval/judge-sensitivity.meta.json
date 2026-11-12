@@ -1,0 +1,30 @@
+{
+ "reading": "judge-sensitivity",
+ "auditRun": "43164165343",
+ "sourceRun": "43140878641",
+ "artifactJudge": {
+  "providerId": "deepseek",
+  "model": "deepseek-chat",
+  "temperature": 0,
+  "source": "reader"
+ },
+ "regradeJudge": {
+  "model": "deepseek-v4-pro",
+  "temperature": 0,
+  "matchesArtifact": false
+ },
+ "scorer": "full",
+ "passes": 2,
+ "population": "all",
+ "limit": 500,
+ "gradedQuestions": 467,
+ "artifactCorrect": 427,
+ "regradeCorrect": 412,
+ "artifactOnlyCorrect": 13,
+ "regradeOnlyCorrect": 0,
+ "ties": 2,
+ "selfFlipRate": 0.004282655246252677,
+ "judgeVerdictShare": 0.544,
+ "dispatchedAt": "2026-11-12T05:51:39Z",
+ "note": "The regrade population is the artifact's recorded answers: 467 of 500. It excludes the 30 abstention questions and three multi-session questions."
+}
