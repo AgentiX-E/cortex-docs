@@ -172,7 +172,8 @@
 | 21  | **普查的分母与判据互斥**：`gate.valueDistribution` 若按「已接纳的轮」统计，`belowThreshold` 按构造恒为 0，判据 `belowThreshold > 0` 在算术上不可满足                                                                                          | 把送审建议的判据和它自己的口径一起复算                                           | **一个恒为 0 的字段会伪装成「闸门没切过东西」**；计数必须落在候选轮上，且 `candidates: 0` 是第三种状态                              |
 | 22  | **注册抄了送审建议而不是注册表**：`sourceTrust: 1` 被写成「即注册值」，实际 arm 的 `INPUTS` 里是 `0.5`                                                                                                                                        | 派发日志里 `cortex_memory_source_trust = 0.5` 与注册正文对不上                   | **注册文档里的每个数字都要能追到一张表**；`[0,1]` 与 `[0,0.5]` 的差别决定「区间中值」是不是中值                                     |
 | 23  | **判据集合可以在被测对象被掏空时全部成立**：`rejected > 0` 与 `distinct >= 2` 在拒掉 98% 的轮时同样为真                                                                                                                                       | 把「闸门切过东西」和「arm 还能答」分开问时                                       | 判据要覆盖**被测对象存活**，否则一个几乎拒光的配置会被读成机制结论；补 `admitted / candidates` 一条                                 |
-| 24  | **一个字段两个含义**：artifact 的 `turns` 与审计读它的方式不一致——`evidenceRoles=['user']` 下审计报「窗口带 assistant 轮」，而该题交付的 11 轮**全部**能被产品正则判为 assistant；若 `turns` 是交付集则过滤器失效，若是候选池则审计读错了字段 | 筛查 run 43465626013 自审失败（4/200 窗口，首例 28dc39ac，gold 30 轮 carried 0） | **同一字段的两种含义会在两个组件都正确时同时成立**；补 `turns` 的语义声明 + `unknown/filtered` 计数，让过滤效果是数而不是从列表反推 |
+| 24  | **一个字段两个含义**（**结论已被 #25 推翻，保留此行以记录错误路径**）：artifact 的 `turns` 与审计读它的方式不一致——`evidenceRoles=['user']` 下审计报「窗口带 assistant 轮」，而该题交付的 11 轮**全部**能被产品正则判为 assistant；若 `turns` 是交付集则过滤器失效，若是候选池则审计读错了字段 | 筛查 run 43465626013 自审失败（4/200 窗口，首例 28dc39ac，gold 30 轮 carried 0） | **同一字段的两种含义会在两个组件都正确时同时成立**；补 `turns` 的语义声明 + `unknown/filtered` 计数，让过滤效果是数而不是从列表反推 |
+| 25  | **整条记录错位**：`#declinedEmpty` 只清了 `#lastWidth`/`#lastIndex`，留下 `#lastRetrievedContext`/`#lastAdmittedEvidence`/`#lastPromptEvidenceChars`/`#lastPromptText`/`#lastRawOutput`/`#lastReview`/`#lastVote` 七个「每问一写」槽位持有**上一题**的值。4 条 decline 记录的 `turns[0]` 与 `rawOutput` 分别逐字等于同 worker 更早某一题（index 101 / 154 / 169 / 124） | 对照 57 道 MR/TR 题：**53 道交付 100% user**，过滤器从未失效 → 反查 4 个例外，发现整条记录被复制 | **「每问一写」的槽位必须在 reader 之前的每个出口清零，且规则只写一次**；第二个出口（`answerAbstention` 的检索闸门）此前直接 `return null`。**一个正确的数挂在错误的行上，比一个错数更难发现** |
 
 ### 4.3 数学核心（真实 BUG，在查测量问题的路上被撞出来）
 
@@ -24072,3 +24073,86 @@ D6 是这一轮最便宜的一条：`pnpm test:tools` 在仓库根写 `.pytest_c
 | **P2-1** | 测试计数口径 | 6,129 vs 6,056 的差额算清或写进文档 |
 
 一句话：**上一轮闸门学会了说话，这一轮它接上了一根能转的轴——同时被自己的派发记录抓出「把建议值当成注册值」和「判据可以在 arm 被掏空时全部通过」两处错误，两处都在读 artifact 之前写进了注册；八个变异证明这十六个测试会红；剩下的全部悬念是那 200 × 2 的 artifact 里 `admission=` 那一行。**
+
+## 90 第 94 轮：语义层修复第一刀——那 4 个 `roles` FAIL 是整条记录错位
+
+用户把优先级改成了「语义层完全修复之前不追 SOTA」。所以本轮起按 E1–E8 的 exit criteria 推进，第一项是 **E8（证据组装正确）**。它一开始看起来是「补两个字段」，实际撞出的是一个**测量归因**缺陷。
+
+### 90.1 §8.3 的两个解读，都被 artifact 自己反驳
+
+上一轮把审计的 `roles` FAIL 读成「要么过滤器没生效，要么审计读错了集合」，并把「长度闸门先砍 user 轮」当作 `goldOverlap.carried: 0` 的解释。两个都错：
+
+| 检验 | 结果 |
+| --- | --- |
+| `evidenceRolesRoutes` 覆盖的 57 道 MR/TR 题里，交付窗口 100% 是 user 的 | **53 道** |
+| 剩下 4 道是否恰好是那份 artifact 里唯一的 `promptVariants: 2` | **是** |
+| 这 4 道的 `answer` 是否都是 `null` | **是** |
+
+过滤器一直在工作。**53/57** 是它工作的证据。
+
+### 90.2 四条记录的交付窗口是别人的
+
+| 记录 | 交付首轮 | 与谁逐字相同 | 本题 gold |
+| --- | --- | --- | --- |
+| `28dc39ac` | `... Hwang's Kitchen's bulgogi ...` | index 101（`38146c39`） | 30 条 user 轮，open-world games |
+| `gpt4_4fc4f797` | `New Orleans is an amazing city!` | index 169（`6aeb4375_abs`） | 11 轮，汽车悬挂 |
+| `gpt4_7fce9456` | `I think there's been a misunderstanding!` | index 154（`6b168ec8`） | 30 轮，看房 |
+| `gpt4_a1b77f9c` | `I'm happy to help! However, I'm a large language model` | index 124（`f9e8c073`） | 36 轮，阅读周数 |
+
+`rawOutput` 一起被搬走：`28dc39ac` 的是 index 101 的 `Turbinado sugar ...`、`gpt4_7fce9456` 的是 index 154 的 `3`、`gpt4_4fc4f797` 的是 index 169 的 `INSUFFICIENT_EVIDENCE`。**复制的是整条记录。**
+
+### 90.3 一个方法、两个出口、九个槽位
+
+| 槽位 | 之前 | 现在 |
+| --- | --- | --- |
+| `#lastWidth` / `#lastIndex` | 已清 | 并入 `#resetPerQuestion()` |
+| `#lastRawOutput` / `#lastReview` / `#lastVote` | 残留 | 清 |
+| `#lastRetrievedContext` / `#lastAdmittedEvidence` | **残留上一题的窗口与 offer** | 清 |
+| `#lastPromptEvidenceChars` / `#lastPromptText` | 残留（`promptDigest` 因此也错） | 清 |
+
+修法不是补七行，而是把规则**命名一次**，由两个 reader 之前的出口共用：`#declinedEmpty` 与 `answerAbstention` 的检索闸门（后者此前直接 `return null`）。
+
+`null` 而不是 `[]`：契约写在字段自己的 docstring 里——`[]` = 「reader 被触达、什么也没带」，`null` = 「reader 未被触达」。offer 也一并清空，因为 artifact 把它与交付**成对**发布，而 `question-record.ts` 把 `turns.length < evidenceTurns` 定义为「预算砍掉了轮」，`turns: []` 配 `evidenceTurns: 5` 会被读成一次裁剪。
+
+### 90.4 六个变异，全杀
+
+| 变异 | 抓住它的断言 |
+| --- | --- |
+| 只清原来那两个槽位 | 5 条测试同时红 |
+| 清交付、留 offer | `admittedEvidence` 必须 `null` |
+| `rawOutput` 不清 | `rawOutput` 必须 `null` |
+| 用 `[]` 代替 `null` | `retrievedContext` 必须 `null`（`[]` 是另一个陈述） |
+| abstention 出口不调清零 | `answerAbstention` 那条红 |
+| `promptText` 不清 | 逐槽位断言红 |
+
+第 6 条的写法有讲究：断言是**逐槽位**的，不用 `for (const slot of captures)` 循环——新增一个槽位而忘了加进 `#declinedEmpty`，正是这个文件存在的理由，循环会因为它没被列进去而放行。
+
+### 90.5 不动分数，动归因
+
+四题修前 `correct: false`、修后 `correct: false`（`answer` 本就是 `null`），`43465626013` 的总分一字不变。改的是：这四行不再声称描述一个窗口；此后任何对 decline 题的 `goldOverlap` / `evidenceTurns` / `unscoredChars` / `promptDigest` 的读数，都是关于那一题的。
+
+### 90.6 读数
+
+| 项 | 值 |
+| --- | --- |
+| `pnpm check` | **绿**（含 `test:tools`、`guard:*`、`census:check`、`coverage:gate`、`acceptance:check`、`docs:crosscheck`、`format`） |
+| TS 测试 | **6,135 passed**（+6，全在 `cortex-memory`，该包 1,345） |
+| 新测试文件 | `decline-resets-capture.test.ts`（6 条） |
+| 变异 | **6 / 6 红** |
+| 产品表 | 未动 **91.25%** |
+| 派发花费 | **0 元** |
+
+### 90.7 位置与下一步
+
+E8 三项要求：行为级测试（decline 不继承）✅、行为级测试（角色过滤）✅、artifact 自述语义 + 过滤计数 ❌。**E8 从「红」变「2/3」**。
+
+| 优先级 | 项 | 判据 |
+| --- | --- | --- |
+| **E8-c** | artifact 记录每题**实际执行的路由** | dispatch 在 `benchmark.ts` 里本来就知道，不必靠 capability 猜；审计改读该字段 |
+| **E8-d** | 交付窗口的**角色直方图** | 用产品自己的 `roleOf`，不是 eval 事后用正则反推 |
+| **P0-1b** | 从分布重定阈值复筛 | 新阈值落在该 artifact 的 `min/max` 之间并先写进注册；判据 4 `admitted/candidates > 0.5` |
+| **E1–E7** | 语义层接线 | 见 `06-semantic-layer-completion.md` §2 |
+
+`S10` / `S9` 的 500×4 对照对**仍在冻结区**，解禁条件是 E1–E8 全绿。
+
+一句话：**上一轮我以为是过滤器坏了，这一轮证明过滤器 53/57 都是好的——坏的是「记录」这件事本身，而一个正确的数挂在错误的行上，比一个错数更难发现。**

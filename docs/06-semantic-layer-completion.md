@@ -124,7 +124,7 @@ pnpm check                                    # 绿
 | **E5** | **三表同步**：哨兵测试、`AUDIT-SEMANTIC-REACH §3`、`ARCHITECTURE.md` 状态表**同一提交**内一致 | `pnpm check` 绿 + 三处 diff 在同一 commit | ❌ 未开始 |
 | **E6** | **语义层自身有测量**：至少一次 paired 读数或离线 trace 指标（FEB-30 四项），且**不伤准确率**（判据 `deltaQuestions ≥ −5`，与 S10 同口径） | artifact 有 run id 与配置行；McNemar 双侧 | ❌ 无 |
 | **E7** | **对外口径一致**：README、白皮书 §4、`ARCHITECTURE.md` 中语义层行与代码一致 | `pnpm docs:crosscheck` + 人工对表 | ⚠️ README 已改，白皮书 #3 已改，`ARCHITECTURE.md` 字段数已改 |
-| **E8** | **证据组装正确**（§8 新增）：artifact 字段自述语义（`turns` 是交付集还是候选池）+ `unknown/filtered` 计数；一条行为级测试证明「声明 `evidenceRoles=['user']` 的窗口不含被排除角色」 | 审计 `roles` 行 PASS，且该 PASS 来自一个**语义已声明**的字段；计数在 artifact 里可见 | ❌ run `43465626013` 在该行 FAIL |
+| **E8** | **证据组装正确**（§8 新增）：artifact 字段自述语义（`turns` 是交付集还是候选池）+ `unknown/filtered` 计数；一条行为级测试证明「声明 `evidenceRoles=['user']` 的窗口不含被排除角色」 | 审计 `roles` 行 PASS，且该 PASS 来自一个**语义已声明**的字段；计数在 artifact 里可见 | ⚠️ **2/3**：`roles` FAIL 的根因是**记录错位**而非过滤器失效（§9），已修（`#resetPerQuestion`，6 条测试、6 个变异全杀）；缺 `route` 字段与交付角色直方图 |
 
 > **E3 是这一套里最容易被跳过的一条**，也是「语义层」这个词配不配用的分界线：一个写不出来的 `MemoryType` 值意味着连「未接线」都不成立——它不是「功能没开」，是「功能无法被表达」。
 
@@ -205,3 +205,66 @@ admission=candidates:198582+admitted:78884+rejected:119698+min:0.008+max:0.500+m
 | 语义层 exit criteria | 新增 **E8**：证据组装正确性——`turns` 语义自述 + `unknown/filtered` 计数 + 一条「角色过滤后窗口不含被排除角色」的行为级测试 |
 | 下一步顺序 | ① 字段语义与计数（E8）→ ② 从分布重定阈值并复筛（判据 4 > 0.5）→ ③ 才轮得到 E1–E7 的语义层接线 |
 | SOTA 队列 | **仍冻结**。这份 artifact 不是分数，是两个缺陷 |
+
+---
+
+## 9. E8 第一步：那 4 个 `roles` FAIL 不是过滤器失效，是**整条记录错位**
+
+`43465626013` 的审计报 `FAIL roles ... 4 window(s) carry an assistant turn`。§8.3 把它读成「要么过滤器没生效，要么审计读错了集合」，并把「长度闸门先砍 user 轮」当作 `goldOverlap.carried: 0` 的解释。**两个解读都错**，artifact 自己就带着反驳。
+
+### 9.1 过滤器一直在工作
+
+`evidenceRolesRoutes` 只覆盖 `multi-session` 与 `temporal`，也就是 57 道 MR/TR 题。其中 **53 道交付的窗口 100% 是 user 轮**。过滤器从来没有失效。
+
+### 9.2 四个例外的共同点：它们是别人的记录
+
+| 记录 | 交付首轮 | 与谁逐字相同 | 本题 gold |
+| --- | --- | --- | --- |
+| `28dc39ac` | `[2023/05/20 (Sat) 20:20] assistant: Based on your description ... Hwang's Kitchen's ...` | index 101（`38146c39`） | 30 条 user 轮，关于 open-world games |
+| `gpt4_4fc4f797` | `[2023/04/24 (Mon) 19:17] assistant: New Orleans is an amazing city!` | index 169（`6aeb4375_abs`） | 11 轮，关于汽车悬挂 |
+| `gpt4_7fce9456` | `[2023/05/20 (Sat) 02:16] assistant: I think there's been a misunderstanding!` | index 154（`6b168ec8`） | 30 轮，关于看房 |
+| `gpt4_a1b77f9c` | `[2023/05/11 (Thu) 02:24] assistant: I'm happy to help! However, I'm a large language model` | index 124（`f9e8c073`） | 36 轮，关于阅读周数 |
+
+`rawOutput` 一起被搬走：`28dc39ac` 的是 index 101 的 `1. [2023/05/27 (Sat) 07:11] Turbinado sugar ...`，`gpt4_7fce9456` 的是 index 154 的 `3`，`gpt4_4fc4f797` 的是 index 169 的 `INSUFFICIENT_EVIDENCE`。**被复制的是整条记录，不是一个字段。**
+
+四者全部 `answer: null`，且是那份 artifact 里**唯一** `promptVariants: 2` 的四条。
+
+### 9.3 机制：清零写了两处，漏了六处
+
+`CortexMemory.#declinedEmpty` 清了 `#lastWidth` 与 `#lastIndex`，注释里给的理由对另外六个字段**逐字适用**：它们都是「每问一写、arm 每问读一次」的状态，留下的值是**错配**而不是陈旧读数。
+
+| 字段 | 之前 | 现在 |
+| --- | --- | --- |
+| `#lastRawOutput` | 残留上一题的模型输出 | `null` |
+| `#lastReview` / `#lastVote` | 残留 | `null` |
+| `#lastRetrievedContext` | **残留上一题的窗口** | `null` |
+| `#lastAdmittedEvidence` | **残留上一题的 offer** | `null` |
+| `#lastPromptEvidenceChars` | 残留 | `null` |
+| `#lastPromptText` | 残留（`promptDigest` 因此也错） | `null` |
+| `#lastWidth` / `#lastIndex` | 已清 | 已清（并入同一方法） |
+
+修法不是补六行，而是把规则**命名一次**：`#resetPerQuestion()`，由**两个** reader 之前的出口共用——`#declinedEmpty` 与 `answerAbstention` 的检索闸门。第二个出口此前也是直接 `return null`。
+
+`null` 而不是 `[]`，契约写在字段自己的 docstring 里：`[]` = 「reader 被触达、什么也没带」，`null` = 「reader 未被触达」。offer 也一并清空——它确实在 abstention 路径上算过，但 artifact 把它与交付**成对**发布，而 `question-record.ts` 把 `turns.length < evidenceTurns` 定义为「预算砍掉了轮」；`turns: []` 配 `evidenceTurns: 5` 会被读成一次裁剪。
+
+### 9.4 这次修复不动分数，动的是**归因**
+
+四道题修前 `correct: false`、修后 `correct: false`（`answer` 本就是 `null`），所以 `43465626013` 的总分一字不变。改的是：这四行不再声称描述一个窗口；此后任何对 decline 题的 `goldOverlap` / `evidenceTurns` / `unscoredChars` / `promptDigest` 的读数，都是关于**那一题**的。
+
+### 9.5 E8 状态
+
+| E8 的三项要求 | 状态 |
+| --- | --- |
+| 一条行为级测试证明「decline 不继承上一题」 | ✅ `decline-resets-capture.test.ts`，6 条，6 个变异全杀 |
+| 一条行为级测试证明「声明 `evidenceRoles=['user']` 的窗口不含被排除角色」 | ✅ 已有 `evidence-roles.test.ts`（11 条），本轮复核仍绿 |
+| artifact 字段**自述**语义 + `unknown`/`filtered` **计数** | ❌ **仍缺**：`turns` 是交付集这一点只写在源码 docstring 里，artifact 本身没有 `route` 字段、也没有过滤计数 |
+
+所以 **E8 从「红」变为「2/3」**，剩下的那一项是纯增量可观测性，不再是缺陷修复。
+
+### 9.6 下一步（顺序未变）
+
+1. **E8 收尾**：artifact 记录每题**实际执行的路由**（dispatch 在 `benchmark.ts` 里本来就知道，不必靠 capability 猜），并记录交付窗口的**角色直方图**（用产品自己的 `roleOf`，不是 eval 事后用正则反推）
+2. 从 distribution 重定阈值复筛（判据 4 > 0.5）
+3. E1–E7 的语义层接线
+
+`S10` / `S9` 的 500×4 对照对**仍在冻结区**。
