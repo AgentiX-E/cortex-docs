@@ -50,11 +50,32 @@ REPO, BRANCH = _origin()
 
 
 def token() -> str:
+    # The credential is read from the same place the repository is, and for the
+    # same reason.
+    #
+    # This used to read `.git/config` for an `oauth2:` line only. A checkout that
+    # carries a fine-grained PAT inline in its remote URL -- `https://github_pat_
+    # ...@github.com/owner/name.git` -- has no `oauth2:` anywhere, so the script
+    # exited with "no oauth2 token in .git/config" on a repository it had just
+    # resolved correctly. Resolving the repo and then refusing to authenticate to
+    # it is one source of truth too few, not a safety property.
     with open(".git/config") as handle:
         for line in handle:
             if "oauth2:" in line:
                 return line.split("oauth2:", 1)[1].split("@", 1)[0]
-    sys.exit("no oauth2 token in .git/config")
+    for line in subprocess.run(
+        ["git", "remote", "get-url", "origin"], check=True, capture_output=True, text=True
+    ).stdout.splitlines():
+        url = line.strip()
+        if "@" not in url:
+            continue
+        userinfo = url.split("//", 1)[-1].rsplit("@", 1)[0]
+        for prefix in ("oauth2:", "x-access-token:", "git:"):
+            if userinfo.startswith(prefix):
+                userinfo = userinfo[len(prefix) :]
+        if userinfo:
+            return userinfo
+    sys.exit("no credential found in .git/config or in the origin URL")
 
 
 TOKEN = token()
