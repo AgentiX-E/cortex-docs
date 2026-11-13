@@ -11162,3 +11162,134 @@ payload 在 vacuum 前仍留在 segment 文件里（Qdrant 本身是软删除，
 `screening` 这一对（200 题 × 2 轮）能回答「产品的排序与测试台的排序是否在同一带」，但它不是 `S9` 注册的仪器：注册值写在 500 题 × 4 轮上，阈值 −15 题在 200 题上等于 −7.5 点，而在 500 题上等于 −3.0 点。**同一条阈值配两个分母就是两把尺子**，用松的那把过门槛，是把仪器换小而不是把产品做好。
 
 因此证据文件的写法是硬的：screening 的数写在 `screening` 键下，矩阵读的 `paired.deltaQuestions` **保持缺席**，`S9` 继续 `unrun`。要让它变成读数，只有一条路——按注册值派发（500 题 × 4 轮，两侧各一次），或者把注册值改严后再派发。改松的一律不接受，哪怕改动会让矩阵多一行 pass。
+
+### 22.100 轮内窗口：一条在固定预算内改变「哪几个字符」的规则（第 91 轮）
+
+#### 22.100.1 它为什么住在 `excerpt.ts` 而不是 `prompt.ts`
+
+`prompt.ts` 已经 4,000 行，而这条规则有三个纯函数级的性质需要被单独钉住（长度不变量、边界吸附、无锚时的回落），把它们塞进渲染器里会让每一条都得穿过一次 `formatEvidence` 才能被测到。依赖方向也因此变干净：`excerpt.ts` 只依赖 `relevance.js`，`prompt.ts` 反过来导入它。
+
+随之有一次搬迁要记录：`truncateCodePointSafe` 从 `prompt.ts` 移到 `excerpt.ts`，`prompt.ts` **re-export** 它，所以每一个既有的导入路径不变。不复制的原因是一个已经在账本里付过钱的缺陷 —— 切一半代理对会产出孤立代理，序列化时损坏请求体。两份实现意味着一份会先腐坏。
+
+#### 22.100.2 一个词法定义，两种用法
+
+锚定需要「问题里的词出现在轮的哪个偏移」，而 `contentTerms` 只有词、没有位置。用第二个分词器去补偏移会让仓库有两份「这个问题提到了这个词」的定义 —— 一份给排序，一份给切割，于是切割可以删掉排序选中的那个轮。
+
+所以 `relevance.ts` 现在导出 `ContentToken = { term, at }` 与 `contentTokens()`，而 `contentTerms` **被定义为**它的投影：
+
+```ts
+export function contentTerms(text: string): string[] {
+  return contentTokens(text).map((token) => token.term);
+}
+```
+
+`contentTokens` 用 `/[a-z0-9]+/gi` 在**原串**上 `exec` 循环，而不是 `toLowerCase().split(...)` —— 后者丢掉偏移。两边在语料里有的一切输入上一致（都先小写、都把小写以外的字符当分隔、都保留数字）。
+
+#### 22.100.3 双指针：线性，且按「不同词」计分
+
+候选窗口的起点随命中单调不减，所以两条边只向前走：
+
+```ts
+for (const hit of hits) {
+  const start = Math.max(0, hit.at - lead);
+  const end = Math.min(textLength, start + body);
+  while (right < hits.length && (hits[right] as ContentToken).at < end) { /* 加入 counts */ right += 1; }
+  while (left < right && (hits[left] as ContentToken).at < start) { /* 从 counts 减一 */ left += 1; }
+  if (counts.size > bestScore) { bestScore = counts.size; best = { start, end, anchorAt: hit.at }; }
+}
+```
+
+对每个候选做一次扫描会是二次的，而这些轮正是长尾：`MR` 交付轮的中位数 243 字符，尾部过 5,000。代价会落在**每一道题**的提示词路径上。
+
+计**不同词**而不是出现次数，理由与 `lexicalRelevance` 相同：一个把问题里某个词重复四十次的轮不是关于这个问题的。
+
+减一那一行原本写 `(counts.get(term) ?? 0) - 1`，覆盖率读数是 95.23%，缺的正是 `?? 0` 那一支。它**不可达**：`right` 在 `left` 到达之前就加入了这个命中，而一个词只在它最后一份离开时才被删除，所以 `counts` 恰好装着两条边之间的词。防御一支任何输入都到不了的分支，是一支任何测试都查不了的分支 —— 改成 `as number` 并在注释里把不变式写下来，四维到 100%。
+
+#### 22.100.4 长度不变量：预留两个标记，四个字符以下退回纯切
+
+```ts
+const body = limit - ELISION.length * 2;
+```
+
+两个标记**先扣**。贴着文本一端的窗口于是浪费至多两个字符，换来一条按构造成立的不变量：渲染长度 ≤ `limit`，无论文本长什么样。这条不是美学 —— `maxTurnChars` 是上界，一个能超出的渲染会冲破产物声称已被遵守的房间。
+
+`MIN_EXCERPT_CHARS = 4`；低于它走纯切。理由写在常量上：一个标记加一个字符不是节选，是一个「没什么可节选」的标记，而它会花掉整个 cap 来说这件事。
+
+第一版有一个真实的 bug，被测试抓住：`bestSpan` 的 `end` 没有按 `textLength` 钳制，于是「是否贴到尾部」的判断对越界的窗口恒为真 —— 尾部标记恒出现。同时 `limit < ELISION*2 + 1` 允许 3 个字符产出「标记 + 1 字」。修法是钳制加门槛，测试改成构造「中间窗口」与「贴尾窗口」两种形态各一条。
+
+#### 22.100.5 边界吸附只向内，且止于锚点
+
+```ts
+const startStop = Math.min(span.anchorAt, span.end - 1);
+while (start > 0 && start < startStop && !WHITESPACE.test(text[start - 1] as string)) start += 1;
+const endFloor = Math.min(span.end, Math.max(span.anchorAt + 1, start + 1));
+while (end > endFloor && end < text.length && !WHITESPACE.test(text[end] as string)) end -= 1;
+```
+
+两个方向都**只缩不扩**，所以预算不变。两个下界都停在锚定词上：一个能走过匹配的边界搜索会印出一个「不包含它被选中的理由」的窗口，而那个块看起来会是一段**说得通的、错句子的**节选。比 lead 还长的单词是唯一留在词内的情况，且是有意的 —— 另一种选择是丢掉匹配。
+
+#### 22.100.6 三层的字段语义与拒绝规则
+
+| 层 | 位置 | 语义 |
+| --- | --- | --- |
+| 产品 | `CortexMemoryOptions.turnWindow` | `'match'` 且 `maxTurnChars === undefined` 时构造抛错；`'head'` 免检，因为缺席字段渲染的就是它 |
+| 转发 | `CortexMemory.#promptOptions` | 与 `turnCutMarker` 同一个 spread、同一条 reach：窗口是被撤掉 cap 的路由不该留着的东西 |
+| 提示词 | `PromptOptions.turnWindow` + `focusQuery` | `buildPrompt` 只在 `'match'` 时把 question 作为 `focusQuery` 注入，`'head'` 时字段根本不出现（字节等价） |
+| 产物 | `memoryArmConfig.turnWindow` | **仅在命名时**投影；`turnCutMarker` 永远写（含 `none`），`turnWindow` 不写 `head`，因为 `head` 就是全部历史产物的状态 |
+
+派发语法 `<width>[:<none|ellipsis>[:<head|match>]]`：
+
+| 输入 | 结果 | 理由 |
+| --- | --- | --- |
+| `400` | cap 400，无标记，`head` | 每个历史产物的字节 |
+| `400::match` | cap 400，标记自动补成 `ellipsis`，`match` | 空段表示「未命名」 |
+| `400:ellipsis:head` | 显式命名控制臂 | 让对照能说出自己是谁 |
+| `400:none:match` | **拒绝** | 窗口总是标记省略；产物写 `turnCutMarker=none` 会与提示词自相矛盾 |
+| `400:a:b:c` | **拒绝** | 段数 > 3 |
+| `400:ellipsis:tail` | **拒绝** | 未知窗口，列出 `head`, `match` |
+
+#### 22.100.7 两张表必须同意，而守卫它的是一条只读一个文件的测试
+
+派发侧有 `TURN_WINDOWS`（运行时校验），产品侧有 `TurnWindow`（类型）。两份声明是必要的 —— 一个在 `cortex-eval`、一个在 `cortex-memory`，共享就要造依赖 —— 但**它们必须同意**，而类型系统跨不过这个边界。
+
+`tools/__tests__/test_ask_table_parity.py` 里新增 `TestTheTwoWindowTablesAgree` 三条：读两边的源码、取各自的值集合、断言相等；断言 `head` 可以在派发里被命名（否则控制臂无法自称）；断言 `parts.length > 3` 的守卫还在（否则第四个段被静默忽略，而「静默忽略」正是这条测试要防的形状）。
+
+#### 22.100.8 覆盖与变异
+
+| 文件 | stmts | branch | funcs | lines |
+| --- | --- | --- | --- | --- |
+| `excerpt.ts` | 100 | 100 | 100 | 100 |
+| `prompt.ts` | 100 | 100 | 100 | 100 |
+| `memory.ts` | 100 | 100 | 100 | 100 |
+| `relevance.ts` | 100 | 100 | 100 | 100 |
+
+四个变异（详见 `MEASURE-TURN-WINDOW.md` §7）：`contentFor` 的 match 分支退回纯切 → 2 红；`snapToWords` 原样返回 → 1 红；`LEAD_SHARE = 0` → 2 红；`excerptAround` 忽略 question → 8 红。第二个变异第一次**没有**变红，因为单 cap 夹具的未吸附切口恰好落在空格上而被 `.trim()` 吃掉；夹具改成读 cap 24–200 全部并数出 354 个边界（要求 > 100）之后变红。
+
+#### 22.100.9 窗口不花日期：一次派发发现、两条先红的测试修好的缺陷
+
+第一次 screening 对照对（`43424939177` / `43427857069`，同在 `a0264108`）发现机制是成立的，同时带走了不该带走的东西。
+
+两条被 cap 的路由上，一个轮的内容**自带** `[2026/11/13 (Thu) 09:15] user: ` 头部，而 cap 一直把这个头部算在里面。于是以内容词为锚的窗口可以落在它**之后**：10,381 个条目里有 **226 个丢了日期与角色**（`MR` 87、`TR` 139）——`TR` 问的就是「哪个月」。
+
+| 读数 | 值 | 判定 |
+| --- | --- | --- |
+| 被切条目降到 cap 的条数 | 644 → **17**（不是 0） | `P1` 严格不成立：回落到「带标记的头」仍会花满 cap |
+| 丢失 dateline 的条目 | **226 / 10,381** | 机制不是登记的那个 |
+| 交付字符 = 每题的证据字符 | 29,340.19 → 29,338.95（**−0.004%**） | `P2` 成立，阈值 2% |
+| 准入轮数 / 字符 | 85,055 / 76,351,015，两侧**完全相同** | 不是预算砍 |
+| 配对准确率 | +0.50 题，p = 1.0000 | **记录但不读** |
+
+按预提交决策 4（机制没到提示词上 → 无判决，修接线重派发），这一对不构成判决。
+
+修法是一行加一条正则：
+
+```ts
+const head = DATELINE.exec(turn.content)?.[0] ?? '';
+return `${head}${excerptAround(turn.content.slice(head.length), cap.focusQuery, max - head.length)}`;
+```
+
+预算给的是**剩余部分**的（`max - head.length`），不是整体的：cap 已经把头部算进去，再给窗口 `max` 就会超出头部那么长。文法**锚定而不宽松**——假阴性只代价「窗口里多一个日期」，假阳性代价「窗口从句子中间开始」。
+
+两条测试先写先红：窗口落得很远时仍保住日期；cap 小到容不下「头部 + 窗口」时仍保住日期（40 个字符里 31 个给头部，规则退化成对**剩余部分**的纯切，而不是对头部）。`prompt.ts` 与 `excerpt.ts` 四维仍是 100%。
+
+一条关于仪器的结论值得单独写下来：这一对是被**三个不是分数的读数**检查出来的——落在 cap 的条目数、带省略号的条目数、以及这次新加的「保住日期的条目数」。前两个说「窗口到了提示词上」，第三个说「它还顺手拿走了东西」。一个只看准确率的读数会报出 +0.50，然后采纳一个在问日期的能力上删日期的窗口。
