@@ -1,0 +1,114 @@
+{
+  "$comment": "S9. The product builds the index for each question (treatment) against the harness building it before the run (control), same 22 inputs apart from the signal and the two departures both sides carry (limit=200, ablation_runs=2). Paired by question id, per-question mean over the repetitions. Written under `screening` because the registered instrument is 500 questions x 4 repetitions and this is not it.",
+  "arm": "cortex-memory",
+  "dataset": {
+    "name": "longmemeval",
+    "fingerprint": "sha256:d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+    "questions": 200,
+    "repetitions": 2
+  },
+  "runs": {
+    "control": "2026-11-13T09:42:39.743Z",
+    "treatment": "2026-11-13T09:15:15.989Z"
+  },
+  "configDelta": [],
+  "selfIndex": {
+    "indexes": 400,
+    "turns": 170110,
+    "embedCalls": 2921,
+    "embedTexts": 153636,
+    "memoHits": 16230,
+    "reuse": true,
+    "rerankCalls": 0,
+    "rerankDegraded": 0
+  },
+  "cost": {
+    "corpusTurnsPerIndex": 425.27,
+    "textsPerIndex": 384.09,
+    "memoHitsPerIndex": 40.58,
+    "textsPerQuestion": 768.2,
+    "turnsPerQuestion": 850.5,
+    "textsPerAttempt": 0.9045
+  },
+  "screening": {
+    "control": {
+      "run": "2026-11-13T09:42:39.743Z",
+      "relevanceSignal": "retrieval-anchored",
+      "meanCorrect": 0.8975
+    },
+    "treatment": {
+      "run": "2026-11-13T09:15:15.989Z",
+      "relevanceSignal": "self-index",
+      "meanCorrect": 0.89
+    },
+    "deltaQuestions": -1.5,
+    "deltaQuestionsFirstRepetition": -1,
+    "discordant": {
+      "controlCorrectTreatmentWrong": 8,
+      "treatmentCorrectControlWrong": 7
+    },
+    "mcnemarP": 1.0,
+    "byCapability": {
+      "KU": {
+        "total": 28,
+        "controlMean": 24.0,
+        "treatmentMean": 24.5,
+        "b": 2,
+        "c": 2,
+        "deltaQuestions": 0.5,
+        "mcnemarP": 1.0
+      },
+      "ABS": {
+        "total": 29,
+        "controlMean": 29.0,
+        "treatmentMean": 29.0,
+        "b": 0,
+        "c": 0,
+        "deltaQuestions": 0.0,
+        "mcnemarP": 1.0
+      },
+      "IE": {
+        "total": 86,
+        "controlMean": 77.0,
+        "treatmentMean": 76.5,
+        "b": 3,
+        "c": 3,
+        "deltaQuestions": -0.5,
+        "mcnemarP": 1.0
+      },
+      "MR": {
+        "total": 29,
+        "controlMean": 23.5,
+        "treatmentMean": 22.5,
+        "b": 2,
+        "c": 2,
+        "deltaQuestions": -1.0,
+        "mcnemarP": 1.0
+      },
+      "TR": {
+        "total": 28,
+        "controlMean": 26.0,
+        "treatmentMean": 25.5,
+        "b": 1,
+        "c": 0,
+        "deltaQuestions": -0.5,
+        "mcnemarP": 1.0
+      }
+    },
+    "instrument": "per-question mean over 2 repetitions, paired by question id",
+    "verdict": {
+      "thresholdQuestions": -15.0,
+      "deltaQuestions": -1.5,
+      "withinThreshold": true,
+      "costCondition": {
+        "textsPerIndex": 384.09,
+        "turnsPerIndex": 425.27,
+        "limit": "at most one text per corpus turn per question",
+        "met": true
+      },
+      "ruleSatisfied": true,
+      "adopted": false,
+      "adoptionBlocker": "measured on 200 questions x 2 repetitions; S9 is registered on 500 x 4, where -15 questions is -3.0 points rather than -7.5"
+    }
+  }
+}
