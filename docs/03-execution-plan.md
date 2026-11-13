@@ -10081,3 +10081,19 @@ McNemar **p = 0.0574**（14 条不一致：对照对而计划错 11 条，反向
 15% 时收回判读（`indeterminate`）并点名 `evidence-budget.py`。**两个工具对同一产物给出不同读数时，错的那个
 应当对它答不了的问题保持沉默**——这条比它修的那个数字更值钱，因为 `C6` 的判决句「cap 不在被测量的量里」恰恰
 在最该被审视的重分配运行上不可得。
+
+### 14.136 协议类型归基座：产品不得由仪器来定义
+
+`cortex-memory` 的 `CortexMemory` 一直是 `implements SessionAwareMemorySystem`，而那个接口在
+`cortex-eval` 里；`cortex-memory` 的 `package.json` 从未声明这个依赖。边是 type-only、无环，所以构建全过，审计也把它记成「type-only and acyclic」——**记录的是无环，没记录的是未声明**。后果是任何只装产品的人，拿到的 `.d.ts` 指向一个不会安装的包。
+
+修法只有一种正确形状：**搬到双方都已依赖的基座**。`Answer` / `MemorySystem` /
+`SessionAwareMemorySystem` → `cortex-core/src/protocol/memory-system.ts`，`cortex-eval` 再导出以保住公开面，`cortex-memory` 从基座导入。`package.json` 一个字节没加——**边是消失，不是被声明**。
+
+三个副产物值得记：
+
+1. **第二处是断言找出来的，不是读代码找出来的。** `parse.ts:10` 也从评测包导 `Answer`；读类的头部只会看到 `memory.ts` 然后停下。断言从「只允许 type-only」收紧到「一处都不允许」之后它立刻红了。
+2. **声明-only 模块在覆盖率门禁里是一个具名状态，不是零。** `coverage-per-file.mjs` 要求 0/0 的文件被登记成 `nothing-to-execute` 并写理由，否则「0/0 读起来像 100%，意思相反」。新模块沿用了 `src/interfaces/*` 的先例。
+3. **可达表做成了断言。** `semantic-reach.test.ts` 钉住「产品不导入语义内核的任一符号」并带阳性对照（`decideWrite`/`decideRetrieval` 必须在），所以将来真去接线时，**表会跟着代码一起动**，而不是留一份写着 `I` 的旧文档。
+
+判据：任何跨包类型，若两侧都要实现或调用，它属于基座；产品包不得在 `package.json` 之外依赖仪器包，`import type` 也不例外。
