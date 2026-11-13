@@ -10097,3 +10097,37 @@ McNemar **p = 0.0574**（14 条不一致：对照对而计划错 11 条，反向
 3. **可达表做成了断言。** `semantic-reach.test.ts` 钉住「产品不导入语义内核的任一符号」并带阳性对照（`decideWrite`/`decideRetrieval` 必须在），所以将来真去接线时，**表会跟着代码一起动**，而不是留一份写着 `I` 的旧文档。
 
 判据：任何跨包类型，若两侧都要实现或调用，它属于基座；产品包不得在 `package.json` 之外依赖仪器包，`import type` 也不例外。
+
+### 14.137 检索与 rerank 归产品：四项能力的归属，以及「注入信号」为什么会变成洞
+
+一条质疑把 §14.136 的结论推到了更硬的地方：「难道产品侧就不需要检索、rerank、reader 和 judge吗？」
+
+需要前三项。第四项不需要，而且**不应该**需要——尺子不能放在被测物里面。逐行核对后的归属是：
+
+| 能力 | 在哪 | 证据 | 判决 |
+| --- | --- | --- | --- |
+| **reader** | 产品 | `memory.ts:12` 写明流水线；`prompt.ts` 五套契约 + 重试/修复，`parse.ts`，`#consult` 调 `LLM.complete` | **一直在产品里**，从来不是缺口 |
+| **judge** | 仪器 | `question-record.ts`、`metrics.ts` | **正确地不在产品里** |
+| **retrieval** | 仪器 | `relevance-index.ts`（665 行）建索引与 rerank，再把同步的 `(question, turn) => number` 通过 `relevanceFor` 交给产品 | **不在产品里**：不给回调时，房间按到达顺序花 |
+| **rerank** | 机制在 core，调用方在仪器 | `retrieval/rerank.ts` 导出 `rerankHits`，调用方是 `relevance-index.ts:663` 与 `natural-language-memory.ts`；`cortex-memory` 两个都不 import | **不在产品里**：机制在下一层，产品调用方为零 |
+
+**「注入信号」不是一条边界，是一个洞。** `types.ts` 用 `relevance.ts` 的判据（I/O-free、model-free）为回调辩护，判据本身是对的，结论不是：不读模型的包仍然必须决定「问模型什么」，而**构造客户端**与**组合一个评分函数被注入的机制**是两件事。这个包对 reader 早就分清了（`LLM` 是接口），对检索没有。
+
+两个后果都在归档数字里：`chooseEvidence` 在没有 `relevanceFor` 时退回
+`truncateCodePointSafe(plan.render(plan.turns), room)`，即到达顺序的前缀——`38114272884` 量到金标轮落在该前缀内只有 12.4%；而产生全部公开数字的那套检索在产品侧没有任何对应物，缺陷只能在仪器里被发现。
+
+**修法的形状**（`cortex-memory/src/retrieval/search-index.ts`）：
+
+| 阶段 | 决定 | 为什么是这个决定 |
+| --- | --- | --- |
+| 词法通道 | `contentTerms` + `lexicalRelevance`，postings 只用来**收窄**候选 | 同名第二套评分会让「词法」有两个意思；候选集与评分器不一致会丢掉评分器排第一的那一轮 |
+| 向量通道 | 注入的**批式** `embed`，对值做 cosine | 批式是契约，因为逐条调用无法定价；包仍然不读模型 |
+| 融合 | RRF，`k=60` | cosine、词法、将来的 BM25 不同尺度，归一化器是一个会被 benchmark 反测的自由参数 |
+| rerank | core 的 `rerankHits` 套在融合头部，评分函数被包一层 | 该函数在任何失败下都退化为输入顺序，所以 `rerankCalls` 与 `rerankDegraded` 并置才能区分「同意了」与「失败了」 |
+| 融合后的分数 | 位置，`1/(60+rank)` | 提示词按这个数排序；保留通道原始幅度会让排序把 rerank 的结果撤销掉 |
+
+**不是第二套检索栈**：`relevanceFor` 与 `index` 同时给出时前者胜出，所以已派发的臂保留其声明信号、归档运行仍可比；`index` 缺席逐字节复现旧行为，并在 flat 与 multi-session 两条路由上断言。
+
+**两个只有接线测试能抓到的缺陷。** 一、`lookup` 最初返回 `(turn) => number`，索引的全部单元测试通过，而提示词按 `(question, turn)` 调用 → 映射用问题串查询 → 每轮评 0 → 退回到达顺序，**而 census 仍报告健康的索引**（`turns: 12, terms: 7`）。二、census 在 `lookup` 之前快照，于是 `embedCalls` 只数到语料那一批、`rerankCalls` 恒为 0——恰好是读者用来判断「这一级跑过没有」的那个数。两处都改了，并各有一条断言钉住。
+
+判据：**产品必须能在没有仪器的条件下回答一个问题**；凡是「评分函数由调用方提供」的机制，若产品自己不能提供同一个函数，就不是边界而是缺口。测得的结论只到能力，不到质量——那条 dispatch（`index` 设、`relevanceFor` 空）尚未派出。
