@@ -10576,3 +10576,150 @@ workflow 已在 24 / 25 个 dispatch input，`test_dispatch_inputs.py` 禁止坐
 **第四条形变了一次**：逐题 `reason` 要穿过 `scoreEvaluation` 的**第九个**位置参数，而那个签名已是本仓最差的
 一个。丢掉的是「每个原因覆盖了哪些题」——所以「切割是否恰好落在金标最小的题上」无法从一份产物检验。这笔债记在
 `03` §14.134.4。
+
+### 22.93 产品侧语料所有权：一个没有 store 的记忆层是仪器，不是产品
+
+§22.92 证明了「一段文本只嵌入一次」可以在 `EmbeddingModel` 边界上做对，并把 `CachingEmbedding` 做到 100%
+覆盖。本节是它的下一句，也是本轮深审的结论：**那个缓存没有调用方，而它没有调用方的原因是产品没有语料。**
+
+#### 22.93.1 一句话，以及它为什么不是「缺个 store」
+
+`cortex-memory` 出货四个公开类，三个持有状态，一个回答问题，而它们互不相连：
+
+| 类 | 持有 | 不持有 | 自身测试之外有构造点吗 |
+| --- | --- | --- | --- |
+| `CortexMemory` | 提示词、六条路由、reader、parser、16 个遥测访问器 | **任何 store** | 有，且只有 `bench/run-ablation.ts:744` |
+| `DisclosureSession` | 私有 store、共享 store、卡片队列、规则层 | 任何 reader、任何检索、任何 LLM | **没有** |
+| `CortexSessionProvider` | 内存里的 `ProviderSession[]` | 持久化、去重、淘汰、上限 | **没有** |
+| `SearchIndex` | postings、可选向量、融合、可选 rerank | 长于一道题的寿命 | 由 `#relevanceFor` 每道题新建 |
+
+三条机械事实：
+
+1. `CortexMemoryOptions` **26 个字段，没有一个 store**。26 个都在调「怎么答」，没有一个说「从什么答」。
+2. `@agentix-e/cortex-storage` 是 `cortex-memory` 的 **devDependency**，`src` 里唯一的导入方是一个测试文件。
+3. 根因是协议：`MemorySystem.answer(question, context[], sessions?)` 每次调用都接收语料。**对被测系统这是正确的
+   契约**（仪器必须给两条臂同一份证据），代价是产品与调用方各持一份，而产品持的是它无法持久化的那份。
+
+#### 22.93.2 九项持久化能力，四项有
+
+| # | 能力 | 状态 | 证据 |
+| --- | --- | --- | --- |
+| P1 | 回答路径能读的 store | **缺** | 26 个选项无 store；`cortex-storage` 只在 devDependencies |
+| P2 | 带身份的 turn 摄取 | **不可达**，且到达时是错的 | `ingest` 往数组 push；同一份稿喂两次，语料翻倍、预算减半 |
+| P3 | 摄取拒绝报告 | **误报** | `ProviderIngestReport.skipped` 是字面量 `[]`（`provider.ts:171`）——什么都没检查，`skipped.length === 0` 意思是「我们没看」 |
+| P4 | 长于一道题的语料寿命 | **缺** | `#relevanceFor` 每题新建索引（`memory.ts:2310`），而 `add` 在 `prime` 之后抛错：建好的索引不可扩展，也就没有可复用的东西 |
+| P5 | 索引持久化 | **缺** | 无序列化、无 `restore`、无 storage 选项 |
+| P6 | 内存上界 | **缺** | `#sessions` 无上限、无 TTL、无淘汰；`reset()` 是唯一的移除 |
+| P7 | 多写原子性 | **不可达** | `Storage.transaction` 在 `FederatedStorage` 自身转发之外**零调用方** |
+| P8 | 关掉自己开的东西 | **缺** | `DisclosureSession` 无 `close()` |
+| P9 | 擦除 | **缺** | `TriageWriter` 全文只在一处调 `del`——跨边界**移动**的私有半边。`dismiss` 改卡片、把句子留在私有表里 |
+
+P9 是本节最该被记住的一条，因为 `card.ts:365` 从内部点出了它：
+
+> `card "…" is …: withdrawing a published fact is a different operation, and this one would leave the
+> shared copy in place`
+
+那个「不同的操作」不存在。`expire` 置 `stale`（检索过滤器，`refresh` 可逆），**不是删除**。一个以「数据没有
+过去那边」为卖点的产品，缺的正是「而它可以回来」——这不是路线图省略，这是那句断言的另一半。
+
+#### 22.93.3 为什么「产品自建 store」是错的修法
+
+三种形状：
+
+| 形状 | 代价 | 判决 |
+| --- | --- | --- |
+| **A** 产品按 `context` 之外的 store 作答 | 零 | **否决**：破坏协议语义（仪器给两臂同一证据），静默作废全部归档运行，并在一个以披露控制为卖点的产品里把用户文本复制第二份到磁盘 |
+| **B** `cortex-memory` 依赖 `cortex-ai` 直接构造 `CachingEmbedding` | 一条依赖边 | **否决**：让组合层依赖具体引擎，违背 `ARCHITECTURE.md` 的设计原则，并把 HTTP 客户端拖进记忆层的每个浏览器构建 |
+| **C** 装饰器下沉 `cortex-core`，`cortex-ai` 再导出，产品默认包住 `index.embed` | 一次移动、一次再导出、一个选项 | **建议**——先例是 `3bc00f5`：协议类型因为两边都要用而下沉基座；此处两边都要「只嵌一次」的**同一份实现**，两份实现迟早漂移成两条只差一个缓存的臂 |
+
+形状 C 的三条要害，每条都是决定而不是机械：
+
+1. 下沉的是 `<core>/cache/embedding-cache.ts`，**移动而不是重写**：§22.92.2 的三条安全性质（存与取都复制、
+   `identity()` 在构造期绑定转发、保序）原样保留。
+2. `CortexMemoryOptions.index.reuse?: boolean`，**默认 `true`**。缓存只对确定性嵌入模型安全：逐次抖动的模型
+   会让两道题共享一个它们本不该共享的向量。所以选项存在，且 `SearchCensus` 增加 `reuse: boolean` 与
+   `memoHits: number`，让**运行自己声明**是哪种配置——没声明这个字段的臂不能与声明了的臂相比。
+3. `SearchCensus.embedCalls` 增加姊妹字段 `embedTexts`。没有它，验收无法判定：产物分不清 501 和 2。
+
+#### 22.93.4 键必须是文本级，不是语料级
+
+一个诱人的设计是「按语料指纹缓存整条索引」。它省的是 CPU（postings 重建 + cosine），而 §22.92 的文本级缓存
+省的是**模型调用**——两个数量级不同的东西。因此：
+
+- **P0 是让已有的文本级缓存可达**，不是再造一个语料级缓存；
+- 语料级索引的持久化（跨进程复用、重启后不重算）降为 P3：P0 之后剩下的只是 CPU，而**没有人量过这个 CPU 是不
+  是问题**。`add` 在 `prime` 后抛错是一个刻意的设计（索引覆盖的语料不能悄悄变），改它是一次重新设计而不是修复。
+
+#### 22.93.5 一处签名摩擦，它是「缓存没人用」的两个原因之一
+
+`EmbeddingModel.embed` 的参数是 `texts: string[]`（`core/interfaces/embedding.ts`），而
+`SearchIndexOptions.embed` 的参数是 `texts: readonly string[]`。**`readonly` 数组不可赋给可变参数**，所以
+`index: { embed: model.embed }` 不通过类型检查，每个调用点都得写一个适配 lambda。
+
+改法是一个参数修饰符：把选项的参数改为 `string[]`。这既让 `model.embed` 可直传，也仍然接受参数更宽的函数
+（逆变允许 `(readonly string[]) => X` 出现在 `(string[]) => X` 的位置）。搜集成因是「一段文本只嵌一次」，而
+摩擦本身就是它没被启用的第二个原因。
+
+#### 22.93.6 读侧下推：`limit` 约束输出，不约束工作量
+
+`Storage.query` 提供 `tags` / `keyPrefix` / `limit` / `offset`。在产品里传过其中任何一个的非测试调用方：**零**。
+唯一一处 `query(` 传 `{}`（`disclosure/session.ts:223`），而 `assemble` 又扫两遍（`read-side.ts:174,185`），
+所以一次 `check(draft)` 读共享表、私有表，再读一次私有表。
+
+比不可达更糟的是：**`limit` 即使被传也不能约束工作量**。`kvQuery` 发出的是
+`SELECT value, tags FROM kv WHERE table_name = ?`，没有 `LIMIT`；`selectPage` 在**行集已经物化之后**用 JS 切片
+（`sql.ts:180`）。标签是一列 JSON 数组，SQL 无法在不建连接表的情况下过滤，模块注释对**顺序**的论证是对的；对
+**后果**的论证缺席：`limit: 10` 在百万行上读一百万行。读 `QueryPredicate` 类型的人会推断出一个不存在的上界。
+
+#### 22.93.7 PostgreSQL：真的，或者不存在
+
+架构文档把 PostgreSQL 写成规模化的路径（设计原则 3）。实际：
+
+- **孤儿**：`PgStorage`、`ensurePgSchema` 在普查的「全仓无引用」清单里；
+- **无测试**：`parity.test.ts` 仅在两个 SQLite 引擎上跑 SQL 层，浏览器套件覆盖 OPFS 与 IndexedDB，PostgreSQL 不在任何一套里；
+- **发散**：`sql.ts` 用 `substr(key, 1, ?) = ?` 并长篇论证 `LIKE` 为何错（前缀里的通配符、ASCII 折叠），
+  `idb.ts` 用 `startsWith` 与之相符，而 `pg.ts:55` 用的正是 `` key LIKE $n `` + `${prefix}%`；
+- **不回收**：`pg.ts` 在 SQL 里内联过滤 `expires_at` 且从不 purge，两个兄弟后端每次读之前都 `#purge`。
+
+三个后端、三种前缀语义、一份契约。本该抓住它的 parity 套件**不包含这个后端**。
+
+#### 22.93.8 存下来的事实类型，没有时间轴也没有槽位
+
+四种 Fact 并存，只有一种有生产者：
+
+| 类型 | 时间轴 | 槽位（subject/predicate） | 可渲染文本 | 生产者 |
+| --- | --- | --- | --- | --- |
+| `Fact`（`domain/fact.ts`） | **两条** | 有 | **无** | **0** |
+| `AdmittedFact`（`triage/writer.ts:70`） | **无** | **无** | `text` | `TriageWriter.admit` |
+| `KnowledgeFact`（`knowledge/frame.ts:65`） | 可选 `at` / `futurity` / `planState` | 可选 | `text` | **0** |
+| `ServedFact`（`context/assemble.ts:126`） | 继承 | 继承 | 有 | `assemble`（仅评测臂） |
+
+真正被写入、被生命周期管理、被读回来的那一行是 `AdmittedFact`：`id`、`text`、`visibility`、`triage`、
+`admittedAt` 与三个生命周期标记。**没有时间轴，没有槽位。**它是一句带隐私判决的话。
+
+两个推论都不是观点：
+
+1. **时间题与知识更新题不可能被结构化地回答。** 持久化里既没有「何时为真」也没有「填哪个槽」，剩下的唯一
+   工具就是提示词措辞——而 `answerKnowledgeUpdate` 正是一条契约，它的文档自己说它「把时态限定词选哪个值
+   说清楚」。这就是能力表里 `KU`/`TR` 长期是弱行的原因。
+2. **建模它的九个模块是一个「没人构造的类型」上的库。** `frame`/`edge`/`unit`/`taxonomy`/`assumption`/
+   `temporality`/`markers`/`revision` 被 `retrieval/typed.ts` 与 `context/assemble.ts` **type-only** 引用，
+   而 `assemble` 的唯一调用方是 `assumption-ablation.ts:680`。`consolidate`、`resolveContradiction`、
+   `currentFacts`、`currentValue`、`findContradictions`、`covers`、`isAnswerable`、`defaultValueFunction`
+   在**全仓无任何非测试引用**——而且 `consolidate`/`resolveContradiction` 的原因是结构性的：它们的输入类型
+   没有生产者，接线之前必须先决定「一条被存下来的事实是什么」。
+
+#### 22.93.9 验收标准
+
+| # | 条款 | 值 | 检验方法 |
+| ---: | --- | --- | --- |
+| 1 | 缓存不改答案 | `reuse` 开关两侧的提示词与答案**逐字节相同** | 每个 `prompt.test.ts` fixture 跑两遍比对 `lastPromptText()` |
+| 2 | 缓存确实生效 | 同一语料第 1 题 `embedTexts = turns + 1`，第 2 题 `= 1` | 两题之后取 `lastIndexCensus()` |
+| 3 | 命中返回的是原值 | 改返回向量不影响缓存 | 一条断言 |
+| 4 | 关闭即复现 | `reuse: false` 的 census 与录制的 fixture 逐字段相等 | census 相等 |
+| 5 | 覆盖率 | 移动后的文件与新分支 100/100/100/100 | `tools/coverage-per-file.mjs`，无 `v8 ignore` |
+| 6 | 擦除 | `forget` 之后 `cards()` / `evidence()` / `check()` 都看不到；二次 `forget` 是幂等空操作；记录跨重启存活 | 三条断言 + 一次 reopen |
+| 7 | 摄取身份 | 同一 fixture 喂两次报 `sessions: n`，永不 `2n` | 一条断言 |
+
+**第 1 条是本阶段唯一可以预注册的断言之形状**：缓存只改工作量，不改答案。任何准确率移动都说明缓存改变了排序，
+那是缺陷而不是结果。
