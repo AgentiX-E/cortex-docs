@@ -23554,3 +23554,77 @@ over `pg-mem`），断言同一个答案。它的第一版把「带 `limit` 的�
 | 新增门禁 | `guard:ci`（8 条要求）、`test:pg` + `pg-integration-count`（拒绝跳过）、census totals 重算 |
 
 一句话总结本轮：**上一轮证明了产品不拥有语料，这一轮证明了「已验证」这三个字有多便宜——而它的代价是一个不存在的文件被引用了整整一轮。**
+
+---
+
+## 85 第 89 轮追踪：擦除落地，以及四个「删一条就以为删干净了」的副本
+
+### 85.1 本轮做了什么
+
+把 §14.139 定的 P0-1 做完：`DisclosureSession.forget(id, { acknowledge, reason })` 一次调用退休四份拷贝——两个 store 的事实行、卡片（措辞 + 出处 + 前后文 + 模型提案）、发布记录（措辞 + 摘要）。记录保留「某规则被覆盖过」，卡片变成墓碑，id 被烧掉。
+
+### 85.2 交付
+
+| # | 变更 | 撤销它就会红的断言 |
+| --- | --- | --- |
+| D1 | `CardQueue.forget`：计划 → 令牌 → 开记录 → 删行 → 墓碑 → 脱敏 → 关记录 | `erasure.test.ts` 21 条；5 个变异 |
+| D2 | `CardState` 增 `forgotten`；墓碑丢弃 `text`/`sourceText`/`proposal`/`origin`/`refused`/`decayAt` | `Record<CardState, number>` 在补上新状态前是编译错误——类型抓住了导出 |
+| D3 | `TriageWriter.eraseRows` 删两个 store、脱敏发布记录；只计数不抛错，重试收敛 | 「两个 store 都有行」那条 `facts: 2` |
+| D4 | `ErasureLog` 独占 `private/erasures`：`begin`/`complete`/`read`/`list`；`admit()` 拒绝被烧掉的 id（仅显式 id） | id 复用测试；重试保留首次 `requestedAt` |
+| D5 | `ERASURE_TOKEN`、`ERASURE_REASONS`（3 值）、`erasureSurfaces`、`erasureWarning` | 拒绝消息断言 `fact rows: 2` |
+| D6 | `SqliteStorage` 设 `secure_delete = ON` | 读**文件字节**的那条测试 |
+| D7 | `tools/erasure-census.mjs` + `C7`/`C8` + 故障注入 | `test_erasure_census.py` 5 条，其中一条要求故障运行时退出码为 1 |
+| D8 | `triage-demo` 增 `forget`/`erasures`，墓碑打印 `(erased: ...)` | §85.5 的 CLI 记录 |
+
+### 85.3 第一次真跑发现的四件事
+
+1. **`evidence()` 的参数是 scope，不是 `{task}`。** 我自己的测试读错了签名，assembler 报 `ScopeViolation: unknown task scope {"task":"shared"}`。
+2. **SQLite 默认把已删内容留在文件里。** 实测 `pragma secure_delete` = 0（两种日志模式都是）。一条 1.6 kB 的句子擦除后仍在 `private.db` 里逐字可寻，而所有行级断言全绿。加 `secure_delete = ON` 后，测试读**文件**而不是 `query()`。
+3. **发布那扇门不会自己关。** 擦除后已完成记录仍在（那是审计），再调 `release()` 会先找到记录、再发现没有行可交回——抛 `no private fact with id`。正确，但只因为 `cross()` 抛之前先找过 shared 拷贝。
+4. **改一个被编译依赖的变异不是变异。** 去掉 `secure_delete` 后跑 `vitest` 是**绿的**：`cortex-memory` 从 `dist` 引 storage，测到的是上一次构建。变异脚本现在先 build。这是 §84.4 的教训往下一层：上一轮变异没落到文本上，这一轮落到了文本、没落到产物上。
+
+### 85.4 五个变异，全红
+
+| 变异 | 行 | 结果 |
+| --- | --- | --- |
+| 墓碑不再写入 | `card.ts:519` | **红**，6 failed |
+| 发布记录保留措辞 | `writer.ts:398` | **红**，2 failed |
+| 被烧掉的 id 可复用 | `writer.ts:183` | **红**，1 failed |
+| sqlite 恢复默认的 secure_delete | `sqlite.ts:44` | **红**，1 failed（先 build 之后） |
+| 漏掉 shared 拷贝 | `writer.ts:389` | **红**，6 failed |
+
+### 85.5 读数
+
+```
+erasure census ok -- 5 occurrence(s) and 4 read path(s) before, 0 and 0 after;
+4 row(s) removed by 1 tombstone and 2 record(s)
+```
+
+CLI 端到端（无 LLM、无令牌时被拒，打印将被销毁的数量）：
+
+```
+$ node tools/triage-demo.mjs forget f1 --home /tmp/h
+erasing "f1" is permanent, and it removes every copy this store holds:
+  fact rows:        1
+  card rows:        1 (the sentence, the wording it came from, the turns around it)
+  release records:  0 (the wording and its digest are redacted; the override stays)
+$ node tools/triage-demo.mjs forget f1 --home /tmp/h --acknowledge erase-permanently
+erased f1: user-request, requested 2026-11-13T06:16:59.447Z
+  removed 1 fact row(s), 1 card(s), 0 release record(s) redacted
+f1  forgotten  Erased at the owner's request. No wording is kept, and the id is burned.
+```
+
+### 85.6 位置
+
+| 项 | 值 |
+| --- | --- |
+| 产品表 | 未动 **456.25/500 = 91.25%** |
+| 验收矩阵 | **34 行**（+`C7`/`C8`），`C7`/`C8` 均 pass |
+| 成本轴 | 未动（注册 9201 tok/题；`trim-2.8k` 臂 5,183） |
+| 覆盖率 | `cortex-core`/`cortex-memory` 全维 ≥95%，`triage/` 新增三文件 100/100/100/100 |
+| 距 SOTA | 擦除这条轴上，SOTA 是 AfterDeleteBench 的 provenance-aware closure（0 恢复）；我方读数 0 次出现、0 条读路径，**机制同族**；不改任何分数 |
+| 新增门禁 | `erasure:census`（含故障注入测试） |
+
+### 85.7 下一步
+
+`P0-2` 派发 `cortex/self-index`（唯一能量化「每题重建 postings」代价的路径），并行 `P1-4`（墓碑的 `reason` 丢失了「为什么有这张卡」）与 `P2-1`（保留策略需要一条不需要人的路径）。`P0-1` 改成 `CortexMemory` 侧没有删除——擦除目前止步于包边界，这条写在手册里。

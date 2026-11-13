@@ -1,0 +1,109 @@
+{
+  "$comment": "Written by tools/erasure-census.mjs. One DisclosureSession over two SQLite files, two sentences with different lineage (a deferred card, a released rule-claimed row), erased with one call each. `residue` reads every row of every surface and counts occurrences of the sentence, so a field nobody thought of fails the criterion rather than escaping it. `before` is the control: a run whose control finds nothing is reported as a failure, not as a clean erasure.",
+  "dataset": "synthetic: 2 sentences, 2 erasure calls, 5 surfaces, 2 stores",
+  "sentences": {
+    "deferred": "s1",
+    "released": "h1"
+  },
+  "before": {
+    "surfaces": [
+      {
+        "role": "private-facts",
+        "rows": 0,
+        "secret": 0,
+        "health": 0
+      },
+      {
+        "role": "shared-facts",
+        "rows": 2,
+        "secret": 1,
+        "health": 1
+      },
+      {
+        "role": "cards",
+        "rows": 1,
+        "secret": 2,
+        "health": 0
+      },
+      {
+        "role": "releases",
+        "rows": 1,
+        "secret": 0,
+        "health": 1
+      },
+      {
+        "role": "erasures",
+        "rows": 0,
+        "secret": 0,
+        "health": 0
+      }
+    ],
+    "occurrences": 5,
+    "readPaths": {
+      "privateEvidence": true,
+      "sharedEvidence": true,
+      "export": true,
+      "releaseWording": true
+    }
+  },
+  "after": {
+    "surfaces": [
+      {
+        "role": "private-facts",
+        "rows": 0,
+        "secret": 0,
+        "health": 0
+      },
+      {
+        "role": "shared-facts",
+        "rows": 0,
+        "secret": 0,
+        "health": 0
+      },
+      {
+        "role": "cards",
+        "rows": 1,
+        "secret": 0,
+        "health": 0
+      },
+      {
+        "role": "releases",
+        "rows": 1,
+        "secret": 0,
+        "health": 0
+      },
+      {
+        "role": "erasures",
+        "rows": 2,
+        "secret": 0,
+        "health": 0
+      }
+    ],
+    "occurrences": 0,
+    "readPaths": {
+      "privateEvidence": false,
+      "sharedEvidence": false,
+      "export": false,
+      "releaseWording": false
+    }
+  },
+  "removed": {
+    "deferred": {
+      "facts": 1,
+      "cards": 1,
+      "releases": 0
+    },
+    "released": {
+      "facts": 1,
+      "cards": 0,
+      "releases": 1
+    },
+    "total": 4
+  },
+  "residualOccurrences": 0,
+  "leakingReadPaths": 0,
+  "controlOccurrences": 5,
+  "controlReadPaths": 4,
+  "tombstones": 1,
+  "records": 2
+}
