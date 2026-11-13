@@ -1,0 +1,58 @@
+{
+  "$comment": "Written by tools/embedding-reuse-census.mjs. One CortexMemory instance, a four-turn corpus and three questions, run twice: once with the embedding store and once with `reuse: false`. A number here is a recomputation, not a transcription.",
+  "dataset": "synthetic: 4 turns, 3 questions, bag-of-words embedder, stub reader",
+  "corpusTurns": 4,
+  "questions": 3,
+  "warm": {
+    "perQuestion": [
+      {
+        "embedCalls": 2,
+        "embedTexts": 5,
+        "memoHits": 0,
+        "reuse": true
+      },
+      {
+        "embedCalls": 1,
+        "embedTexts": 1,
+        "memoHits": 4,
+        "reuse": true
+      },
+      {
+        "embedCalls": 1,
+        "embedTexts": 1,
+        "memoHits": 4,
+        "reuse": true
+      }
+    ],
+    "embedTextsTotal": 7,
+    "memoHitsTotal": 8
+  },
+  "cold": {
+    "perQuestion": [
+      {
+        "embedCalls": 2,
+        "embedTexts": 5,
+        "memoHits": 0,
+        "reuse": false
+      },
+      {
+        "embedCalls": 2,
+        "embedTexts": 5,
+        "memoHits": 0,
+        "reuse": false
+      },
+      {
+        "embedCalls": 2,
+        "embedTexts": 5,
+        "memoHits": 0,
+        "reuse": false
+      }
+    ],
+    "embedTextsTotal": 15
+  },
+  "secondQuestionEmbedTexts": 1,
+  "coldSecondQuestionEmbedTexts": 5,
+  "identicalPrompts": 1,
+  "identicalAnswers": 1,
+  "savedRatio": 0.5333
+}
