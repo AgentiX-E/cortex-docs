@@ -24353,3 +24353,98 @@ A vs C 是因果主张：只有 store 的内容不同。B vs C 是防止把这�
 一句话：**产品现在会为一个被授权的值变更铸一个带时间序的事实，并在下次同一语料被问到时告诉读者哪个是当前值；而为了做到这件事，它先发现自己那道理应拦下「把正确答案换成旧值」的守卫，从头到尾没有运行过。**
 
 `S10` / `S9` 的 500×4 对照对**仍在冻结区**。
+
+## 93 第 97 轮：账本接进块——一个「被驳倒的值当事实呈上」的缺陷，与一次用算术拒绝的接线
+
+### 93.1 先看缺陷，因为它决定了这一轮做什么
+
+第 96 轮的块把**已被取代**的值印在自己的 `fact:` 行上，与取代它的值同等权重：
+
+```
+UPDATES:
+fact:     30 dozen  [state]
+status:   replaces "20 dozen"
+fact:     20 dozen  [state]
+status:   superseded by "30 dozen"
+```
+
+`renderBlocks` 没错。错的是**整条路径上没有任何东西写过 `refuted`**：两个 fact 没有 assumptions，`reviseLedger` 的 `apply` 找不到 `persistence` 可改，原样返回。一个被 import、被调用、完全惰性的机制——`AUDIT-SEMANTIC-REACH.md` §4.3 标价的「43 次机制翻转换 46 次损害」，而这次的成因是**接线顺序**：先接生产者，忘了接账本。
+
+### 93.2 四步，缺一不可
+
+| 步 | 调用 | 省掉会怎样 |
+| ---: | --- | --- |
+| 1 | `deriveAssumptions(fact, frame)` | 没有账本条目就没有东西可驳 |
+| 2 | `buildKnowledgeUnit(...)` | 先校验再改；反过来，被拒的 unit 会留下一个已改的 fact 集 |
+| 3 | `reviseLedger(facts, { edges })` | 写出 `refuted` / `confirmed`——「边」与「驳斥」的差别 |
+| 4 | `assemble({ …, omitFrame: true })` | 唯一出口：既拒绝被驳的值，又渲染块，所以不存在第二条渲染路径 |
+
+`frame.at` = 较晚那条 record 的时刻 = 每条 assumption 的 `openedAt`：两个 fact 在**同一个瞬间**进入账本，即这次替换被授权的瞬间。块按同一时刻读账本，而不是按墙上的 now。省掉它，`assumptionPenalty` 会把这个模块能构造的**每一个** unit 报成 `aged`；而这个数字**不进渲染**，所以它只能被测试钉住——这正是「看不见的错数字」这一类问题需要断言而不是需要 artifact 的原因。
+
+### 93.3 顺手补上的内核缺口
+
+`renderBlocks` 从第一天就有 `omitFrame`，注释里点名了调用方；`assemble` 却传不下去，于是「花在渲染结果上的预算」在替一行调用方印不出来的东西买单。`AssembleInput.omitFrame` 补上：加法、默认 `false`、试探渲染与交付渲染从此量同一件事。
+
+另一条路被否：拿 `served` 自己渲染，会丢掉 `assemble` 算出的 conflict `flags`，而调用方自己的输出里看不出这个丢失。
+
+### 93.4 `resolveContradiction`：一次用算术拒绝的接线
+
+E2 的三项里，两项接了，第三项**结清为 Declined**。理由不是「不好接」，是实测：
+
+| 喂入顺序 | 胜者 | 后验 |
+| --- | --- | --- |
+| `[before, after]`（事实源自己的顺序） | **`20 dozen`** | 0.999 |
+| `[after, before]` | `30 dozen` | 0.999 |
+
+这个函数靠 `confidence × sourceTrust` 决定胜负，而 `KnowledgeFact` 两个字段都没有；给两边同值是唯一站得住的输入，于是后验打平，胜负落到 `Map` 的第一个键，也就是**数组顺序**。接上它，返回的会是账本刚驳掉的那个值，后验 0.999，而输出里看不出这个答案是由一个 `for` 循环定的。
+
+E2 因此是 **2 接 / 1 结清**，不是 3/3。写清楚这件事，比凑一个调用点重要——凑出来的那个调用点会改变答案，而且改坏。
+
+### 93.5 reach 表：P 从 5/19 到 11/19
+
+| 行 | 能力 | 之前 | 现在 | 依据 |
+| ---: | --- | --- | --- | --- |
+| 3 | polarity / modality / futurity / plan state | `I` | **`P`** | `assemble` 对每个候选调用 `isPlan` / `planFactor`。**说准**：产品构造的 fact 不带 plan state，所以 futurity 那一支恒返回 `1`——模块被调用，plan 词表从未被检验 |
+| 6 | `slotKey` | `I` | **`P`** | 被 `deriveAssumptions` 与 `assemble` 调用，两者都从 `semantic-facts.ts` 到达 |
+| 8 | 假设账本 6 类 | `E` | **`P`** | `deriveAssumptions` |
+| 10 | 修订：supersede / cascade / plan | `E` | **`P`** | `reviseLedger`；cascade 仍关，那是 `revision.ts` 自己的默认 |
+| 11 | 答案侧出口四问 + `asOf` | `E` | **`P`** | `assemble`，带 `omitFrame` 与位置排名 |
+| 12 | 矛盾消解 | `I` | `I` | **Declined**，见 93.4 |
+
+行 2、5、7 不动，且理由各自具体：闭集里写了一员不等于闭集可达；没有 alias registry；双轴 `Fact` 仍是零构造器。
+
+### 93.6 13 个变异，1 个第一次活了下来
+
+| 第一遍存活 | 说明什么 |
+| --- | --- |
+| 「试探渲染忽略 `omitFrame`」 | 原先只断言 `census.tokens` 变小，而 `tokens` 来自**最终**渲染。试探渲染错了只会改变**谁装得下**，所以预算宽松时看不见。补的测试取「有 frame 成本」与「无 frame 成本」的中间值作预算：它装得下调用方真正会收到的那块，装不下带 frame 的那块 |
+
+补完后 **13 / 13 全红**。另有一个**等价**变异被记录下来而不是被隐藏：把位置的排名反过来，在账本打开时不可观测，因为被驳的 fact 根本到不了排名那一步。这条「不可观测」本身要写进登记，否则下一轮会有人以为它被杀掉了。
+
+### 93.7 读数
+
+| 项 | 值 |
+| --- | --- |
+| `pnpm check` | **绿**（`manual:check`：31 示例、34/34 选项、2 张契约表） |
+| TS 测试 | **6,212**（+7：memory 1,406、eval 3,423、core 931、ai 327、storage 125） |
+| 覆盖率 | 167 文件、16 豁免、**0 ratchet**；memory stat 99.86 / bran 99.67 / func 100 / line 100 |
+| 变异 | **13 / 13 红** |
+| 导出普查 | 1,180 / 715 / 465 三项不变；**另撤回 1 个**自写孤儿 `SemanticBlock` |
+| 派发 | **0 元** |
+| 产品表 | 未动 **91.25%** |
+
+### 93.8 位置
+
+| 判据 | 第 96 轮 | 现在 |
+| --- | --- | --- |
+| E1 fact source | ✅ | ✅ |
+| **E2 消费者接线** | ❌ | ✅ **2 接 / 1 结清**。**副作用**：`if (lines.length > 0)` 那个 `matched` 守卫被覆盖率门禁报为不可达——它确实不可达（`assemble` 总会服务一个良构 unit 的 confirmed 端），而且它把「窗口匹配」与「窗口收到行」两种读数并成一个，于是删掉守卫、按 anchor 计数 |
+| E3 `MemoryType` | ❌ | ❌ |
+| E4 四机制结清 | ❌ | ⚠️ **半做**：`resolveContradiction` 已 Declined；`consolidate` 未定 |
+| **E5 三表同步** | ⚠️ 半做 | ✅ **关闭**（哨兵 7 项 + 调用点断言、reach 六行、`ARCHITECTURE.md` 两行、`USER-MANUAL`、§13.376，同一提交） |
+| E6 语义层测量 | ❌ | ❌（预测未变） |
+| E7 / E8 | ✅ | ✅ |
+
+**5 关闭 / 1 半做 / 2 全红。** 下一步 **E3**：`MemoryType` 写 `'semantic'` 并有一个读取点——这是「语义层」这个词配不配用的分界线，也是唯一还红着、且不依赖派发的一条。
+
+一句话：**产品的 prompt 里现在只有一条「值变了」的记录，旧值不再以事实身份出现；为此它也第一次让账本真的写了字。上一轮那个块，是把一个已被驳倒的值和取代它的值并排印出来，只靠一行关系区分。**

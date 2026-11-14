@@ -24,7 +24,7 @@ pnpm check                                    # 绿
 | 语义内核（19 行可达表）现状 | **P 5 / E 5 / I 8 / T 1**；其中语义相关只有 **2 行 P**（answer-side supersession、aggregation），store-side 语义 **0 行 P** |
 | 送审报告的 5 条建议 | **2 条已关闭**（T1 部分、T2 的结构阻塞）、**3 条未动**（T3/T4/T5） |
 | 报告自身陈述 | **6 处需要修正**：2 处已被本项目改掉、1 处算术不可满足、3 处计数/状态漂移 |
-| 是否可解禁 SOTA | **否**。8 条 exit criteria（§5）现为 **3 关闭（E1 / E7 / E8）、1 半做（E5）、4 全红**；S10/S9 与全部 SOTA 队列本轮**冻结** |
+| 是否可解禁 SOTA | **否**。8 条 exit criteria（§5）现为 **5 关闭（E1 / E2 / E5 / E7 / E8）、1 半做（E4）、2 全红（E3 / E6）**；S10/S9 与全部 SOTA 队列本轮**冻结** |
 
 一句话：**产品册上的「语义记忆」这一格，代码里写不出来、产品读不到、测量没测过；报告把它定位为「缺一个 fact source」，这个定位是对的，但它给出的修法与判据里有 3 处会把人带到错的地方。**
 
@@ -118,10 +118,10 @@ pnpm check                                    # 绿
 | # | 判据 | 验证方式 | 现状 |
 | --- | --- | --- | --- |
 | **E1** | **fact source 存在且 additive**：产品能构造 `KnowledgeFact`，来源是**已计算的** supersession 状态（不新增模型调用、不替换原文） | 存在非测试构造点，且其输入来自 `supersede.ts`/`memory.ts:1603` 的计算结果；一条行为级测试证明同语料下 prompt 字节**因该事实而变** | ✅ **关闭**（§11）：构造点在 `memory.ts` → `semantic-facts.ts`，输入是 `supersede.ts` 的 verdict；`semantic-carry.test.ts` 三条件字节对照（空 store / 开关关 / 两者都有）；0 新模型调用（开与关各 3 次调用） |
-| **E2** | **消费者接线**：`assemble` → `reviseLedger` → `resolveContradiction` 在产品路径被调用 | `semantic-reach.test.ts` 的命中清单**非空**且打印出符号；reach table 对应行改 **P** | ❌ 命中 = 0 |
+| **E2** | **消费者接线**：`assemble` → `reviseLedger` → `resolveContradiction` 在产品路径被调用 | `semantic-reach.test.ts` 的命中清单**非空**且打印出符号；reach table 对应行改 **P** | ✅ **关闭**（§12）：白名单 5 → 7，且每个值符号都要求**调用点**而非 import；reach 表行 3/6/8/10/11 同提交改 **P**（P 从 5/19 到 11/19）。**2 接 / 1 结清**：`assemble` 与 `reviseLedger` 已接，`resolveContradiction` 由 ADR §6.1 实测 Declined——喂它可以给出的唯一输入，胜者是账本刚驳掉的那个值 |
 | **E3** | **可表示**：`MemoryType` 的 `'semantic'` 有写有读（读 = 影响 selection/渲染/调度之一）**或**两个不可达值被删除且文档同步撤回 | 一条「写入 semantic → 读回并改变行为」的测试；或删除后的类型快照 | ❌ 0 次写入、0 次读取 |
-| **E4** | **charter 四机制结清**：`consolidate` / `resolveContradiction` 从 0 调用变为**有产品调用者**，或由 ADR 显式 **Declined** 并给出理由与代价 | `grep` 出调用点（非测试）；或 ADR 文件存在且被 `ARCHITECTURE.md` 引用 | ❌ 两者皆 0，无 ADR |
-| **E5** | **三表同步**：哨兵测试、`AUDIT-SEMANTIC-REACH §3`、`ARCHITECTURE.md` 状态表**同一提交**内一致 | `pnpm check` 绿 + 三处 diff 在同一 commit | ⚠️ **半做**（§11）：哨兵、reach 表行 4（`I → P`）、`ARCHITECTURE.md`（27→28 字段 + 一行新状态）本轮同提交；`assemble` 那几行要等 E2 |
+| **E4** | **charter 四机制结清**：`consolidate` / `resolveContradiction` 从 0 调用变为**有产品调用者**，或由 ADR 显式 **Declined** 并给出理由与代价 | `grep` 出调用点（非测试）；或 ADR 文件存在且被 `ARCHITECTURE.md` 引用 | ⚠️ **半做**（§12）：`resolveContradiction` 由 `DECISION-SEMANTIC-LAYER-ROUTE.md` §6.1 显式 **Declined**，`ARCHITECTURE.md` 已引用；`consolidate` 仍**未定** |
+| **E5** | **三表同步**：哨兵测试、`AUDIT-SEMANTIC-REACH §3`、`ARCHITECTURE.md` 状态表**同一提交**内一致 | `pnpm check` 绿 + 三处 diff 在同一 commit | ✅ **关闭**（§12）：哨兵（白名单 7 项 + 调用点断言）、reach 表六行、`ARCHITECTURE.md` 两行、`USER-MANUAL.md` 选项表与示例、`PREREGISTRATION` §13.376 全部同一提交 |
 | **E6** | **语义层自身有测量**：至少一次 paired 读数或离线 trace 指标（FEB-30 四项），且**不伤准确率**（判据 `deltaQuestions ≥ −5`，与 S10 同口径） | artifact 有 run id 与配置行；McNemar 双侧 | ❌ 无 |
 | **E7** | **对外口径一致**：README、白皮书 §4、`ARCHITECTURE.md` 中语义层行与代码一致 | `pnpm docs:crosscheck` + 人工对表 | ✅ **关闭**（§11）：`USER-MANUAL.md` 新增 `semanticCarry` 行与可编译示例，`manual:check` 强制（34/34 选项有示例）；`ARCHITECTURE.md` 新增「Semantic update carry」行 |
 | **E8** | **证据组装正确**（§8 新增）：artifact 字段自述语义（每题实际路由 + 交付窗口角色直方图）+ `unclassified` 计数；一条行为级测试证明「声明 `evidenceRoles=['user']` 的窗口不含被排除角色」 | 审计读 `route` 而不是从 `capability` 反推；角色对照读产品自己的 `lastRoleCensus()` 而不是 eval 侧正则 | ✅ **关闭**（§10）：`#resetPerQuestion`（6 测试 6 变异）+ `lastRoute()` / `lastRoleCensus()` 贯通到 artifact（9 测试 9 变异），两层合计 15 变异全杀 |
@@ -404,3 +404,90 @@ E8 让 artifact 说得清「走了哪条路、窗口里是什么角色」，但*
 ### 11.4 一句必须写清的话
 
 E1 证明了「产品会因为一个授权过的事实而改变 prompt 字节」，**它没有证明这让答案更准**。E6 是那个问题，而 §13.375.5 的预测说：在本题库上「更准」的空间是零，因为每道题自带语料、每个更新都到不了别的题的窗口——真正能检验机制的总体是**一次会话里多题共享一份语料**，而本活动还没有这样的总体。
+
+## 12. 第 97 轮：账本接进块，被取代的值不再被当作事实呈上
+
+### 12.1 一个只有接上才看得见的缺陷
+
+第 96 轮的块长这样：
+
+```
+UPDATES:
+fact:     30 dozen  [state]
+status:   replaces "20 dozen"
+fact:     20 dozen  [state]
+status:   superseded by "30 dozen"
+```
+
+`20 dozen` 是**已被取代**的值。它以 `fact:` 行、与被取代它的值同等的权重出现，唯一区分两者的是读者必须自己解析的一条关系行。
+
+问题不在 `renderBlocks`。问题在**整条路径上没有任何东西写过 `refuted`**：两个 fact 根本没有 assumptions，`reviseLedger` 的 `apply` 找不到 `persistence` 可改，原样返回——一个被 import、被调用、却完全惰性的机制，正是 `AUDIT-SEMANTIC-REACH.md` §4.3 标价为「43 次机制翻转换 46 次损害」的那种失败，由**接线的顺序错**造成。
+
+### 12.2 四步，每一步都不能省
+
+| 步 | 调用 | 省掉会怎样 |
+| ---: | --- | --- |
+| 1 | `deriveAssumptions(fact, frame)` | 没有账本条目就没有东西可驳，`apply` 原样返回 |
+| 2 | `buildKnowledgeUnit(...)` | 先校验再改：反过来会让被拒的 unit 留下一个已改的 fact 集 |
+| 3 | `reviseLedger(facts, { edges })` | 写出 `refuted` / `confirmed`，这是「边」与「驳斥」的差别 |
+| 4 | `assemble({ …, omitFrame: true })` | 唯一的出口：拒绝被驳斥的 fact **并且**渲染块，所以不存在第二条渲染路径 |
+
+`frame.at` = 较晚那条 record 的时刻，也就是每条 assumption 的 `openedAt`：两个 fact 是在**同一个瞬间**进入账本的——这次替换被授权的瞬间。块随后按同一时刻读账本，而不是按墙上的 now 读。省掉它，`deriveAssumptions` 把所有 assumption 记在 epoch 上，`assumptionPenalty` 会把这个模块能构造的**每一个** unit 都报成 `aged`——而这个数字是看不见的（`penalty.reason` 不进渲染），所以它只能被测试钉住，不能留给 artifact。
+
+块现在是：
+
+```
+UPDATES:
+fact:     30 dozen  [state]
+status:   replaces "20 dozen"
+assumed:  confirmed
+```
+
+**什么都没丢**：关系行仍然引用了被取代的值。变的只是它不再被**当作事实呈上**。
+
+### 12.3 顺手补上的内核缺口
+
+`renderBlocks` 从语义块第一天起就带 `omitFrame`，它自己的注释就点名了这个调用方；`assemble` 却没有办法把它传下去，于是「花在渲染结果上的预算」在替一行调用方印不出来的东西买单。`AssembleInput.omitFrame` 补上了它：加法、默认 `false`、试探渲染与交付渲染从此量同一件事。
+
+另一条路——拿 `served` 自己渲染——被否掉了，因为它会丢掉 `assemble` 算出来的 conflict `flags`，而调用方自己的输出里看不出这个丢失。
+
+### 12.4 `resolveContradiction` 结清为 Declined，理由是算术
+
+不是「还没做」，是**实测**：把这一对按事实源的顺序喂进去，唯一站得住的输入（两根 fact 的 `confidence` 与 `sourceTrust` 相等，因为 `KnowledgeFact` 没有这两个字段）让后验在 0.999 打平，胜负由 `Map` 的第一个键决定，也就是数组顺序，也就是 **`20 dozen`**——账本刚驳掉的那个值。
+
+| 喂入顺序 | 胜者 | 后验 |
+| --- | --- | --- |
+| `[before, after]`（产品的顺序） | **`20 dozen`** | 0.999 |
+| `[after, before]` | `30 dozen` | 0.999 |
+
+一个调用点会变成「改变答案、而且改坏」的装饰。落盘在 `DECISION-SEMANTIC-LAYER-ROUTE.md` §6.1。E2 因此是 **2 接 / 1 结清**，不是 3/3——把这条写清楚，比凑一个调用点重要。
+
+### 12.5 读数
+
+| 项 | 值 |
+| --- | --- |
+| `pnpm check` | **绿**（含 `manual:check`：31 示例、34/34 选项、2 张契约表） |
+| TS 测试 | **6,212**（+7；memory 1,406、eval 3,423、core 931、ai 327、storage 125） |
+| 覆盖率 | 167 文件、16 豁免、**0 ratchet**；memory stat 99.86 / bran 99.67 / func 100 / line 100 |
+| 变异 | **13 / 13 红**（首轮存活 1 个：试探渲染忽略 `omitFrame`——补了一条「预算取两种成本的中间值」的测试） |
+| 导出普查 | 1,180 / 715 / 465 三项不变（`renderSemanticUpdate` 出、`assembleSemanticUpdate` 入），**另撤回 1 个**自写孤儿 `SemanticBlock` |
+| reach 表 | **P 5/19 → 11/19**：行 3、6、8、10、11 同提交改 P，行 12 记为 **Declined** |
+| 派发 | **0 元** |
+| 产品表 | 未动 **91.25%** |
+
+### 12.6 位置
+
+| 判据 | 第 96 轮 | 现在 |
+| --- | --- | --- |
+| E1 fact source | ✅ | ✅ |
+| **E2 消费者接线** | ❌ | ✅ **2 接 / 1 结清**：`reviseLedger` + `assemble` 已接并被调用（哨兵白名单 5 → 7，且要求调用点），`resolveContradiction` 记为实测 Declined |
+| E3 `MemoryType` | ❌ | ❌ |
+| E4 四机制结清 | ❌ | ⚠️ **半做**：`resolveContradiction` 已 Declined（ADR §6.1，算术可见）；`consolidate` 仍**未定** |
+| E5 三表同步 | ⚠️ 半做 | ✅ **关闭**：哨兵、reach 表六行、`ARCHITECTURE.md` 两行、`USER-MANUAL` 同提交 |
+| E6 语义层测量 | ❌ | ❌（预测未变：500 题上 `deltaQuestions === 0`，非零即跨题泄漏） |
+| E7 对外口径 | ✅ | ✅ |
+| E8 证据组装 | ✅ | ✅ |
+
+**5 关闭 / 1 半做 / 2 全红。** 剩余最短路径是 **E3**（`MemoryType` 写 `'semantic'` + 一个读取点），随后 E4 的 `consolidate` 与 E6。
+
+一句话：**产品的 prompt 里现在只有一条「值变了」的记录，而且旧值不再以事实的身份出现；为此它也第一次让账本真的写了字——上一轮那个块，是把一个已被驳倒的值和取代它的值并排印出来，只靠一行关系区分。**
