@@ -174,6 +174,7 @@
 | 23  | **判据集合可以在被测对象被掏空时全部成立**：`rejected > 0` 与 `distinct >= 2` 在拒掉 98% 的轮时同样为真                                                                                                                                       | 把「闸门切过东西」和「arm 还能答」分开问时                                       | 判据要覆盖**被测对象存活**，否则一个几乎拒光的配置会被读成机制结论；补 `admitted / candidates` 一条                                 |
 | 24  | **一个字段两个含义**（**结论已被 #25 推翻，保留此行以记录错误路径**）：artifact 的 `turns` 与审计读它的方式不一致——`evidenceRoles=['user']` 下审计报「窗口带 assistant 轮」，而该题交付的 11 轮**全部**能被产品正则判为 assistant；若 `turns` 是交付集则过滤器失效，若是候选池则审计读错了字段 | 筛查 run 43465626013 自审失败（4/200 窗口，首例 28dc39ac，gold 30 轮 carried 0） | **同一字段的两种含义会在两个组件都正确时同时成立**；补 `turns` 的语义声明 + `unknown/filtered` 计数，让过滤效果是数而不是从列表反推 |
 | 25  | **整条记录错位**：`#declinedEmpty` 只清了 `#lastWidth`/`#lastIndex`，留下 `#lastRetrievedContext`/`#lastAdmittedEvidence`/`#lastPromptEvidenceChars`/`#lastPromptText`/`#lastRawOutput`/`#lastReview`/`#lastVote` 七个「每问一写」槽位持有**上一题**的值。4 条 decline 记录的 `turns[0]` 与 `rawOutput` 分别逐字等于同 worker 更早某一题（index 101 / 154 / 169 / 124） | 对照 57 道 MR/TR 题：**53 道交付 100% user**，过滤器从未失效 → 反查 4 个例外，发现整条记录被复制 | **「每问一写」的槽位必须在 reader 之前的每个出口清零，且规则只写一次**；第二个出口（`answerAbstention` 的检索闸门）此前直接 `return null`。**一个正确的数挂在错误的行上，比一个错数更难发现** |
+| 26  | **四层接线里有两层没有任何测试经过**：`lastRoute`/`lastRoleCensus` 的实现、record 字段、reducer 转发、arm 读取四处都写好了，第一遍 6 个变异里 **4 个存活**——循环收集了向量却不返回、捕获写死 route、reducer 丢掉字段、arm 写死 null，每一个都是「实现了但没人走过那一层」                                                                                                                                      | 同一轮内的变异验证（不是事后审计）：存活项逐条指出缺的是哪一层测试                                                | **实现完成 ≠ 接线完成**：一条链路每多一层，就要多一层自己的测试，否则「绿」只覆盖到最上面那层；补完后 15 个变异全杀                                                                     |
 
 ### 4.3 数学核心（真实 BUG，在查测量问题的路上被撞出来）
 
@@ -24156,3 +24157,90 @@ E8 三项要求：行为级测试（decline 不继承）✅、行为级测试（
 `S10` / `S9` 的 500×4 对照对**仍在冻结区**，解禁条件是 E1–E8 全绿。
 
 一句话：**上一轮我以为是过滤器坏了，这一轮证明过滤器 53/57 都是好的——坏的是「记录」这件事本身，而一个正确的数挂在错误的行上，比一个错数更难发现。**
+
+## 91 第 95 轮：E8 关闭——artifact 说得清「走了哪条路、窗口里是什么角色」，然后 4 个变异活了下来
+
+用户把优先级定为「语义层完全修复之前不追 SOTA」。E8 是 8 条 exit criteria 里唯一一条**测量正确性**判据，也是唯一一条能在不接线语义内核的前提下关闭的。本轮关掉了它。
+
+### 91.1 两个问题，artifact 已有的字段都答不了
+
+| 问题 | 原来有的 | 为什么不算答案 |
+| --- | --- | --- |
+| 这题走了哪条路 | `capability` | **数据集**的词，不是**臂**的词。`TR` 题在未声明 `answerTemporal` 的系统上落到 flat；`ABS` 可带 `single-session-assistant` |
+| 窗口里是什么角色 | `memoryArmConfig.evidenceRoles` | 过滤器的**指令**，不是**结果**。指令分不清「跑了并排除 3 轮」与「根本没到达这条路由」 |
+
+两处缺口在同一 run 上合流：审计用 `capability` 推该检查的路由，报 4 个 FAIL，artifact 没有任何字段能说这 4 题实际走了哪条路——只能手工重建，而重建给出的答案是第三种（§90：那 4 条是 decline，带走了上一题的窗口）。
+
+### 91.2 改动按层，两层是产品的、四层是 eval 的
+
+| 层 | 字段 |
+| --- | --- |
+| `cortex-memory` | `lastRoute()`（decline **不清**）、`lastRoleCensus()`（用过滤器自己那个分类器数） |
+| `cortex-eval` | `RetrievalCapture.route` / `.roleCensus`、`RetrievalCaptureVectors`、`QuestionRecord.route` / `.roleCensus`、`QuestionRecordInput.route` / `.roleCensus`（required + nullable） |
+
+`QuestionRecordInput` 的两个字段是 **required**，因为 bound reducer 会把 record 重映射一遍，而 `featureConfig` 与 `promptChars` 各被这样丢过一次。
+
+`lastRoute` 的「decline 不清」与上一轮修的 `#resetPerQuestion` **方向相反**，所以写进了字段自己的注释：其它八个槽位是 reader 侧读数，没到 reader 就没有读数；路由是入口归属，在任何闸门之前就知道。而「走了 multi-session 路径、在 reader 之前就关了」正是审计看 decline 时最需要的那句话。
+
+### 91.3 直方图是封闭算术，`unclassified` 是单独的桶
+
+`sum(counts) + unclassified === total`，且 `total` 与 artifact 的 `turns` **同一个窗口**（不是 `evidenceTurns`，那是 offer）。
+
+`unclassified` 不叫 `unknown`：分类器的词表属于调用方，它完全可以返回字符串 `"unknown"` 作为一个角色。而契约说「角色读不出的轮保留」，所以 `unclassified > 0` 是逃生口在工作、`evidenceRoles: ["user"]` 下 `assistant > 0` 才是过滤器没工作——**这两个读法审计原来分不开**。
+
+### 91.4 第一遍变异，6 个里 4 个活了下来（登记 #26）
+
+这是本轮最值钱的部分：
+
+| 存活 | 缺的是哪一层 |
+| --- | --- |
+| 循环收集两个向量但不返回 | 测试只测 `runBenchmark` 的 `onRetrieved`，没测 `evaluateWithScorerDetailed` 的返回值 |
+| 捕获把 route 写死成 `'flat'` | 同上，那条匿名回调没有测试走到 |
+| bound reducer 丢掉 route | `evidence-bound.test.ts` 直接调 `buildQuestionRecords`，绕过 `report-write.ts` 的私有 `withEvidenceBound` |
+| arm 把 route 写死成 `null` | 没有测试跑完整 arm 到 record |
+
+补测试后 **9 + 6 = 15 全杀**。这不是事后审计发现的，是变异验证在提交前抓的——说明「跑绿了」只覆盖到最上面那层。
+
+另外导出普查在**当小时**抓到我自己写的孤儿 `RetrievalCapture`：消费者（回调类型）是模块私有的，外部也不需要命名它——撤回导出，不加进基线。两轮里第二次。
+
+### 91.5 读数
+
+| 项 | 值 |
+| --- | --- |
+| `pnpm check` | **绿** |
+| TS 测试 | **6,161**（+26：memory 1,358、eval 3,423、core 928、ai 327、storage 125） |
+| 覆盖率 | 166 文件、16 豁免、**0 ratchet**；`memory.ts` 与 `report-write.ts` 均 100/100/100/100 |
+| 导出普查 | 1,173 → **1,176** exports（+3 全有调用者）、465 orphan 不变、0 新增 |
+| 变异 | **15 / 15 红** |
+| 派发 | **0 元**（本轮无派发） |
+| 产品表 | 未动 **91.25%** |
+| `docs:crosscheck` | 64 / 71 marker，137 文档 |
+
+### 91.6 位置
+
+| 判据 | 状态 |
+| --- | --- |
+| E1 fact source | ❌ |
+| E2 消费者接线 | ❌ |
+| E3 `MemoryType` 可表示 | ❌ |
+| E4 四机制结清 | ❌ |
+| E5 三表同步 | ❌ |
+| E6 语义层测量 | ❌ |
+| E7 对外口径 | ⚠️（README 已加 evidence assembly 段） |
+| **E8 证据组装正确** | ✅ **关闭** |
+
+**8 条里 1 关闭、1 部分、6 全红。** 下一步是 **E1（fact source）**，因为它是 E2/E3/E4 的前置：没有事实就没有可装配的语义单元。E1 之前先落 **P0-1 的 ADR**——语义层走 **B（接线）**，并同时记录 A 路径（Declined）的代价，供将来推翻时复用；没有这份 ADR，E4 的「Declined」就无从引证。
+
+| 优先级 | 项 | 判据 |
+| --- | --- | --- |
+| **E1** | 从 `supersede.ts` 的 span+date 授权状态派生 `KnowledgeFact` | 非测试构造点；行为级测试证明同语料下 **prompt 字节因该事实而变**；0 新模型调用 |
+| **E2** | `assemble` → `reviseLedger` → `resolveContradiction` 接线 | `semantic-reach.test.ts` 命中清单非空；reach table 改 P |
+| **E3** | `MemoryType` 写入 `'semantic'` + 一个读取点 | 「写入→读回→行为变化」测试 |
+| **E4** | `consolidate` / `resolveContradiction` 结清 | 调用点或 ADR Declined |
+| **E5** | 三表同提交同步 | `pnpm check` 绿 + 三处 diff 同 commit |
+| **E6** | 语义层自身测量 | `deltaQuestions ≥ −5` |
+| **E7** | 对外口径 | 白皮书 §4 的 10 行全对齐 |
+
+`S10` / `S9` 的 500×4 **仍冻结**，解禁条件不变。
+
+一句话：**E8 让 artifact 说得清「走了哪条路、窗口里是什么角色」，但它一个字也没让答案更准——它的价值在下一轮，当接线真正改变 prompt 字节时，能分辨「字节变了因为语义层」与「因为别的原因」的，就是这两个字段。**

@@ -113,7 +113,7 @@ pnpm check                                    # 绿
 
 ## 5. 「语义层完全修复」的可验证定义
 
-只有下列 **7 条全部成立**，才解禁 SOTA 队列。每条都给了可执行判据，不用「看起来修好了」。
+只有下列 **8 条全部成立**，才解禁 SOTA 队列。每条都给了可执行判据，不用「看起来修好了」。（第 8 条 E8 由 §8 补充；此句原写「7 条」，是补 E8 时漏改的一处计数。）
 
 | # | 判据 | 验证方式 | 现状 |
 | --- | --- | --- | --- |
@@ -124,7 +124,7 @@ pnpm check                                    # 绿
 | **E5** | **三表同步**：哨兵测试、`AUDIT-SEMANTIC-REACH §3`、`ARCHITECTURE.md` 状态表**同一提交**内一致 | `pnpm check` 绿 + 三处 diff 在同一 commit | ❌ 未开始 |
 | **E6** | **语义层自身有测量**：至少一次 paired 读数或离线 trace 指标（FEB-30 四项），且**不伤准确率**（判据 `deltaQuestions ≥ −5`，与 S10 同口径） | artifact 有 run id 与配置行；McNemar 双侧 | ❌ 无 |
 | **E7** | **对外口径一致**：README、白皮书 §4、`ARCHITECTURE.md` 中语义层行与代码一致 | `pnpm docs:crosscheck` + 人工对表 | ⚠️ README 已改，白皮书 #3 已改，`ARCHITECTURE.md` 字段数已改 |
-| **E8** | **证据组装正确**（§8 新增）：artifact 字段自述语义（`turns` 是交付集还是候选池）+ `unknown/filtered` 计数；一条行为级测试证明「声明 `evidenceRoles=['user']` 的窗口不含被排除角色」 | 审计 `roles` 行 PASS，且该 PASS 来自一个**语义已声明**的字段；计数在 artifact 里可见 | ⚠️ **2/3**：`roles` FAIL 的根因是**记录错位**而非过滤器失效（§9），已修（`#resetPerQuestion`，6 条测试、6 个变异全杀）；缺 `route` 字段与交付角色直方图 |
+| **E8** | **证据组装正确**（§8 新增）：artifact 字段自述语义（每题实际路由 + 交付窗口角色直方图）+ `unclassified` 计数；一条行为级测试证明「声明 `evidenceRoles=['user']` 的窗口不含被排除角色」 | 审计读 `route` 而不是从 `capability` 反推；角色对照读产品自己的 `lastRoleCensus()` 而不是 eval 侧正则 | ✅ **关闭**（§10）：`#resetPerQuestion`（6 测试 6 变异）+ `lastRoute()` / `lastRoleCensus()` 贯通到 artifact（9 测试 9 变异），两层合计 15 变异全杀 |
 
 > **E3 是这一套里最容易被跳过的一条**，也是「语义层」这个词配不配用的分界线：一个写不出来的 `MemoryType` 值意味着连「未接线」都不成立——它不是「功能没开」，是「功能无法被表达」。
 
@@ -268,3 +268,100 @@ admission=candidates:198582+admitted:78884+rejected:119698+min:0.008+max:0.500+m
 3. E1–E7 的语义层接线
 
 `S10` / `S9` 的 500×4 对照对**仍在冻结区**。
+
+---
+
+## 10. E8 关闭：artifact 现在自己说得清「走了哪条路、窗口里是什么角色」
+
+第 9 节修的是「decline 不继承上一题的捕获」。E8 还剩两项，都在这轮做完：**每题实际执行的路由**，以及**交付窗口的角色直方图**——而且必须由**产品自己**报出，不是 eval 事后推。
+
+### 10.1 为什么不能用 artifact 已有的两个字段
+
+| 问题 | artifact 原来有的 | 为什么不算答案 |
+| --- | --- | --- |
+| 这题走了哪条路？ | `capability`（`IE`/`MR`/`TR`/`KU`/`ABS`） | 那是**数据集**的词，不是**臂**的词。`TR` 题在未声明 `answerTemporal` 的系统上会落到 flat 路径；`ABS` 可以带 `single-session-assistant` |
+| 窗口里是什么角色？ | `memoryArmConfig.evidenceRoles`（`["user"]`） | 那是过滤器的**指令**，不是**结果**。指令分不清「过滤跑了并排除了 3 轮」与「过滤器根本没到达这条路由」 |
+
+两处缺口在同一个 run 上合流：审计用 `capability` 推出该检查的路由，报了 4 个 FAIL，而 artifact 没有任何字段能说这 4 题实际走了哪条路——于是只能手工重建记录，而重建给出的答案是第三种：**那 4 条是 decline，带走了上一题的窗口**（§9）。
+
+### 10.2 改动，按层
+
+| 层 | 字段 | 它说什么 |
+| --- | --- | --- |
+| `cortex-memory` | `lastRoute(): TurnCapRoute \| null` | 这题**从哪个入口进来**，在任何闸门之前设置，**decline 不清** |
+| `cortex-memory` | `lastRoleCensus(): RoleCensus \| null` | 交付窗口的角色构成，用**过滤器自己用的那个分类器**数 |
+| `cortex-eval` | `RetrievalCapture.route` / `.roleCensus` | 每题捕获，与既有四项同一个开关 |
+| `cortex-eval` | `RetrievalCaptureVectors` | `evaluateWithScorerDetailed` 返回、`ablation.ts` 转发的两个向量 |
+| `cortex-eval` | `QuestionRecord.route` / `.roleCensus` | artifact 携带；系统不报时**缺席** |
+| `cortex-eval` | `QuestionRecordInput.route` / `.roleCensus` | **required + nullable**，让 bound reducer 无法像当年丢掉 `featureConfig` / `promptChars` 那样把它们丢掉 |
+
+捕获回调从六个位置参数改成一个对象。理由不是风格：新加的两项是**总是一起走的一对**，而只想要最后一项的调用方得为此写四个 `null`。
+
+`lastRoute` 的「decline 不清」是与其它八个槽位**相反**的规则，所以写在了字段自己的注释里：其它槽位是 reader 侧读数，没到 reader 就没有读数；路由是入口归属，在任何闸门之前就知道——而「走了 multi-session 路径、在 reader 之前就关了」正是审计看 decline 时最需要的那句话。
+
+### 10.3 三个状态，用算术而不是散文说清
+
+| 状态 | `route` | `roleCensus` | 含义 |
+| --- | --- | --- | --- |
+| 报了 | `'flat'` / `'multi-session'` / … | `{counts, unclassified, total}` | 系统说了 |
+| 报了「什么都没有」 | — | `{counts: {}, unclassified: n, total: n}` | 分类器一个角色都没读出来 |
+| 缺席 | 字段不存在 | 字段不存在 | 系统没有这个 accessor |
+
+直方图是封闭算术：`sum(counts) + unclassified === total`，而 `total` 是 artifact 的 `turns` **同一个窗口**的长度——不是 `evidenceTurns`（那是 offer）。在上一层取直方图会满足自己的加法却描述一个模型没看过的窗口，这正是 `§13.262` 在 prompt 字段上记过的 delivery/coverage 分裂。
+
+`unclassified` 单独成桶而不是叫 `unknown`：分类器的词表属于调用方，它完全可以返回字符串 `"unknown"` 作为一个角色，那时叫 `unknown` 的字段就有两个含义。而过滤器契约说「角色读不出的轮**保留**」，所以 `unclassified > 0` 是逃生口在工作、`evidenceRoles: ["user"]` 下 `assistant > 0` 才是过滤器没工作——**这正是审计分不开的那两个读法**。
+
+`evidence-bound` 与 `report-write` 各有一条测试断言它**穿过 reduction 不变**：直方图数的是 bound 之前的交付，bound 是 run 之后的 artifact 设置。
+
+### 10.4 15 个变异，其中 4 个第一次活了下来
+
+这一轮最值钱的部分不是实现，是**第一遍变异跑出 4 个存活**：
+
+| 存活（第一遍） | 说明什么 |
+| --- | --- |
+| 循环收集了两个向量但不返回 | 测试只测了 `runBenchmark` 的 `onRetrieved`，没测 `evaluateWithScorerDetailed` 的返回值 |
+| 捕获时把 route 写死成 `'flat'` | 同上：那条匿名回调根本没被任何测试走到 |
+| bound reducer 丢掉 route | `evidence-bound.test.ts` 直接调 `buildQuestionRecords`，绕过了 `report-write.ts` 的私有 `withEvidenceBound` |
+| arm 把读到的 route 写死成 `null` | 没有任何测试跑完整 arm 到 record |
+
+四者都是「实现了但没有一条测试经过那一层」。补完后：**9 + 6 = 15 全杀**。
+
+| 组 | 变异数 | 全杀 |
+| --- | --- | --- |
+| 产品侧（`cortex-memory`） | 9 | ✅ |
+| eval 侧（捕获 / record / reducer / arm） | 6 | ✅ |
+
+另外，导出普查在**当小时**抓到一个我自己写的孤儿：`RetrievalCapture`。它的消费者（回调类型）是模块私有的，所以外部也不需要命名它——于是撤回导出，而不是加进基线。这是两轮里第二次「门禁抓到同一轮写下的导出」。
+
+### 10.5 读数
+
+| 项 | 值 |
+| --- | --- |
+| `pnpm check` | **绿**（`test:tools` / `guard:*` / `census:check` / `coverage:gate` / `acceptance:check` / `docs:crosscheck` / `format`） |
+| TS 测试 | **6,161**（+26：memory 1,358 / eval 3,423 / core 928 / ai 327 / storage 125） |
+| 覆盖率 | 166 文件、16 豁免、**0 ratchet**；`report-write.ts` 与 `memory.ts` 均 100/100/100/100 |
+| 导出普查 | 1,173 → **1,176** exports（+3，全有调用者）、465 orphan **不变**、0 新增 |
+| 变异 | **15 / 15 红** |
+| 派发花费 | **0 元** |
+| 产品表 | 未动 **91.25%** |
+
+### 10.6 位置：语义层 8 条里的第 1 条关闭
+
+| 判据 | 状态 |
+| --- | --- |
+| E1 fact source | ❌ 唯一非测试 `KnowledgeFact` 构造点仍在 arm |
+| E2 消费者接线 | ❌ 命中 0 |
+| E3 `MemoryType` 可表示 | ❌ 0 写 0 读 |
+| E4 四机制结清 | ❌ 0 调用、无 ADR |
+| E5 三表同步 | ❌ 未开始 |
+| E6 语义层测量 | ❌ 无 |
+| E7 对外口径 | ⚠️ README 已加 evidence assembly 段；白皮书 §4 的 10 行仍未全对齐 |
+| **E8 证据组装正确** | ✅ **关闭** |
+
+**8 条里 1 条关闭、1 条部分、6 条全红。** 下一项是 **E1（fact source）**——它是 E2/E3/E4 的前置：没有事实就没有可装配的语义单元；有了事实，`assemble → reviseLedger → resolveContradiction` 才有输入，`MemoryType` 的 `'semantic'` 才有写入方。
+
+`S10` / `S9` 的 500×4 对照对**仍在冻结区**。
+
+### 10.7 一句必须写清的话
+
+E8 让 artifact 说得清「走了哪条路、窗口里是什么角色」，但**它一个字也没让答案更准**。它的价值在下一轮：当 E1–E7 的接线真正改变 prompt 字节时，能分辨「字节变了因为语义层」与「字节变了因为别的原因」的，就是这两个字段。**仪器完备不等于测量完成**。
