@@ -20,8 +20,8 @@ pnpm check                                    # 绿
 
 | 问题 | 答案 |
 | --- | --- |
-| 语义层在**产品册**（白皮书 §4 功能清单）的完成度 | 语义层 10 行：**交付口径 1/10**（能改变一次已发表 artifact 的字节）、**实现口径 7/10**（有代码有单测）、**可表示口径 0/10**（类型层写不出一个 `semantic`） |
-| 语义内核（19 行可达表）现状 | **P 5 / E 5 / I 8 / T 1**；其中语义相关只有 **2 行 P**（answer-side supersession、aggregation），store-side 语义 **0 行 P** |
+| 语义层在**产品册**（白皮书 §4 功能清单）的完成度 | 语义层 10 行：**交付口径 1/10**（能改变一次已发表 artifact 的字节）、**实现口径 7/10**（有代码有单测）、**可表示口径 1/10**（第 98 轮起：`MemoryType` 的 `'semantic'` 有处写、有处读，见 §13） |
+| 语义内核（19 行可达表）现状 | **P 5 / E 5 / I 8 / T 1**（送审时快照；第 98 轮为 **P 11 / E 2 / I 5 / T 1**，见 §13 读数表）；送审时语义相关只有 **2 行 P**（answer-side supersession、aggregation），store-side 语义 **0 行 P** |
 | 送审报告的 5 条建议 | **2 条已关闭**（T1 部分、T2 的结构阻塞）、**3 条未动**（T3/T4/T5） |
 | 报告自身陈述 | **6 处需要修正**：2 处已被本项目改掉、1 处算术不可满足、3 处计数/状态漂移 |
 | 是否可解禁 SOTA | **否**。8 条 exit criteria（§5）现为 **5 关闭（E1 / E2 / E5 / E7 / E8）、1 半做（E4）、2 全红（E3 / E6）**；S10/S9 与全部 SOTA 队列本轮**冻结** |
@@ -61,7 +61,7 @@ pnpm check                                    # 绿
 | --- | --- | --- | --- |
 | 交付 | 1 / 10（第 3 行，且仅「闸门生效」这半） | **10%** | 其余 9 行对已发表字节零影响 |
 | 实现 | 7 / 10（3、4b、5、6、7、8、9） | **70%** | 11 行部分实现，10/12 未实现 |
-| 可表示 | 0 / 10 | **0%** | `'semantic'` 在产品包出现 **0 次**（7 处 `semantic` 全是英文散文注释）；`admission.ts:449` 每次准入都 `type: 'episodic'` |
+| 可表示 | 1 / 10 | **10%** | 送审时是 0：`'semantic'` 在产品包出现 **0 次**，`admission.ts:449` 每次准入都 `type: 'episodic'`。第 98 轮起 `semantic-facts.ts` 的 `memoryForUpdate` 写出 `type: 'semantic'`，`retention.ts` 读它并据此决定有界 store 先丢哪一条；普查同时报出 `cortex-core: MemoryType` **离开**孤儿账本 |
 
 ### 1.4 语义内核可达表（19 行）现状
 
@@ -119,7 +119,7 @@ pnpm check                                    # 绿
 | --- | --- | --- | --- |
 | **E1** | **fact source 存在且 additive**：产品能构造 `KnowledgeFact`，来源是**已计算的** supersession 状态（不新增模型调用、不替换原文） | 存在非测试构造点，且其输入来自 `supersede.ts`/`memory.ts:1603` 的计算结果；一条行为级测试证明同语料下 prompt 字节**因该事实而变** | ✅ **关闭**（§11）：构造点在 `memory.ts` → `semantic-facts.ts`，输入是 `supersede.ts` 的 verdict；`semantic-carry.test.ts` 三条件字节对照（空 store / 开关关 / 两者都有）；0 新模型调用（开与关各 3 次调用） |
 | **E2** | **消费者接线**：`assemble` → `reviseLedger` → `resolveContradiction` 在产品路径被调用 | `semantic-reach.test.ts` 的命中清单**非空**且打印出符号；reach table 对应行改 **P** | ✅ **关闭**（§12）：白名单 5 → 7，且每个值符号都要求**调用点**而非 import；reach 表行 3/6/8/10/11 同提交改 **P**（P 从 5/19 到 11/19）。**2 接 / 1 结清**：`assemble` 与 `reviseLedger` 已接，`resolveContradiction` 由 ADR §6.1 实测 Declined——喂它可以给出的唯一输入，胜者是账本刚驳掉的那个值 |
-| **E3** | **可表示**：`MemoryType` 的 `'semantic'` 有写有读（读 = 影响 selection/渲染/调度之一）**或**两个不可达值被删除且文档同步撤回 | 一条「写入 semantic → 读回并改变行为」的测试；或删除后的类型快照 | ❌ 0 次写入、0 次读取 |
+| **E3** | **可表示**：`MemoryType` 的 `'semantic'` 有写有读（读 = 影响 selection/渲染/调度之一）**或**两个不可达值被删除且文档同步撤回 | 一条「写入 semantic → 读回并改变行为」的测试；或删除后的类型快照 | ✅ **关闭**（§13）：写 = `memoryForUpdate`，读 = `retention.ts` 的 `Record<MemoryType, RetentionRule>`（影响淘汰）；判据是一对——同样 9 次吸收、只差「一个窗口读过 record 0」，对照丢掉 record 0、机制保住它并丢掉 record 1；8 个变异全杀，其中两个只杀机制测试、对照保持绿 |
 | **E4** | **charter 四机制结清**：`consolidate` / `resolveContradiction` 从 0 调用变为**有产品调用者**，或由 ADR 显式 **Declined** 并给出理由与代价 | `grep` 出调用点（非测试）；或 ADR 文件存在且被 `ARCHITECTURE.md` 引用 | ⚠️ **半做**（§12）：`resolveContradiction` 由 `DECISION-SEMANTIC-LAYER-ROUTE.md` §6.1 显式 **Declined**，`ARCHITECTURE.md` 已引用；`consolidate` 仍**未定** |
 | **E5** | **三表同步**：哨兵测试、`AUDIT-SEMANTIC-REACH §3`、`ARCHITECTURE.md` 状态表**同一提交**内一致 | `pnpm check` 绿 + 三处 diff 在同一 commit | ✅ **关闭**（§12）：哨兵（白名单 7 项 + 调用点断言）、reach 表六行、`ARCHITECTURE.md` 两行、`USER-MANUAL.md` 选项表与示例、`PREREGISTRATION` §13.376 全部同一提交 |
 | **E6** | **语义层自身有测量**：至少一次 paired 读数或离线 trace 指标（FEB-30 四项），且**不伤准确率**（判据 `deltaQuestions ≥ −5`，与 S10 同口径） | artifact 有 run id 与配置行；McNemar 双侧 | ❌ 无 |
