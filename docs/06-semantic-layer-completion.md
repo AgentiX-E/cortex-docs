@@ -491,3 +491,112 @@ assumed:  confirmed
 **5 关闭 / 1 半做 / 2 全红。** 剩余最短路径是 **E3**（`MemoryType` 写 `'semantic'` + 一个读取点），随后 E4 的 `consolidate` 与 E6。
 
 一句话：**产品的 prompt 里现在只有一条「值变了」的记录，而且旧值不再以事实的身份出现；为此它也第一次让账本真的写了字——上一轮那个块，是把一个已被驳倒的值和取代它的值并排印出来，只靠一行关系区分。**
+
+## 13. 第 98 轮：`MemoryType` 第一次既被写、也被读
+
+### 13.1 一个字段，三个成员，零个读者
+
+`domain/memory.ts:4` 声明 `'episodic' | 'semantic' | 'procedural'`。到第 97 轮为止：`admission.ts:449` 写死 `'episodic'`，`createMemory` 默认 `'episodic'`，**没有任何代码读过这个字段**（不是选择，不是渲染，不是 FSRS——FSRS 读的是 `stability`）。`'semantic'` 在整个仓库里出现的地方只有一处：那个联合类型的声明本身。
+
+这不只是「语义层没接线」，是**无法表示**：没有值可写，也没有东西会读。E3 的判据原文就是冲着这个来的——*a settable label nobody reads*。
+
+而产品里唯一一个「关于世界的记忆」（相对于「对某个窗口的读数」）的容器，是 `CortexMemory` 的语义槽：8 条被授权的替换，每条是一个带 `supersedes` 边的 `KnowledgeUnit`。它持有 `SemanticUpdate`——一个 unit、一个 fact 顺序、一个 anchor——**里面一个 `MemoryValue` 都没有**。所以产品内存本体论的唯一落点，恰好是内存类型从未到达的地方。
+
+所以 E3 不是「给类型加个标签」。一个内存层的分类学，它的主张就是「不是所有记忆都是同一种东西」；一个有兩種内容、却只有一种类型的 store 说不出这句话，而代价正好在淘汰上：`shift()` 交出的是**持有最久**的那条，对观察是对的，对知识是错的。
+
+### 13.2 写入：五个字段各有来源，三个最容易编造的都留空
+
+`semantic-facts.ts` 新增 `memoryForUpdate`——一条被授权的更新**所是**的那个 `MemoryValue`。
+
+| 字段 | 值 | 来源 |
+| --- | --- | --- |
+| `id` | `update.key` | 去重键，所以一条更新就是一条记录 |
+| `content` | 渲染出的块 | prompt 真的会印出的字符，由 `assemble` 产出而不是在这里描述一遍 |
+| `type` | `'semantic'` | 主张本身 |
+| `source` | 记录头 `[date] speaker:` | 授权所读的那条记录，**不是** `'supersede'`——那说的是机制名，不是出处 |
+| `createdAt` / `lastAccessedAt` | `now` | store 的注入时钟，**不是** `learnedAt`：一条 2026 年被吸收、语料日期是 2023 的条目，不能读起来比持有它的 store 还老 |
+
+`value`、`confidence`、`sourceTrust`、`stability`、`difficulty` 全部交给 `createMemory` 的默认值，也就是一个被准入的 turn 所携带的同一组数。一条 `value: 1` 的语义条目，是关于未来效用的一句没有观察支撑的话。
+
+写这条记录顺带逼出一个修复。`source` 一开始是 `2. [2023/03/12 …] user:`——**渲染器的位置前缀**。那个数字是「某一次渲染里的第几个 turn」，同一条记录在前面多三个 turn 的窗口里就是 `5. `，于是同一句内容的出处会在两次渲染之间变。`splitRecord` 现在剥掉前缀，用的是 `supersede.ts` 找记录边界的那条模式。
+
+### 13.3 读取：表驱动，第二个元素是计数而不是时间戳
+
+`retention.ts` 是 `Record<MemoryType, RetentionRule>`，`leastRetained` 比较它产出的那一对。
+
+| 类型 | 秩 | 为什么 |
+| --- | --- | --- |
+| `semantic` | `[lastAccessedAt, reads]` | 靠**被使用**留住；没有任何窗口引用过的条目最先走 |
+| `episodic` | `[createdAt, 0]` | 一个 turn 是对一个窗口的读数；后来的窗口引用过它几次，不是它还值不值得持有的依据 |
+| `procedural` | `[createdAt, 0]` | 同上，写出来而不是默认掉，所以表里没有沉默的成员 |
+
+用表而不是 `if (type === 'semantic')`，理由很具体：后者的另外两个成员会退化成一个注释，而将来加第四个成员时会**落进 `else` 恰好做的事**，而不是编译错误。
+
+第二个元素是**读回计数**，理由不是偏好。产品的时钟是注入且固定的（`CortexMemoryOptions.now`），store 给每条记录盖同一个瞬间，所以同一个实例内每条 `lastAccessedAt` 都相等——无论有没有窗口引用过它。只用 `[lastAccessedAt]` 的秩排序不了任何东西，而断言它的测试会**在读回从未发生**的 store 上通过。计数是 store 真的观测到的量，所以 tie-break 是它。
+
+`reads` 存在 store 自己的记录上，**不写进** `MemoryValue.value`：后者的契约是 `[0, 1]`，生产者是准入闸门；两个尺度共用一个字段，正是 `math/fsrs.ts` 在时间维度上花了一整段 docstring 修掉的缺陷。
+
+### 13.4 对照：一次读回，两个不同的被驱逐者
+
+`semantic-memory-type.test.ts` 让两个 store 各走 9 次吸收（第 8 次填满边界，第 9 次越过），只差**一件事**：
+
+| 条件 | store 看到了什么 | 谁被驱逐 |
+| --- | --- | --- |
+| A 对照 | 8 条更新，中间没有窗口 | `record 0`，最旧的那条 |
+| B 机制 | 8 条更新，一个窗口读过 `record 0` | `record 1`，它之后的那条 |
+
+一个不读 `type` 的 store——以及它替换掉的 `shift()`——在 A 和 B 上到达同一个状态。**只有这一对**才能把「规则读了类型」和「规则恰好和插入顺序一致」分开，这也是为什么单独一条 B 只是关于代码的断言，而不是关于产品的。
+
+`semanticCarryCensus()` 增加 `stored`：一个**按 `MemoryType`** 而不是按事件的普查。8 条 `episodic` 在那个对象的每一个其他数字上都是 8 次吸收；类型普查是产品自己的分类学在读本里唯一出现的地方。
+
+### 13.5 八个变异，全部被杀
+
+| # | 变异 | 杀死它的测试 |
+| ---: | --- | --- |
+| 1 | `type: 'semantic'` → `'episodic'` | 四条端到端全红 |
+| 2 | `leastRetained` → `return 0`（旧的 `shift()`） | **只有**机制测试，对照仍绿 |
+| 3 | `stored.reads += 1` → `+= 0` | **只有**机制测试 |
+| 4 | 剥前缀的正则复原 | `source` 测试 |
+| 5 | `content` → `''` | `content` 测试 |
+| 6 | `id` → `crypto.randomUUID()` | `id` 测试 |
+| 7 | `createdAt` → `learnedAt` | 时间戳测试 |
+| 8 | `source` → 正文 | `source` 测试 |
+
+第 2、3 个是关键：各自**只杀机制测试、对照保持绿**。这才是「这一对是因果的，不是并列的」的证据。
+
+### 13.6 普查自己抓到的东西
+
+`tools/export-census.mjs` 报出 `cortex-core: MemoryType` **离开**了孤儿账本——因为 `retention.ts` 现在 import 它。它原本被归为 `referenced-locally`（符号有活的调用点，只是 `export` 关键字多余）——但对一个联合类型成员来说，这个分类本身就是问题：类型被导出、被文档引用、被**零处读取**。
+
+同一门禁还抓到本轮写下又撤回的两个导出：`retentionRank`（排序和它喂的那个选择是同一个决定，所以边界是 `leastRetained`）和 `Retainable`（外部没有东西需要命名那个参数类型）。这是连续第五轮，门禁在**写下它的同一轮**里报出了作者刚声明的符号。
+
+### 13.7 读数
+
+| 项 | 值 |
+| --- | --- |
+| `pnpm check` | **绿**（`manual:check`：31 示例、34/34 选项、2 张契约表；字段数未变，仍 28） |
+| TS 测试 | **6,229**（+17：memory 1,422（+16）、core 932、eval 3,423、ai 327、storage 125） |
+| 覆盖率 | **168** 文件（+1：`retention.ts`）、16 豁免、**0 ratchet**；memory stat 99.86 / bran 99.67 / func 100 / line 100；`retention.ts` 与 `semantic-facts.ts` 均 100/100/100/100 |
+| 变异 | **8 / 8 红**（其中第 2、3 个只杀机制测试、对照保持绿） |
+| 导出普查 | 1,180 → **1,182** exports、715 → **718** with caller、465 → **464** orphan（`cortex-core: MemoryType` 离开账本，因为它第一次被 import）；**另撤回 2 个**自写导出 `retentionRank`、`Retainable` |
+| 门禁自检 | `cortex-core` 的 `export-census-gate` 在基线更新前**红过**（总数不匹配），这正是它该做的事 |
+| reach 表 | **不变，P 11/19**——`MemoryType` 不在那 19 行里，它是 §5.2 说的行 1 前提 |
+| 派发 | **0 元** |
+| 产品表 | 未动 **91.25%** |
+
+### 13.8 位置
+
+| 判据 | 第 97 轮 | 现在 |
+| --- | --- | --- |
+| E1 fact source | ✅ | ✅ |
+| E2 消费者接线 | ✅ | ✅ |
+| **E3 `MemoryType`** | ❌ | ✅ **关闭**：`memoryForUpdate` 写、`retention.ts` 读、驱逐结果随之改变；对照 + 机制成对断言，8 个变异全杀 |
+| E4 四机制结清 | ⚠️ 半做 | ⚠️ 半做（`consolidate` 仍未定，E4 拥有它） |
+| E5 三表同步 | ✅ | ✅ |
+| E6 语义层测量 | ❌ | ❌（预测未变：500 题上 `deltaQuestions === 0`，非零即跨题泄漏） |
+| E7 对外口径 | ✅ | ✅ |
+| E8 证据组装 | ✅ | ✅ |
+
+**6 关闭 / 1 半做 / 1 全红。** 剩下的两条是同一条：E4 的 `consolidate`（要么一个调用点，要么一个显式 Declined），以及 E6——唯一需要派发的一条，而它正是 `S10`/`S9` 解禁的条件。
+
+一句话：**store 现在知道它手里哪一条是知识、哪一条只是读数，并且据此决定先丢哪一条——为此它第一次写下了一类型，也第一次有一个读者因为这个类型而做了不同的决定。**
