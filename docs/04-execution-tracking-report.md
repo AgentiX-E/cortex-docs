@@ -24805,3 +24805,62 @@ E4 的原文：`consolidate` / `resolveContradiction` 从 0 调用变为**有产
 **7 关闭 / 1 全红，与第 101 轮相同**，但 E6 的性质变了：从「无从下手」变成「一条被 `void` 挡住的判据」。
 
 一句话：**这一轮没有给语义层一个数，而是给了它拥有一个数的能力，并让那条判据在拿到之前拒绝通过。**
+
+---
+
+## 99 第 103 轮：E6 的障碍是一个总体——用真实 runner 派发，`S13` 第一次通过
+
+### 99.1 触发
+
+用户指令：**「用 Github Workflow 和 Runner 真实派发。」** 这是对第 102 轮收尾「剩下一步我在此环境做不到」的直接回应：不再解释为什么做不到，而是用仓库自带的 workflow 与 runner 真跑。
+
+### 99.2 核查：障碍不是凭据
+
+第 102 轮把三件障碍写在纸上（无选择器能把一个语料问两次、`CORTEX_MEMORY_SEMANTIC_CARRY` 只说产品侧、池每 worker 一实例且领取是 `next++`），并误记了一条「本环境没有 reader 凭据」。本轮核查纠正了它：`/actions/secrets` 返回 `[]` 只说明**仓库级**没有，而 CI 的 `Verify` 一直绿、派发后 runner 真的答了 144 题 × 2 侧——凭据来自**组织级** secrets（token 无权枚举，403）。所以真实障碍只剩一个：**一个能承载该机制的总体**。
+
+### 99.3 交付（四个对象）
+
+1. **`Question.corpus` + `two-window.ts`**：`CORTEX_WINDOWS`（默认 1，上限 8，拒绝 0/小数/超限），id 加 `#wN`，`windows = 1` 返回**入参本身**；排在选择器最后（`LIMIT`/`capability` 必须看到语料而不是窗口）；与 restore 计划互斥。
+2. **`claimRun`**：从领取到的索引起，把 `corpus` 相同的索引**原子整段**领走，worker 在自己的实例上按序回答——不预切片，慢 worker 不会成为关键路径。无 `corpus` 的题目仍只领一个索引。
+3. **`arm-pairing.ts` + `CORTEX_MEMORY_AB`**：`reference`（默认）/ `carry`；`carry` 用**一个** `buildCortex(carry)` 造两侧。`carry` 而处理侧没开时，**先于第一次调用**拒绝（两个对照 + `0` delta 是「从未施加处理」被发布成零结果）。
+4. **`semantic-carry.yml` + `tools/dispatch-semantic-carry.py`**：七个 input，预设写在明面上，一处声明过的偏离 `review_pass: supersede`（吸收只发生在这一遍、这一条路由上），两侧都开。
+
+报告新增 `population`（`windows`/`corpora`/`marker`），Markdown 在 `Dataset file` 下一行渲染；`AblationReport` 的字段缺席规则不变。
+
+### 99.4 读数
+
+| 项 | 值 |
+| --- | --- |
+| 派发 | run [`43590434060`](https://github.com/AgentiX-E/cortex/actions/runs/43590434060)，artifact `14115493476`，`completed success`，约 2 小时 |
+| 总体 | `72 corpora x 2 windows` = 144 题（`capability=KU`、`ablation_runs=2`、`workers=4`、`thinking=disabled`） |
+| carry census | `absorbed 3 / dropped 0 / matched 8 / served 8 / withheld 8`；`stored.semantic 3`（`absorbed − dropped = Σ stored` 成立） |
+| 正确数 | 控制 `245/288 = 85.07%` vs 处理 `244/288 = 84.72%`，净差**一题** |
+| delta | 第二窗口 **`0.0`**（`n = 72`）；第一窗口 `-0.5`；全部 `-0.5`（`n = 144`） |
+| McNemar | 第二窗口首 repetition `b = 3`、`c = 1`、`p = 0.6250` |
+| supersession | `attempted 285 / replaced 13 / refused 272`（`no-change 204`、`restates 63`、`not-later 4`、`date-not-on-line 1`） |
+| 变异 | **13 / 13 杀** |
+| TS 测试 | **6,299**（eval 3,482，+28） |
+| 覆盖率 | 170 文件 / 16 豁免 / **0 ratchet**；eval 99.58 / 98.64 / 99.83 / 99.77 |
+| 导出普查 | 1,189 / 725 / 464 |
+| 验收门禁 | exit 0；`S13` = **8 `pass`**、`S12` = `unrun` |
+| 产品表 | 未动 **91.25%** |
+
+矩阵位移（本轮唯一的状态变化）：
+
+```
+S12  —    >= -5   unrun   semantic layer: carrying an authorised update into a later window
+S13  8    >= 1    pass    semantic layer: whether the treatment reached any window at all
+```
+
+**`S13` 从 `unrun` 变 `pass`，值 `8`**——八个题的窗口仍携带三份被吸收 update 之一所授权的记录，跨四个 worker 求和。`S12` 从 `void` 退回 `unrun`：筛查总体把 delta 写在 `screening.deltaQuestions`、让 `paired.deltaQuestions` 缺席，于是读那个键的行没有值——**不假装通过**。
+
+### 99.5 两处陷阱，写下来因为它们都长得像成功
+
+1. **变异存活源于测试传错了参数槽位。** `runBenchmark` 九个位置参数，`corpus-run-claim.test.ts` 把池传进第八个（`budgetMs`），于是跑了一趟「穿并发外衣的串行 pass」——`claimRun` 被改回单索引仍全绿。修法：`runPooled`/`runSerial` 两个具名 helper + 注释。
+2. **`supersessionConsultations` 不是 carry 的证据。** 144 题**每一题**都是 `4`，控制侧一样；carry 唯一的证据是 census 的 `matched`/`served`/`withheld`。逐题列上恒定的数，不可能是「抵达了其中八行」的证据——差一步就把这条写进读数。
+
+### 99.6 位置
+
+**7 关闭 / 1 全红，与第 102 轮相同**，但 E6 的阻塞换了性质：从「缺一个总体」变成「缺一次装得下 500×4×2×2 的派发」。`S12` 的注册总体不是一个 job 能跑完的量。
+
+一句话：**语义层抵达了八个窗口、一个都没推动，而测这件事的判据现在等的是一个总体，而不是一个机制。**

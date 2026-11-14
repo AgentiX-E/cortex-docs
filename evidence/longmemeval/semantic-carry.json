@@ -1,0 +1,71 @@
+{
+  "generatedBy": "evidence/longmemeval/scripts/semantic_carry_analysis.py",
+  "sourceRun": "43590434060",
+  "tier": "screening",
+  "population": {
+    "windows": 2,
+    "corpora": 72,
+    "marker": "#w"
+  },
+  "arm": {
+    "reviewPass": "supersede",
+    "semanticCarry": true,
+    "reader": "deepseek-chat",
+    "judge": "deepseek-chat",
+    "runs": 2
+  },
+  "semanticCarry": {
+    "absorbed": 3,
+    "dropped": 0,
+    "matched": 8,
+    "served": 8,
+    "withheld": 8,
+    "stored": {
+      "episodic": 0,
+      "procedural": 0,
+      "semantic": 3
+    }
+  },
+  "windows": {
+    "all": {
+      "n": 144,
+      "deltaQuestions": -0.5,
+      "discordant": {
+        "baselineOnly": 4,
+        "featureOnly": 3
+      }
+    },
+    "first": {
+      "n": 72,
+      "deltaQuestions": -0.5,
+      "discordant": {
+        "baselineOnly": 3,
+        "featureOnly": 2
+      }
+    },
+    "second": {
+      "n": 72,
+      "deltaQuestions": 0.0,
+      "discordant": {
+        "baselineOnly": 1,
+        "featureOnly": 1
+      }
+    }
+  },
+  "mcnemar": {
+    "p": 0.625,
+    "b": 3,
+    "c": 1
+  },
+  "verdict": {
+    "reached": true,
+    "withinThreshold": true,
+    "readable": true,
+    "rule": "delta over the second window >= -5 AND reach >= 1"
+  },
+  "screening": {
+    "deltaQuestions": 0.0,
+    "n": 72,
+    "blocker": "measured on a scoped population; S12 is registered on 500 corpora x 4 repetitions, where -5 questions is -1.0 point rather than the ratio this sample carries"
+  }
+}

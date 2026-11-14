@@ -1007,3 +1007,128 @@ E6 是语义层八条退出判据的最后一条：*paired readout，`deltaQuest
 - **不主张准确率。** `semanticCarry` 仍默认关；`CORTEX_MEMORY_SEMANTIC_CARRY` 未设是每一份归档 artifact 的产出状态，现在仍然如此。
 
 一句话：**这一轮没有给语义层一个数，而是给了它拥有一个数的能力，并让那条判据在拿到之前拒绝通过。**
+
+## 18. 第 103 轮：E6 的障碍是一个总体，而建它需要四个对象
+
+第 102 轮的收尾句是「这一轮没有给语义层一个数，而是给了它拥有一个数的能力」。连着八轮说这句话，就该问那个能力还缺什么——**缺的不是 reader 凭据，是一个总体**。`S13` 的 `onMiss` 早就写着修法：*同一语料两个窗口*。而在这一轮之前，仓库里没有任何东西能造出这样一个总体。
+
+### 18.1 缺的又是三个对象
+
+| # | 对象 | 事实 | 表现 |
+| --- | --- | --- | --- |
+| 1 | 总体 | `loadLongMemEval` 一题一实例，每实例自带 haystack；没有任何选择器能把一个语料问两次 | 机制没有可作用的总体 |
+| 2 | 配对 | `CORTEX_MEMORY_SEMANTIC_CARRY` 只说**产品侧**做什么，没有东西说基线是什么。`S9` 用两次派发相比，付掉了 `PREREGISTRATION` §2.2 存在的那个漂移 | delta 会是两次运行之差，而不是一次运行两侧之差 |
+| 3 | store | 池给每个 worker 自己的 `CortexMemory`，而领取循环一次只发一个**索引**。一个语料的两个窗口可能被两个 worker 答，第二个读的是从未吸收过第一个的 store | 处理会运行、会 reach 到 0——正是 `S13` 拒绝的那种读数 |
+
+三者仍是一条链，第三条同样最隐形：语料被切开时产出 `matched: 0`，而 `matched: 0` 与「机制什么都没带上」是同一个数。
+
+### 18.2 乘法，以及它在选择器里的位置
+
+`two-window.ts` 把已加载的 dataset 按语料问 `windows` 次：id 加 `#wN`，同一语料的题相邻，`windows = 1` 返回**入参本身**。
+
+- **恒等是同一个对象，不是副本。** 每一份归档 artifact 都是「一题一窗口」产出的，内容相同的副本仍然是从 dataset 里穿过的第二条代码路径。`two-window.test.ts` 里的 `toBe` 就是这句话的可执行形式。
+- **语料优先的顺序是契约，不是偏好。** `Question.corpus` 把它写死：相邻、同一实例、升序。§18.3 是它的执行者。
+- **它排在选择器最后。** `LIMIT` 问多少个语料、`CORTEX_CAPABILITY` 问哪些，两者都必须看到**语料**而不是窗口；否则 `LIMIT=78, capability=KU, windows=2` 会变成「156 题，其中一半是第二窗口」，样本量取决于一个日志里看不见的乘法。
+- **它与 restore 计划互斥。** 计划按**录制的题号**匹配，而乘法重命名了每一个；同时给会让 `restrictDatasetToPlan` 一个都选不中——而且是在数据集下载之后、报的还是计划的问题。所以它在读出后立刻拒绝。
+
+### 18.3 一个语料，一个实例——而领取仍然是动态的
+
+池的领取是 `next++`：索引被原子地取走，取走它的 worker 回答它。那对独立总体是对的，对一个语料是错的；而修法**不是**预切片数组——计数器上方的注释写着原因：切片会让慢 worker 的那一份成为整趟的关键路径。
+
+`claimRun` 改成领取**整段**：从被取走的索引起，把后面 `corpus` 相同的索引一并取走，worker 在自己的实例上按序回答。仍然是按需领取，所以负载均衡不变；只是原子，所以语料切不开。没有 `corpus` 的题目只领一个索引，也就是每一份归档 artifact 产出的那一趟。
+
+### 18.4 对照组是同一个系统，且这条配对拒绝变成两个对照
+
+`arm-pairing.ts` 读 `CORTEX_MEMORY_AB`：`reference` 是注册配对（参考流水线对认知系统）且是默认值；`carry` 用**一个**构造函数造两侧，中间只有一个 flag。于是 `run-ablation.ts` 只有一个 `buildCortex(carry)` 和两个调用点，而不是两份会各自演化、直到其中一份被改动的字面量。
+
+真正值得写下来的是那条拒绝：`ab=carry` 而产品侧 `semanticCarry` 没开，就是两个对照、delta 为 `0`、census 为 `0`——一个从未施加处理的比较被发布成零结果。它**先于第一次调用**被拒绝，所以发现它的代价是零。
+
+### 18.5 派发
+
+`semantic-carry.yml` + `tools/dispatch-semantic-carry.py`，真实 runner，预设写在明面上，只有一处声明过的偏离：`review_pass: supersede`。吸收只发生在那一遍、那一条路由上；用注册的 `bare` 派发 carry，就是派发一个没有东西可带的机制。这一遍在**两侧都开**，所以配对仍然只隔离 carry；它不隔离这一遍，而 artifact 上的 `memoryArmConfig.reviewPass` 就是读者核查它的位置。
+
+### 18.6 十三处变异，与那个「先活下来」的
+
+每处变异施加到源码、跑它自己的测试套件、再还原。套件仍然通过就是**存活**，意味着套件测的不是被删掉的那一行。
+
+| # | 变异 | 归属套件 | 结果 |
+| ---: | --- | --- | --- |
+| 1 | `claimRun` 在有语料时也一次只领一个索引 | `corpus-run-claim.test.ts` | 杀 |
+| 2 | 一个语料的窗口降序领取 | `corpus-run-claim.test.ts` | 杀 |
+| 3 | `withWindows` 在一窗口时返回副本而非入参 | `two-window.test.ts` | 杀 |
+| 4 | 窗口标记改成前缀（`#w1q` 而非 `q#w1`） | `two-window.test.ts` | 杀 |
+| 5 | 乘法后的题目不带 `corpus` | `two-window.test.ts` | 杀 |
+| 6 | `readWindowCount` 接受 0 | `two-window.test.ts` | 杀 |
+| 7 | 未设 `CORTEX_WINDOWS` 时按 2 | `two-window.test.ts` | 杀 |
+| 8 | 未设 `CORTEX_MEMORY_AB` 时按 `carry` | `arm-pairing.test.ts` | 杀 |
+| 9 | population 进报告时被丢掉 | `report-population.test.ts` | 杀 |
+| 10 | Markdown 里的 population 行被丢掉 | `report-population.test.ts` | 杀 |
+| 11 | carry 侧改用 arm 选项而非参数造 | `semantic-carry-arm.test.ts` | 杀 |
+| 12 | 两种配对的控制侧都用参考流水线 | `semantic-carry-arm.test.ts` | 杀 |
+| 13 | `ab=carry` 而处理侧没开时不拒绝 | `semantic-carry-arm.test.ts` | 杀 |
+
+第 1 条要写下来，因为它**第一次是存活的**，而它存活的原因是测试本身错得像是成功：`runBenchmark` 有九个位置参数，`corpus-run-claim.test.ts` 把 worker 池传进了第八个——那是 `budgetMs`。TypeScript 不报错，套件于是跑了一趟**穿着并发参数外衣的串行 pass**：只有一个 worker、一次只有一个 `claimRun`，于是被改回 `claim()` 的 `claimRun` 依然全部答对，变异存活。修法是两个具名 helper（`runPooled` / `runSerial`）加一行注释——现在套件在「这趟不是并发的」时会失败，而这是让那条变异读起来像变异的唯一办法。
+
+这条教训不止于本文件：**存活的变异首先是关于套件的问题，其次才是关于源码的问题**；本轮的答案是套件一直在测另一件仪器的名字。
+
+目标文本找不到的变异报 `SETUP-FAIL` 并**计入存活**。这是同一条规则：没被施加过的变异，与施加了却没杀掉任何东西的变异无法区分；把「找不到那一行」当通过的脚手架，会在一次重命名之后交出一块干净的板子。
+
+### 18.7 读数
+
+Run [`43590434060`](https://github.com/AgentiX-E/cortex/actions/runs/43590434060)，artifact `14115493476`，`completed success`，约两小时。预设：`capability=KU`、`ablation_runs=2`、`workers=4`、`thinking=disabled`、`CORTEX_MEMORY_AB=carry`、`CORTEX_MEMORY_SEMANTIC_CARRY=1`、`CORTEX_WINDOWS=2`、`review_pass=supersede`。
+
+| 对象 | 读数 |
+| --- | --- |
+| 总体 | `72 corpora x 2 windows` = 144 题，id 带 `#w` |
+| carry census | `absorbed 3 / dropped 0 / matched 8 / served 8 / withheld 8`；`stored {episodic 0, procedural 0, semantic 3}` |
+| 不变量 | `absorbed − dropped = 3 = Σ stored`——`semanticCarryAcross` 折叠四个 worker 后 store 的算术仍成立 |
+| 正确数 | 控制 `245/288 = 85.07%`，处理 `244/288 = 84.72%`，两次 repetition 合起来差**一题** |
+| delta（第二窗口） | **`0.0`**，`n = 72`（`baselineOnly 1`、`featureOnly 1`） |
+| delta（第一窗口） | `-0.5`，`n = 72`——吸收发生在这一窗口，机制动不了它 |
+| delta（全部窗口） | `-0.5`，`n = 144` |
+| McNemar（第二窗口、首个 repetition） | `b = 3`、`c = 1`、`p = 0.6250` |
+| 四个不一致 | 得 `c4ea545c#w2`；失 `10e09553#w2`、`50635ada#w2`、`f685340e#w2` |
+| supersession | `attempted 285 / replaced 13 / refused 272`——`no-change 204`、`restates 63`、`not-later 4`、`date-not-on-line 1`，`unreadable`/`no-quote`/`agrees`/`not-in-evidence` 全 `0` |
+
+矩阵在这一次之后：
+
+```
+S12  —    >= -5   unrun   semantic layer: carrying an authorised update into a later window
+S13  8    >= 1    pass    semantic layer: whether the treatment reached any window at all
+```
+
+**`S13` 第一次通过，且是在 `8` 上通过、不是 `0`。** 八个题的答案取自一个仍携带三份被吸收 update 之一所授权记录的窗口。这是本项目第一次有「`semanticCarry` 抵达过任何东西」的证据；此前每一次派发都读 `0`，而 `0` 与「机制什么都不做」是同一个数——这就是那条判据是**计数**而不是 delta 的原因。
+
+**`S12` 是 `unrun`，这是设计结果而不是失败。** 这次是筛查配对（72 语料 × 2 repetition），`semantic_carry_analysis.py --tier screening` 把 delta 写在 `screening.deltaQuestions` 下、让 `paired.deltaQuestions` **缺席**，于是读那个键的行没有值。在这一总体上的 `void → pass` 会是对「500 语料 × 4 repetition」的断言，而实测是 72 × 2。筛查对确实产出了第二窗口的 `0.0`，它被写进 `evidence/longmemeval/semantic-carry.json` 的 `screening` 键——一个矩阵不读的键。
+
+**一处不是读数的读数，写下来因为我差点当读数发布。** 144 个题**每一个**都带 `supersessionConsultations: 4`，`0ddfec37#w2` 还带四次 `supersessionReplacements` 且零拒绝；把它们读成 carry 抵达很方便。它们不是：那些咨询是**supersession 这一遍**在逐条读窗口里的候选事实，在整个总体上均匀（144/144），控制侧同样有。carry 在这份 artifact 里唯一的证据是 census——`matched`、`served`、`withheld`——因为 census 是唯一由语义 store 而不是由它前面那一遍产生的字段。**每一行都是同一个数的逐题列，不可能是「抵达了其中八行」的证据。**
+
+### 18.8 位置
+
+| 项 | 值 |
+| --- | --- |
+| TS 测试 | **6,299**（core 946 / memory 1,419 / **eval 3,482（+28）** / ai 327 / storage 125） |
+| 覆盖率 | **170** 文件、16 豁免、**0 ratchet**；cortex-eval 83 文件 99.58 / 98.64 / 99.83 / 99.77 |
+| 变异 | **13 / 13 杀** |
+| 导出普查 | 1,189 / 725 / 464（+7 / +7 / 0） |
+| 验收门禁 | exit 0；`S13` = **8 `pass`**、`S12` = `unrun`（`paired` 键缺席） |
+| `docs:crosscheck` | 65 / 74 marker 通过，9 skipped |
+| 派发 | 一次真实 run，约 2 小时 |
+| 产品表 | 未动 **91.25%** |
+
+| 判据 | 第 102 轮 | 现在 |
+| --- | --- | --- |
+| E1 / E2 / E3 / E4 / E5 / E7 / E8 | ✅ | ✅ |
+| **E6 语义层测量** | ❌（有臂、有行、有 reach；缺总体） | ❌（**reach 已非零 8；注册总体待派发**） |
+
+**7 关闭 / 1 全红，与上一轮相同**——但 E6 的阻塞从「缺一个总体」变成「缺一次能装下 500×4×2×2 的派发」。
+
+### 18.9 这轮不主张什么
+
+- **不主张 carry 已有价值。** 第二窗口 delta 是 `0.0`，McNemar `3 : 1`（`p = 0.625`），两次 repetition 里净失一题。机制抵达了；抵达是否有用没有答案，`S12` 在注册总体派发前保持 `unrun`。
+- **不主张 `S13` 的 `8` 稳定。** 一次 run、四个 worker、两次 repetition，而 census 是跨实例求和：同样形状的第二次派发可能读出另一个数，且两个都不算错。这次 run 确立的是**这个计数器在结构上不是零**。
+- **不主张注册总体上的任何数。** 500 语料 × 4 repetition 是 4,000 题 × 2 侧 × 4 特性，不是一个 job 装得下的。`8` 是 72 语料上的数，不能按算术放大：第二窗口才是 carry 能落地的地方，而 500 里有多少个带 carry，正是注册派发要测的东西。
+- **不主张这一遍是免费的。** `review_pass=supersede` 在两侧都开，所以配对只隔离 carry、不隔离这一遍；285 次尝试里 272 次被拒，其中非 `no-change`/`restates` 的五次（`not-later 4`、`date-not-on-line 1`）是这一遍按未来某一轮可能想审计的理由拒绝的。
+- **不改默认。** `CORTEX_MEMORY_SEMANTIC_CARRY` 在这些 workflow 之外仍未设置，每一份归档 artifact 依旧是在未设状态下产出的。
+
+一句话：**语义层抵达了八个窗口、一个都没推动，而测这件事的判据现在等的是一个总体，而不是一个机制。**
