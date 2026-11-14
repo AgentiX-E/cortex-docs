@@ -24,7 +24,7 @@ pnpm check                                    # 绿
 | 语义内核（19 行可达表）现状 | **P 5 / E 5 / I 8 / T 1**；其中语义相关只有 **2 行 P**（answer-side supersession、aggregation），store-side 语义 **0 行 P** |
 | 送审报告的 5 条建议 | **2 条已关闭**（T1 部分、T2 的结构阻塞）、**3 条未动**（T3/T4/T5） |
 | 报告自身陈述 | **6 处需要修正**：2 处已被本项目改掉、1 处算术不可满足、3 处计数/状态漂移 |
-| 是否可解禁 SOTA | **否**。语义层 7 条 exit criteria（§5）一条都未满足；S10/S9 与全部 SOTA 队列本轮**冻结** |
+| 是否可解禁 SOTA | **否**。8 条 exit criteria（§5）现为 **3 关闭（E1 / E7 / E8）、1 半做（E5）、4 全红**；S10/S9 与全部 SOTA 队列本轮**冻结** |
 
 一句话：**产品册上的「语义记忆」这一格，代码里写不出来、产品读不到、测量没测过；报告把它定位为「缺一个 fact source」，这个定位是对的，但它给出的修法与判据里有 3 处会把人带到错的地方。**
 
@@ -117,13 +117,13 @@ pnpm check                                    # 绿
 
 | # | 判据 | 验证方式 | 现状 |
 | --- | --- | --- | --- |
-| **E1** | **fact source 存在且 additive**：产品能构造 `KnowledgeFact`，来源是**已计算的** supersession 状态（不新增模型调用、不替换原文） | 存在非测试构造点，且其输入来自 `supersede.ts`/`memory.ts:1603` 的计算结果；一条行为级测试证明同语料下 prompt 字节**因该事实而变** | ❌ 唯一构造点在 arm |
+| **E1** | **fact source 存在且 additive**：产品能构造 `KnowledgeFact`，来源是**已计算的** supersession 状态（不新增模型调用、不替换原文） | 存在非测试构造点，且其输入来自 `supersede.ts`/`memory.ts:1603` 的计算结果；一条行为级测试证明同语料下 prompt 字节**因该事实而变** | ✅ **关闭**（§11）：构造点在 `memory.ts` → `semantic-facts.ts`，输入是 `supersede.ts` 的 verdict；`semantic-carry.test.ts` 三条件字节对照（空 store / 开关关 / 两者都有）；0 新模型调用（开与关各 3 次调用） |
 | **E2** | **消费者接线**：`assemble` → `reviseLedger` → `resolveContradiction` 在产品路径被调用 | `semantic-reach.test.ts` 的命中清单**非空**且打印出符号；reach table 对应行改 **P** | ❌ 命中 = 0 |
 | **E3** | **可表示**：`MemoryType` 的 `'semantic'` 有写有读（读 = 影响 selection/渲染/调度之一）**或**两个不可达值被删除且文档同步撤回 | 一条「写入 semantic → 读回并改变行为」的测试；或删除后的类型快照 | ❌ 0 次写入、0 次读取 |
 | **E4** | **charter 四机制结清**：`consolidate` / `resolveContradiction` 从 0 调用变为**有产品调用者**，或由 ADR 显式 **Declined** 并给出理由与代价 | `grep` 出调用点（非测试）；或 ADR 文件存在且被 `ARCHITECTURE.md` 引用 | ❌ 两者皆 0，无 ADR |
-| **E5** | **三表同步**：哨兵测试、`AUDIT-SEMANTIC-REACH §3`、`ARCHITECTURE.md` 状态表**同一提交**内一致 | `pnpm check` 绿 + 三处 diff 在同一 commit | ❌ 未开始 |
+| **E5** | **三表同步**：哨兵测试、`AUDIT-SEMANTIC-REACH §3`、`ARCHITECTURE.md` 状态表**同一提交**内一致 | `pnpm check` 绿 + 三处 diff 在同一 commit | ⚠️ **半做**（§11）：哨兵、reach 表行 4（`I → P`）、`ARCHITECTURE.md`（27→28 字段 + 一行新状态）本轮同提交；`assemble` 那几行要等 E2 |
 | **E6** | **语义层自身有测量**：至少一次 paired 读数或离线 trace 指标（FEB-30 四项），且**不伤准确率**（判据 `deltaQuestions ≥ −5`，与 S10 同口径） | artifact 有 run id 与配置行；McNemar 双侧 | ❌ 无 |
-| **E7** | **对外口径一致**：README、白皮书 §4、`ARCHITECTURE.md` 中语义层行与代码一致 | `pnpm docs:crosscheck` + 人工对表 | ⚠️ README 已改，白皮书 #3 已改，`ARCHITECTURE.md` 字段数已改 |
+| **E7** | **对外口径一致**：README、白皮书 §4、`ARCHITECTURE.md` 中语义层行与代码一致 | `pnpm docs:crosscheck` + 人工对表 | ✅ **关闭**（§11）：`USER-MANUAL.md` 新增 `semanticCarry` 行与可编译示例，`manual:check` 强制（34/34 选项有示例）；`ARCHITECTURE.md` 新增「Semantic update carry」行 |
 | **E8** | **证据组装正确**（§8 新增）：artifact 字段自述语义（每题实际路由 + 交付窗口角色直方图）+ `unclassified` 计数；一条行为级测试证明「声明 `evidenceRoles=['user']` 的窗口不含被排除角色」 | 审计读 `route` 而不是从 `capability` 反推；角色对照读产品自己的 `lastRoleCensus()` 而不是 eval 侧正则 | ✅ **关闭**（§10）：`#resetPerQuestion`（6 测试 6 变异）+ `lastRoute()` / `lastRoleCensus()` 贯通到 artifact（9 测试 9 变异），两层合计 15 变异全杀 |
 
 > **E3 是这一套里最容易被跳过的一条**，也是「语义层」这个词配不配用的分界线：一个写不出来的 `MemoryType` 值意味着连「未接线」都不成立——它不是「功能没开」，是「功能无法被表达」。
@@ -349,19 +349,58 @@ admission=candidates:198582+admitted:78884+rejected:119698+min:0.008+max:0.500+m
 
 | 判据 | 状态 |
 | --- | --- |
-| E1 fact source | ❌ 唯一非测试 `KnowledgeFact` 构造点仍在 arm |
+| E1 fact source | ✅ **关闭**（第 96 轮，§11） |
 | E2 消费者接线 | ❌ 命中 0 |
 | E3 `MemoryType` 可表示 | ❌ 0 写 0 读 |
 | E4 四机制结清 | ❌ 0 调用、无 ADR |
-| E5 三表同步 | ❌ 未开始 |
+| E5 三表同步 | ⚠️ 半做（第 96 轮：哨兵 + reach 表 + ARCHITECTURE 同提交；`assemble` 行待 E2） |
 | E6 语义层测量 | ❌ 无 |
-| E7 对外口径 | ⚠️ README 已加 evidence assembly 段；白皮书 §4 的 10 行仍未全对齐 |
+| E7 对外口径 | ✅ **关闭**（第 96 轮，§11：`manual:check` 强制 34/34） |
 | **E8 证据组装正确** | ✅ **关闭** |
 
-**8 条里 1 条关闭、1 条部分、6 条全红。** 下一项是 **E1（fact source）**——它是 E2/E3/E4 的前置：没有事实就没有可装配的语义单元；有了事实，`assemble → reviseLedger → resolveContradiction` 才有输入，`MemoryType` 的 `'semantic'` 才有写入方。
+**8 条里 1 条关闭、1 条部分、6 条全红。**（这是第 95 轮的读数。第 96 轮把 E1 与 E7 关掉、E5 做到一半，见 §11。）下一项是 **E1（fact source）**——它是 E2/E3/E4 的前置：没有事实就没有可装配的语义单元；有了事实，`assemble → reviseLedger → resolveContradiction` 才有输入，`MemoryType` 的 `'semantic'` 才有写入方。
 
 `S10` / `S9` 的 500×4 对照对**仍在冻结区**。
 
 ### 10.7 一句必须写清的话
 
 E8 让 artifact 说得清「走了哪条路、窗口里是什么角色」，但**它一个字也没让答案更准**。它的价值在下一轮：当 E1–E7 的接线真正改变 prompt 字节时，能分辨「字节变了因为语义层」与「字节变了因为别的原因」的，就是这两个字段。**仪器完备不等于测量完成**。
+
+## 11. 第 96 轮：事实源落地，以及它逼出的「守卫从未生效」
+
+### 11.1 三件独立的事，按落地顺序
+
+| # | 事 | 判据 |
+| ---: | --- | --- |
+| 1 | `docs/DECISION-SEMANTIC-LAYER-ROUTE.md`（cortex 仓）：语义层走 **B 接线**，并把 A 路径逐项定价 | ADR 落盘并被 `ARCHITECTURE.md` 引用（P0-1） |
+| 2 | `semantic-facts.ts`：把 `supersede.ts` 已算出的 span+date 授权铸成两个 `KnowledgeFact` + 一条 `supersedes` 边 | 非测试构造点、0 新模型调用、additive（E1） |
+| 3 | `semanticCarry` 开关 + `UPDATES:` 段 + `semanticCarryCensus()` | 三条件字节对照（E1）；`manual:check` 强制文档（E7） |
+
+**为什么这条路而不是「从语料推断 supersession」。** 后者已被 `docs/MEASURE-SUPERSEDE-REACH.md` §2 关闭三次：最紧的规则触碰 77 个窗口、删掉其中 36 个的 gold、对它注册的四道题**一个被取代的值都没移除**。前者的三道检查（逐字引文、日期同 record、record 更晚）比任何 token 启发式都强，而且**已经付过费**。
+
+**为什么默认关。** 三条各自足够：默认开会改所有已发布 artifact 的字节、使其无法从代码复现；E6（paired 读数）`unrun`，默认开等于先给药后注册；而开关是让字节 delta **可断言**的唯一办法。
+
+### 11.2 那个缺陷，因为它比功能本身重要
+
+`evidenceRecords` 要求「行首第一个非空字符是 `[`」，而 `formatEvidence` 的默认标签是 `` `${index + 1}. ` ``。**真实 prompt 里没有一行以 `[` 开头**，所以它把整段 evidence 切成一条 record。
+
+后果里最重的一条：`§13.371` 的 `not-later` 守卫——为「不要把正确答案换成被它取代的旧值」而写，并且在 `ed4ddc30` 上做过测量——**在生产路径上从未执行过**。测试没抓到，因为每个 fixture 都是无编号字符串：测试同意的是代码，不是系统。
+
+### 11.3 位置
+
+| 判据 | 第 95 轮 | 现在 |
+| --- | --- | --- |
+| E1 fact source | ❌ | ✅ |
+| E2 消费者接线 | ❌ | ❌（`assemble` / `reviseLedger` / `resolveContradiction`；哨兵已从「零 import」改为「白名单 + 必须被调用」） |
+| E3 `MemoryType` | ❌ | ❌ |
+| E4 四机制结清 | ❌ | ❌（ADR 已落盘；`MemoryGraph` 记为有读数的 Declined，另三个仍「未决定」） |
+| E5 三表同步 | ❌ | ⚠️ 半做 |
+| E6 语义层测量 | ❌ | ❌（预测已注册：`deltaQuestions === 0`，非零即跨题泄漏） |
+| E7 对外口径 | ⚠️ | ✅ |
+| E8 证据组装 | ✅ | ✅ |
+
+**3 关闭 / 1 半做 / 4 全红。** 下一步 **E2**——现在有事实可喂了。
+
+### 11.4 一句必须写清的话
+
+E1 证明了「产品会因为一个授权过的事实而改变 prompt 字节」，**它没有证明这让答案更准**。E6 是那个问题，而 §13.375.5 的预测说：在本题库上「更准」的空间是零，因为每道题自带语料、每个更新都到不了别的题的窗口——真正能检验机制的总体是**一次会话里多题共享一份语料**，而本活动还没有这样的总体。
