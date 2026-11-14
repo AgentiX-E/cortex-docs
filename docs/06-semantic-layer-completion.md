@@ -940,3 +940,70 @@ leastRetained(entries: readonly { readonly memory: MemoryValue; readonly reads: 
 - **不主张 `cortex-memory` 其余模块都已放对。** 本轮只裁决了「产品是否有检索」这一个事实。
 
 一句话：**这一轮没有让产品多答对一个题，而是第一次把「用户装完包什么都不配会拿到什么」变成一条有阈值、有后果、且阈值来自另一条已注册行的判据——而它此前连一行都没有。**
+
+## 17. 第 102 轮：E6 没有臂——六轮「unrun」描述的都是错的障碍
+
+E6 是语义层八条退出判据的最后一条：*paired readout，`deltaQuestions ≥ −5`*。连续六轮的收尾都写着「E6 仍 `unrun`」，每一次都把它读成预算或排期的注记，下一步自然是「派发」。**这个下一步不存在：那套处理根本没有开关。**
+
+### 17.1 缺的是三个不同的东西
+
+| # | 对象 | 事实 |
+| --- | --- | --- |
+| 1 | 臂的选项面 | `CortexMemoryArmOptions` 没有 `semanticCarry` 字段，`cortextMemoryArmOptions` 不读这个环境变量，`bench/run-ablation.ts` 往构造函数里条件转发**二十五**个产品选项——每一个都配着一段「缺席即出厂配置」的说明。第二十六个不在里面 |
+| 2 | artifact 的 census | `CortexMemory.semanticCarryCensus()` 存在且被测试，而 `cortex-eval` 里没有任何 reader 点它的名；`traceCensus` 读三个 accessor，它是第四个、零调用方 |
+| 3 | 判据本身 | `S9`/`S10`/`S11` 覆盖了排名的三条臂；语义层**一行都没有** |
+
+三者是一条链，而第三条正是前两条一直不可见的原因：**一条不存在于矩阵中的判据，无法以任何读者会注意到的方式「unrun」**——它唯一的记录是一句话。
+
+### 17.2 为什么 `0` 是这个总体的必然，而这是设计事实
+
+一条 update 是关于「授权它的那条记录」的。`updateAppliesTo` 是对该记录的子串测试（`semantic-facts.ts:383`），其 docblock 写明为什么不能用更软的判据：相似度会让一条关于语料 A 的 update 抵达一个关于语料 B 的问题，而那在 benchmark 上就是跨题泄漏。
+
+注册总体里**每题自带语料**，所以没有任何一题的窗口会携带另一题的记录，reach 按构造为零——`DECISION-SEMANTIC-LAYER-ROUTE.md` §5 已写明。于是 E6 在这个总体上必然读 `0`，而 `0 ≥ −5` 是 **pass**。「处理没有运行」被记成 pass，比没有这一行更糟。
+
+### 17.3 修复的三部分
+
+1. **`CORTEX_MEMORY_SEMANTIC_CARRY`**：`readToggle` 语义（`'1'` 开，缺席即控制臂），启用与停用两个投影都写，构造函数里条件转发，配置日志行回显，`featureConfig` 记录。条件 spread 是本仓的既定形状，理由与其余选项相同：缺席是每一份归档 artifact 的产出状态，若写一个 present-but-false 的键，「跑了控制臂」和「处理被配置成关」就变成 artifact 分不开的两件事。
+2. **报告里的 `semanticCarry`**：跨每个 worker 实例折叠（`censusSourcesOf`，§13.244），构建没有该 accessor 时字段缺席。折叠把 store 自己的算术当作检查：`absorbed − dropped` 等于 `stored` 三项之和，因为 `stored` 数的是**手上的条目**。违反它的记录被丢弃而非发布——与 `supersessionAcross` 对 `attempted === replaced + refused` 的规则相同。
+3. **`S12` / `S13`**，其中 `S12.requires = ['S13']`，并为「存在但回答不了本行问题」的数字新增第五种状态 **`void`**。
+
+### 17.4 为什么需要新状态，而不是更严的阈值
+
+没有任何阈值能分开「层没获益」与「层没运行」：两者都读 `0`。任何单数字比较也不能。分开它们的是第二个数字（reach），而让一行的裁决依赖另一行，唯一可执行的做法是把它声明出来。于是有 `Criterion.requires`，`applyRequirements` 是对整个矩阵的第二遍（它需要全部裁决，而 `verdictOf` 刻意不依赖注册表），`void` 是它产出的状态。`void` 与 `unrun`/`stale` 一起计入发布闸门，但分开标注——因为修法不同：一次派发、一次重挂 artifact、一个总体。
+
+### 17.5 变异
+
+**17 / 17 杀**：解析恒 false、`defaultOn: true`、停用臂投影 true、`!== false` 的比较、census 不挂载、`served`/`withheld`/`stored` 各自不累加、`absorbed − dropped` 不变量、三名检查、构造函数 spread 删除、日志子句删除、`featureConfig` 丢字段、**`applyRequirements` 的不动点退化为单遍**、未知 id 检查删除、`void` 的 `blocking` 翻转、`requires` 读成空表。
+
+其中后三条是**文本断言**，也是本轮最弱的一环：`bench/**` 作为入口被覆盖率排除，那行把处理从解析后的选项送进构造函数的代码没有任何测试能执行到。本臂其余每个处理都有同样的缺口和同样的补偿；这里不同的是 artifact 现在把 reach 记在开关旁边，所以将来删掉 spread 会表现为 `semanticCarry: true` 配 `absorbed: 0`——可见，但只对会去看的读者可见。
+
+### 17.6 读数
+
+| 项 | 值 |
+| --- | --- |
+| TS 测试 | **6,271**（core 946 / memory 1,419 / **eval 3,454（+26）** / ai 327 / storage 125） |
+| 覆盖率 | **168** 文件、16 豁免、**0 ratchet**；cortex-eval 81 文件 99.58 / 98.65 / 99.83 / 99.76 |
+| 变异 | **17 / 17 杀** |
+| 导出普查 | 1,182 / 718 / 464 不动（`SemanticCarryCensus` 被本地引用，未成孤儿） |
+| 验收门禁 | exit 0；`S12` = **`void`**（`S13` 未 pass），`S13` = `unrun`——不再可能 vacuum pass |
+| `docs:crosscheck` | 64 / 74 marker 通过，10 skipped |
+| 派发 | **0 元** |
+| 产品表 | 未动 **91.25%** |
+
+### 17.7 位置
+
+| 判据 | 第 101 轮 | 现在 |
+| --- | --- | --- |
+| E1 / E2 / E3 / E4 / E5 / E7 / E8 | ✅ | ✅ |
+| **E6 语义层测量** | ❌（无臂、无行） | ❌（**有臂、有行、有 reach；缺一个能承载的总体**） |
+
+**7 关闭 / 1 全红，与上一轮相同**——但 E6 的性质变了：它从「无从下手」变成「一条被 `void` 挡住的判据」。
+
+### 17.8 这轮不主张什么
+
+- **不主张有读数。** 没有派发：本环境没有 reader 凭据，也够不到数据集主机。`S12` 是 `void`、`S13` 是 `unrun`，矩阵就是这么打印的。
+- **不主张注册总体能承载该机制。** 按 17.2 它不能；`S13` 的 `onMiss` 写明修法是**一个语料两个窗口**，而不是再派发一次这一个。
+- **不主张派发一定有益。** 在这个总体上它只会产出 `0 / 0`，即 `void`——对一个无法回答该问题的总体的正确报告。
+- **不主张准确率。** `semanticCarry` 仍默认关；`CORTEX_MEMORY_SEMANTIC_CARRY` 未设是每一份归档 artifact 的产出状态，现在仍然如此。
+
+一句话：**这一轮没有给语义层一个数，而是给了它拥有一个数的能力，并让那条判据在拿到之前拒绝通过。**
