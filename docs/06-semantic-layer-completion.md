@@ -24,7 +24,7 @@ pnpm check                                    # 绿
 | 语义内核（19 行可达表）现状 | **P 5 / E 5 / I 8 / T 1**（送审时快照；第 98 轮为 **P 11 / E 2 / I 5 / T 1**，见 §13 读数表）；送审时语义相关只有 **2 行 P**（answer-side supersession、aggregation），store-side 语义 **0 行 P** |
 | 送审报告的 5 条建议 | **2 条已关闭**（T1 部分、T2 的结构阻塞）、**3 条未动**（T3/T4/T5） |
 | 报告自身陈述 | **6 处需要修正**：2 处已被本项目改掉、1 处算术不可满足、3 处计数/状态漂移 |
-| 是否可解禁 SOTA | **否**。8 条 exit criteria（§5）现为 **5 关闭（E1 / E2 / E5 / E7 / E8）、1 半做（E4）、2 全红（E3 / E6）**；S10/S9 与全部 SOTA 队列本轮**冻结** |
+| 是否可解禁 SOTA | **否**。8 条 exit criteria（§5）现为 **7 关闭（E1 / E2 / E3 / E4 / E5 / E7 / E8）、1 全红（E6）**；E6 是唯一需要派发的一条，也正是 S10/S9 的解禁条件，本轮**冻结** |
 
 一句话：**产品册上的「语义记忆」这一格，代码里写不出来、产品读不到、测量没测过；报告把它定位为「缺一个 fact source」，这个定位是对的，但它给出的修法与判据里有 3 处会把人带到错的地方。**
 
@@ -120,7 +120,7 @@ pnpm check                                    # 绿
 | **E1** | **fact source 存在且 additive**：产品能构造 `KnowledgeFact`，来源是**已计算的** supersession 状态（不新增模型调用、不替换原文） | 存在非测试构造点，且其输入来自 `supersede.ts`/`memory.ts:1603` 的计算结果；一条行为级测试证明同语料下 prompt 字节**因该事实而变** | ✅ **关闭**（§11）：构造点在 `memory.ts` → `semantic-facts.ts`，输入是 `supersede.ts` 的 verdict；`semantic-carry.test.ts` 三条件字节对照（空 store / 开关关 / 两者都有）；0 新模型调用（开与关各 3 次调用） |
 | **E2** | **消费者接线**：`assemble` → `reviseLedger` → `resolveContradiction` 在产品路径被调用 | `semantic-reach.test.ts` 的命中清单**非空**且打印出符号；reach table 对应行改 **P** | ✅ **关闭**（§12）：白名单 5 → 7，且每个值符号都要求**调用点**而非 import；reach 表行 3/6/8/10/11 同提交改 **P**（P 从 5/19 到 11/19）。**2 接 / 1 结清**：`assemble` 与 `reviseLedger` 已接，`resolveContradiction` 由 ADR §6.1 实测 Declined——喂它可以给出的唯一输入，胜者是账本刚驳掉的那个值 |
 | **E3** | **可表示**：`MemoryType` 的 `'semantic'` 有写有读（读 = 影响 selection/渲染/调度之一）**或**两个不可达值被删除且文档同步撤回 | 一条「写入 semantic → 读回并改变行为」的测试；或删除后的类型快照 | ✅ **关闭**（§13）：写 = `memoryForUpdate`，读 = `retention.ts` 的 `Record<MemoryType, RetentionRule>`（影响淘汰）；判据是一对——同样 9 次吸收、只差「一个窗口读过 record 0」，对照丢掉 record 0、机制保住它并丢掉 record 1；8 个变异全杀，其中两个只杀机制测试、对照保持绿 |
-| **E4** | **charter 四机制结清**：`consolidate` / `resolveContradiction` 从 0 调用变为**有产品调用者**，或由 ADR 显式 **Declined** 并给出理由与代价 | `grep` 出调用点（非测试）；或 ADR 文件存在且被 `ARCHITECTURE.md` 引用 | ⚠️ **半做**（§12）：`resolveContradiction` 由 `DECISION-SEMANTIC-LAYER-ROUTE.md` §6.1 显式 **Declined**，`ARCHITECTURE.md` 已引用；`consolidate` 仍**未定** |
+| **E4** | **charter 四机制结清**：`consolidate` / `resolveContradiction` 从 0 调用变为**有产品调用者**，或由 ADR 显式 **Declined** 并给出理由与代价 | `grep` 出调用点（非测试）；或 ADR 文件存在且被 `ARCHITECTURE.md` 引用 | ✅ **关闭**（§14）：四个机制全部结清——`consolidate` 为 **Declined + 算术**（ADR §6.2：一个 store 只有一个时钟 ⇒ 它测到的流逝为 0；它写的状态在产品包里**零读取**；它的动作方向正是 `not-later` 要防的），`resolveContradiction` 为 Declined + 算术（§6.1），`MemoryGraph` 为**带读数的 Declined**（77.95% → 70.87%，McNemar p = 0.039），`sinkhorn` 为 inert Declined；`Fact.derivedFrom` 作为第二套机制被拒。判据的「或」被用到了，但用的是算术而不是沉默 |
 | **E5** | **三表同步**：哨兵测试、`AUDIT-SEMANTIC-REACH §3`、`ARCHITECTURE.md` 状态表**同一提交**内一致 | `pnpm check` 绿 + 三处 diff 在同一 commit | ✅ **关闭**（§12）：哨兵（白名单 7 项 + 调用点断言）、reach 表六行、`ARCHITECTURE.md` 两行、`USER-MANUAL.md` 选项表与示例、`PREREGISTRATION` §13.376 全部同一提交 |
 | **E6** | **语义层自身有测量**：至少一次 paired 读数或离线 trace 指标（FEB-30 四项），且**不伤准确率**（判据 `deltaQuestions ≥ −5`，与 S10 同口径） | artifact 有 run id 与配置行；McNemar 双侧 | ❌ 无 |
 | **E7** | **对外口径一致**：README、白皮书 §4、`ARCHITECTURE.md` 中语义层行与代码一致 | `pnpm docs:crosscheck` + 人工对表 | ✅ **关闭**（§11）：`USER-MANUAL.md` 新增 `semanticCarry` 行与可编译示例，`manual:check` 强制（34/34 选项有示例）；`ARCHITECTURE.md` 新增「Semantic update carry」行 |
@@ -608,3 +608,115 @@ assumed:  confirmed
 交付口径仍是 **1 / 10**、实现口径仍是 **7 / 10**：`semanticCarry` 默认关，500 题上预测字节不变，E6 未跑，所以没有任何一行能被说成「改变了已发表 artifact」。可表示性提高不等于交付提高，这两个数必须分开读。
 
 一句话：**store 现在知道它手里哪一条是知识、哪一条只是读数，并且据此决定先丢哪一条——为此它第一次写下了一类型，也第一次有一个读者因为这个类型而做了不同的决定。**
+
+## 14. 第 99 轮：遗忘时钟的输入是空集，而它写的东西没人读
+
+### 14.1 E4 的判据里有一个「或」，本轮用的是第二个分支
+
+E4 的原文是 **charter 四机制结清**：`consolidate` / `resolveContradiction` 从 0 调用变为**有产品调用者**，**或**由 ADR 显式 **Declined** 并给出理由与代价。判据两条路，但不给第三条：**沉默不算**。
+
+四个机制现在全部落地，只是落法不同：
+
+| 机制 | 结清方式 | 证据形态 |
+| --- | --- | --- |
+| `MemoryGraph`（Hebbian 多跳） | **带读数的 Declined** | 接进时序路径后被测量淘汰：77.95% → 70.87%，修好 6 个、弄坏 15 个，精确 McNemar p = 0.039 |
+| `resolveContradiction`（对数几率融合） | **Declined + 算术** | ADR §6.1：喂它唯一可辩护的输入（那一对事实），返回的正是账本刚驳掉的值，后验 0.999 由数组顺序决定 |
+| `consolidate`（FSRS 遗忘时钟） | **Declined + 算术**（本轮） | 下面三条，每条都有可检验形态 |
+| `sinkhorn`（最优传输蒸馏） | **inert Declined** | 无读数、无调用者；删除它是另一个决定 |
+| `Fact.derivedFrom` | **作为第二套机制被拒** | `KnowledgeFact.references` 已经是派生边，`revision.ts` 已经在它上面级联 |
+
+「带读数」和「有算术」不是同一种证据，而「有算术」和「没人到过」也不是——这一轮的全部工作量就在于把第三种变成第二种。
+
+### 14.2 三条理由，每条都能被检验
+
+**(1) 它测到的流逝时间，在一个 store 内部恒为 0。** 一个 store 只有一个时钟（`CortexMemoryOptions.now`，一个数字），`memoryForUpdate` 用它同时盖 `createdAt` 和 `lastAccessedAt`。于是：
+
+| 量 | 值 | 为什么 |
+| --- | --- | --- |
+| `now − lastAccessedAt` | `0` | 一个时钟，一次盖戳 |
+| `retrievability(0, 1)` | `1` | `exp(0)`；stability 默认一天 |
+| 默认阈值 | `0.01` | `exp(-4.6)`，即**四点六个稳定日之外** |
+| 能删掉的条目 | `0` | 差的不是一点余量，是这辈子的余量 |
+
+不是「偶尔不删」，是**永不可能删**——只要 store 是一个实例一个时钟。而一个没有任何 access record 的 review 趟，没有东西可 review。
+
+**(2) 它写的状态，产品包里零个读者。** review 趟写 `stability` / `difficulty`，遗忘趟读 `stability`。`packages/cortex-memory/src` 里 `.stability` 出现 **0 次**。所以 FSRS 状态是 `consolidate.ts` 与 `fsrs.ts` 之间的闭环：一个写、一个读，没有任何做决定的模块碰它。接上去，等于把某字段按每次读回乘 1.25（`review` 的零间隔地板）然后交给没人。
+
+`semantic-reach.test.ts` 现在断言这个 0，于是这个拒绝是**自取消的**：哪天产品模块读了 `.stability`，那条测试立刻红，拒绝就得按它想要的东西重新论证一遍。
+
+**(3) 它的动作方向，正是 `not-later` 存在的理由。** 遗忘是「因为时间过去了，所以删掉」。而那条条目不是对某个窗口的观察，是一条替换——它的语料现在仍然写着 `30 dozen`。删掉它不会让这句话变假，只会让 prompt 退回证据，那里旧值 `20 dozen` 无标记地躺着。这正是 §13.371 的 `not-later` 守卫要防的那个结果，也是上一轮实测抓到的那个缺陷（被驳倒的值被当成事实印出来）的另一条到达路径。
+
+而 store 真正有的那个问题是「越过 8 条边界时丢哪一条」——E3 已经用读秩（`lastAccessedAt`，再用读回计数）回答了。再加一条衰减规则，就是对同样八个位置加**第二条淘汰规则**，而两条规则恰好在最要紧的那个案例上分歧：一条旧但承载着当前答案的条目。
+
+### 14.3 顺路抓到的陷阱：这是一个真 bug，不是拒绝的一部分
+
+遗忘趟原本读 `Date.now()`，而它用来算年龄的条目，是由**调用方的时钟**盖的戳。套件看不见：`consolidate.test.ts` 与 `consolidation-clock.test.ts` 的每一个 fixture 都盖 `Date.now()`，于是两个时钟在套件拥有的每一个输入上都一致——和 `AUDIT-CONSOLIDATION-CLOCK.md` 记录的单位缺陷完全同型，只是往前挪了一个参数。
+
+它咬的恰好是**最可能来接线的那个调用者**。replay 会把 `now` 钉在语料日期；今天跑一个批次，它量的是 2023 到今天：
+
+| 调用者 | 条目盖的戳 | 遗忘趟用的钟 | `forgotten` |
+| --- | --- | --- | --- |
+| 新进程，`now = Date.now()` | 现在 | 现在 | `0` |
+| replay，`now` 钉在语料日期 | 2023-03-12 | 墙钟 | **整库** |
+| replay，修复后 | 2023-03-12 | `now` | `0` |
+
+`now` 现在是**必填参数**，没有默认值：默认 `Date.now()` 只对「用墙钟盖戳的调用者」正确，对其他人静默错误。模块头写着「pure, side-effect-free orchestration」——读墙钟的时候这句话是假的，现在是真的，而**签名是让它成立的东西**。
+
+`consolidation-clock.test.ts` 里两行 `@ts-expect-error` 钉住这个形状：
+
+```ts
+// @ts-expect-error -- no options at all: the batch instant has no default.
+const noOptions = () => consolidate(build(), new MemoryGraph(), []);
+// @ts-expect-error -- other options given, clock still missing, still refused.
+const noClock = () => consolidate(build(), new MemoryGraph(), [], { decay: false });
+```
+
+第二行才是要紧的那个。第一行只说了第四个参数必填；第二行说：一个给了**别的选项**的作者，仍然不能省略时钟——这才是现实里的漏法，也是「可选字段 + `?? Date.now()` 兜底」会放过去的那一种。
+
+### 14.4 四个变异
+
+| # | 变异 | 杀死它的东西 |
+| ---: | --- | --- |
+| 1 | 遗忘趟改回 `Date.now()` | 核心库的「批次瞬间盖戳的条目不被遗忘」——`1 failed` |
+| 2 | `now?: number` + `?? Date.now()` | `tsc`：`TS2578 Unused '@ts-expect-error' directive` |
+| 3 | `lastAccessedAt` 取 `learnedAt` 而不是 store 时钟 | 盖戳测试**与**流逝时间测试——`2 failed` |
+| 4 | 某个产品模块读 `.stability` | `semantic-reach.test.ts` 的 reach 警报——`1 failed` |
+
+第 2 条是**类型级杀死**，也是唯一能永久关住这个陷阱的一条：兜底会把第二个时钟请回来，而不改动任何一条断言——因为套件里每个 fixture 都显式传 `now`。
+
+### 14.5 两个文档漂移，本轮一并修
+
+- **README 说 `consolidate` 做「episodic → semantic promotion」。它不做。** 它的三件事是 FSRS 复习、共激活强化、阈值淘汰；「提升」在产品里确实存在，但那是 `memoryForUpdate` 在做，不是它。这句话从送审起就在，本轮改掉。
+- **`06` 的结论行上一轮漏改**：E3 在第 98 轮关闭，而 §1.2 的「5 关闭 / 1 半做 / 2 全红」还写着 E3 红。这就是「三表同一 commit」那条规则存在的原因——同一个 commit 里，代码与 README 改了一处，`06` 的结论行没改。
+- **ARCHITECTURE 的 FSRS 行**原本说「`consolidate` has no caller, so FSRS is reachable only transitively」，现在它说的是**为什么没有 caller 是一个决定**，以及两个已记录的缺陷。
+
+### 14.6 读数
+
+| 项 | 值 |
+| --- | --- |
+| `pnpm check` | **绿**（`manual:check`：34/34 选项；字段数未变，仍 28） |
+| TS 测试 | **6,235**（+6：core 935（+3）、memory 1,425（+3）、eval 3,423、ai 327、storage 125） |
+| 覆盖率 | **168** 文件、16 豁免、**0 ratchet**；core 99.60 / 98.40 / 99.78 / 99.82，memory 99.86 / 99.67 / 100 / 100；`consolidate.ts` **100 / 100 / 100 / 100**（`options = {}` 的默认分支随必填参数一起消失） |
+| 变异 | **4 / 4 杀**：运行时 1 条、类型级 1 条（`TS2578`）、盖戳 1 条、reach 1 条 |
+| 导出普查 | **1,182 / 718 / 464，三个数都不动**——本轮没新增导出，也没撤回导出（签名改动不进计数） |
+| reach 表 | **P 11/19 不变**；第 13 行「Consolidation / forgetting (FSRS)」的 Caller 从 `none` 改成 `none — Declined` |
+| 门禁自检 | 本轮没有触发（没有新导出、没有删导出），但 reach 警报本身被第 4 条变异验证过会红 |
+| 派发 | **0 元** |
+| 产品表 | 未动 **91.25%** |
+
+### 14.7 位置
+
+| 判据 | 第 98 轮 | 现在 |
+| --- | --- | --- |
+| E1 fact source | ✅ | ✅ |
+| E2 消费者接线 | ✅ | ✅ |
+| E3 `MemoryType` | ✅ | ✅ |
+| **E4 四机制结清** | ⚠️ 半做 | ✅ **关闭**：`consolidate` 为 Declined + 算术（三条理由、四个变异）；`MemoryGraph` / `resolveContradiction` / `sinkhorn` / `Fact.derivedFrom` 早已结清 |
+| E5 / E7 / E8 | ✅ | ✅ |
+| E6 语义层测量 | ❌ | ❌（预测未变：500 题上 `deltaQuestions === 0`，非零即跨题泄漏） |
+
+**7 关闭 / 1 全红。**
+
+E4 一关，剩下的**只有 E6**，而它是八条里唯一需要派发的一条——也正好是 `S10`/`S9` 的解禁条件。这个结构值得说清楚：语义层的修复已经不再被任何**代码**工作阻塞，只被一次**测量**阻塞，而那次测量需要花钱。
+
+一句话：**这一轮没有让产品多接一条机制，而是第一次把「我们为什么不接这条」写成了能算出数的东西——一条遗忘规则在一个只有一个瞬间的 store 里测到的流逝是零，而它写的那个字段，产品里没有一个模块读。**
