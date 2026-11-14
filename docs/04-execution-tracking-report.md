@@ -24646,3 +24646,59 @@ E4 的原文：`consolidate` / `resolveContradiction` 从 0 调用变为**有产
 **7 关闭 / 1 全红。** 语义层的修复已经不再被任何**代码**工作阻塞，只被一次**测量**阻塞——E6 是八条里唯一需要派发的一条，也正好是 `S10`/`S9` 的解禁条件。
 
 一句话：**这一轮没有让产品多接一条机制，而是第一次把「我们为什么不接这条」写成了能算出数的东西——一条遗忘规则在一个只有一个瞬间的 store 里测到的流逝是零，而它写的那个字段，产品里没有一个模块读。**
+
+---
+
+## 96 第 100 轮：语义层在哪个包——主体在 core，错位只有一个文件，缺口在领域模型
+
+### 96.1 触发
+
+一次直接质疑：*「语义层的实现是放在 `cortex-memory` 包吗？它难道不属于 `cortex-core` 的部分吗？」*
+
+### 96.2 量出来的三件事
+
+1. **主体在 core。** `knowledge/` 2,089 行 + `triage/` 4,188 行 = **6,277 行，占 core 非测试 11,085 行的 56.6%**；
+   `cortex-memory` 从 core 导入 **45 个符号**，语义内核的消费点是 `disclosure/session.ts`
+   （`TriageWriter` / `CardQueue` / `OutputGuard` / `TriageProposer`）与 `semantic-facts.ts`
+   （`assemble` / `buildKnowledgeUnit` / `deriveAssumptions` / `deriveSupersedes` / `locate` / `reviseLedger`）。
+2. **质疑成立的原因是文档。** `ARCHITECTURE.md` §2 的 layer map 只列了 core 的 8 个目录，`knowledge/` 与
+   `triage/` 都没列——6,277 行在架构图上不存在。已补全到目录级，并写明这两个数字。
+3. **真正的错位只有一个文件：`retention.ts` 96 行。** 纯函数、零 I/O、只依赖 core 的 `MemoryType` /
+   `MemoryValue`，按 core 自述「contracts + pure algorithms」本该在 core。
+
+### 96.3 「签名就是证据」
+
+旧签名 `leastRetained([{ memory, reads }])` 的第二元素 `reads` 在 `MemoryValue` 里没有字段。一个需要领域类型
+表达不了的入参的规则，是领域描述不了的规则。修法是把计数变成领域字段，规则随之上移：
+
+- `MemoryValue.reads: number` 必填、`createMemory` 默认 `0`（**不是** `value`——`value` 是 `[0, 1]` 的准入估计，
+  计数无界且是观测）；
+- `cortex-core/src/domain/retention.ts`，签名不再收第二个参数；
+- `memory.ts` 只保留它该有的部分：`when`、`splice`、计数。
+
+`semantic-facts.ts` 被问同样的问题并**留下**：它依赖 `SupersessionVerdict`（由模型调用产出），上移会把 LLM 带进
+零 I/O 的包。判据不是主题，是纯度。
+
+### 96.4 必填字段的代价
+
+`tsc` **17 个错误 / 13 个测试文件**，全是手写 `MemoryValue` 字面量（15 处是同一个 stub 补 `reads: 0,`）。
+**生产模块零改动**；`cortex-storage` 对 `MemoryValue` 出现 **0** 次，无 schema、无迁移。这 17 个错误是本仓手搓
+领域值的位置数，不是字段太贵。
+
+### 96.5 读数
+
+| 项 | 值 |
+| --- | --- |
+| TS 测试 | **6,240**（core 946 +11、memory 1,419 −6、eval 3,423、ai 327、storage 125） |
+| 覆盖率 | 168 文件 / 0 ratchet；core 40 文件、memory 27 文件；`domain/retention.ts` **100/100/100/100** |
+| 变异 | **4 / 4** |
+| 导出普查 | 1,182 / 718 / 464 三个数不动（`leastRetained` 仍 1 个调用方） |
+| 派发 | **0 元** |
+| 产品表 | 未动 **91.25%** |
+
+### 96.6 位置
+
+**7 关闭 / 1 全红，与第 99 轮相同。** 纯位移不改行为，不消耗 E6：`semanticCarry` 仍默认关，E6 仍 `unrun`，
+预测仍是 `deltaQuestions === 0`。
+
+一句话：**这一轮把一个纯规则搬回了领域，代价是给 `MemoryValue` 加一个必填字段——而 17 个编译错误证明的不是字段太贵，而是本仓有 17 处手搓领域值的地方。**

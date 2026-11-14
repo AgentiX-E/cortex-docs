@@ -720,3 +720,124 @@ const noClock = () => consolidate(build(), new MemoryGraph(), [], { decay: false
 E4 一关，剩下的**只有 E6**，而它是八条里唯一需要派发的一条——也正好是 `S10`/`S9` 的解禁条件。这个结构值得说清楚：语义层的修复已经不再被任何**代码**工作阻塞，只被一次**测量**阻塞，而那次测量需要花钱。
 
 一句话：**这一轮没有让产品多接一条机制，而是第一次把「我们为什么不接这条」写成了能算出数的东西——一条遗忘规则在一个只有一个瞬间的 store 里测到的流逝是零，而它写的那个字段，产品里没有一个模块读。**
+
+## 15. 第 100 轮：语义层在哪个包——一次质疑，一个真错位，一个领域缺口
+
+问题来自一次直接质疑：*「语义层的实现是放在 `cortex-memory` 包吗？它难道不属于 `cortex-core` 的部分吗？」*
+
+这一轮没有写新机制。它做的是把这个问题量出来，然后按量出来的结果搬了一个文件。
+
+### 15.1 核查：主体确实在 core，而文档把它藏起来了
+
+| 层 | 内容 | 行数 | 占 core 非测试行数 |
+| --- | --- | ---: | ---: |
+| `cortex-core/src/knowledge/` | taxonomy · unit · frame · edge · assumption · revision · temporality · markers | 2,089 | 18.8% |
+| `cortex-core/src/triage/` | proposer · rules · writer · card · claims · grounding · release · erasure · output-guard | 4,188 | 37.8% |
+| **语义内核合计** | | **6,277** | **56.6%**（core 11,085 行） |
+
+`cortex-memory` 从 `@agentix-e/cortex-core` 导入 **45 个符号**，语义内核的消费点是具体的：
+`disclosure/session.ts` 用 `TriageWriter` / `CardQueue` / `OutputGuard` / `TriageProposer`，
+`semantic-facts.ts` 用 `assemble` / `buildKnowledgeUnit` / `deriveAssumptions` / `deriveSupersedes` /
+`locate` / `reviseLedger`。
+
+所以 `DECISION-SEMANTIC-LAYER-ROUTE.md` 第 3 行的决定（the semantic kernel in `cortex-core` gets wired to the
+shipping product）是**被执行的**。质疑之所以成立，是因为 `ARCHITECTURE.md` §2 的 layer map 只列了 core 的 8 个
+目录，`knowledge/` 与 `triage/` 一个都没有——6,277 行、包内 56.6% 的代码在架构图上不存在。一张那样的图，读出来
+的结论只能是「语义层是 memory 的事」。
+
+这是文档缺陷，而且是最该先修的一类，因为它正是这次提问的成因。
+
+### 15.2 真正的错位：`retention.ts` 96 行
+
+| 模块 | 位置 | 纯度 | 依赖 | 判定 |
+| --- | --- | --- | --- | --- |
+| `retention.ts` | memory | 纯函数、零 I/O、零状态 | 只依赖 core 的 `MemoryType` / `MemoryValue` | **错位**：core 自述「contracts + pure algorithms」，这条够格 |
+| `semantic-facts.ts` | memory | 纯构造 | core 内核 7 个符号 **+ memory 的 `SupersessionVerdict`** | **正确**：verdict 由模型判定，上移会把 LLM 带进零 I/O 的包 |
+| `memory.ts #semanticAbsorb` | memory | 有状态、splice、计数 | — | **正确**：状态与 I/O 归装配层 |
+
+### 15.3 签名就是证据，而缺口在领域模型里
+
+旧签名：
+
+```
+leastRetained(entries: readonly { readonly memory: MemoryValue; readonly reads: number }[]): number
+```
+
+纯规则的每个入参都应该是领域能命名的值。`reads` 不是：`MemoryValue` 没有这个字段，store 把它存在自己的
+`StoredUpdate` 上，调用方传进来。**一个需要领域类型表达不了的入参的规则，是领域描述不了的规则**——第二个参数
+就是它显形的地方。
+
+不是整洁癖：读数留在外面，排序就成了「条目 + 调用方声称的计数」的函数，而且没有任何东西阻止两个调用方对同一条
+目声称不同的计数。字段让计数成为条目的属性，排序才成为条目单变量的函数。
+
+修复顺序（顺序本身是被依赖决定的）：
+
+1. `MemoryValue.reads: number` 必填，`createMemory` 默认 `0`；
+2. `cortex-core/src/domain/retention.ts`：表 + rank + `leastRetained`，签名不再有第二个参数；
+3. `memory.ts`：`StoredUpdate` 去掉 `reads`，驱逐改为
+   `leastRetained(this.#semanticUpdates.map((stored) => stored.memory))`，读回改为 `stored.memory.reads += 1`；
+4. 删除 `cortex-memory/src/retention.ts` 与其测试。**没有兼容 re-export**——一条规则两个 import 路径会让导出普查
+   数两遍。
+
+`reads` 不是 `MemoryValue.value`，这正是它必须独立成字段而不是折进已有字段的原因：`value` 的契约是 `[0, 1]`，
+由准入闸用调用方给的 `valueFunction` 算出，而这些语义条目从不经过那个闸；使用计数无界、且是**观测**而非估计。一个
+字段装两个标尺，正是 `math/fsrs.ts` 在时间域花一整段 docstring 修掉的缺陷。
+
+### 15.4 必填字段的代价，数出来的
+
+`tsc` 报 **17 个错误、13 个测试文件**，形状全部相同：手写的 `MemoryValue` 字面量列出了它在意的 12 个字段，现在
+要列 13 个。其中 15 处是同一个 stub（`stability: 1, difficulty: 5,` 后补 `reads: 0,`）。
+
+值得记下来而不是道歉：这 17 个错误就是本仓**绕过 `createMemory` 手搓 `MemoryValue`** 的位置数。**生产模块零改动**
+——`memoryForUpdate`、`admitInto` 及其余构造点本来就都走 `createMemory` 或展开它的结果。`cortex-storage` 在加字段
+前查过：`packages/cortex-storage/src` 里 `MemoryValue` 出现 **0** 次，没有 schema、没有迁移、不涉及任何持久化产物。
+
+### 15.5 测试与变异
+
+§12 的 5 条断言意图不变、形状重写（条目而非 `{ memory, reads }` 对），新增 3 条：
+
+| # | 断言 | 用途 |
+| ---: | --- | --- |
+| 1 | `createMemory(...)` 的 `reads === 0` **且** `value === 0.5` | 独立性：计数没有被折进效用字段 |
+| 2 | `@ts-expect-error` 下旧形状 `[{ memory, reads: 3 }]` 不可赋值 | 调用方计数无法在不触发编译错误的情况下回来 |
+| 3 | `leastRetained([])` 与单元素都返回 `0` | 文档化契约，含实现拒绝添加的 `-1` 哨兵 |
+
+| # | 变异 | 被谁杀 |
+| ---: | --- | --- |
+| 1 | `semantic: (m) => [m.lastAccessedAt, 0]` | semantic 用例死，episodic 对照**保持绿**——这才是「计数是因果输入」的证明 |
+| 2 | `leastRetained` 返回 `0` | 所有非零期望 |
+| 3 | 签名回到 `{ memory, reads }[]` | `TS2578 Unused '@ts-expect-error' directive` |
+| 4 | `reads` 写进 `value` 而非独立字段 | 15.5 第 1 条独立性断言 |
+
+### 15.6 读数
+
+| 项 | 值 |
+| --- | --- |
+| TS 测试 | **6,240**（core 946（+11）、memory 1,419（−6，迁走的 `retention.test.ts`）、eval 3,423、ai 327、storage 125） |
+| 覆盖率 | **168** 文件、16 豁免、**0 ratchet**；core 40 文件（+1）99.60 / 98.40 / 99.78 / 99.82，memory 27 文件（−1）99.86 / 99.67 / 100 / 100；`domain/retention.ts` **100 / 100 / 100 / 100** |
+| 变异 | **4 / 4 杀**：运行时 2 条、类型级 1 条、独立性 1 条 |
+| 导出普查 | **1,182 / 718 / 464，三个数都不动**——文件换了包、`leastRetained` 仍恰好 1 个调用方（`memory.ts`，现经 barrel） |
+| bundle | PASS（`./sqlite` +20 B 为本轮前既有差异，容差内） |
+| `manual:check` | 2 页 / 31 例编译通过 / 34 个选项全被示例覆盖 |
+| 派发 | **0 元** |
+| 产品表 | 未动 **91.25%** |
+
+### 15.7 位置
+
+| 判据 | 第 99 轮 | 现在 |
+| --- | --- | --- |
+| E1 / E2 / E3 / E4 / E5 / E7 / E8 | ✅ | ✅ |
+| **E6 语义层测量** | ❌ | ❌（预测未变：500 题上 `deltaQuestions === 0`，非零即跨题泄漏） |
+
+**7 关闭 / 1 全红，与上一轮相同。** 本轮是纯位移，不改行为——它**不**是 E6 的替代，也不消耗 E6。
+
+### 15.8 这轮不主张什么
+
+- **不主张准确率。** `semanticCarry` 仍默认关，E6 仍 `unrun`；不改行为的重构预测 `deltaQuestions === 0`，非零即
+  位移跨题泄漏。
+- **不主张 `cortex-memory` 其余部分都已放对。** 本轮只裁决了一个含纯规则的文件。`question-shape.ts`、
+  `confidence.ts`、`tally.ts` 未逐一核查，而 layer map 的过时本身（15.1）就是「至少还有一处」的理由。
+- **不主张 layer map 现在完备。** 它列的是目录，不是文件；列出的目录里新增文件它仍然看不见。更深的修法——
+  生成式架构图、像 `docs-crosscheck` 校验 marker 那样校验它——没有做，记在这里是「假装漂移不会复发」的替代。
+
+一句话：**这一轮把一个纯规则搬回了领域，代价是给 `MemoryValue` 加一个必填字段——而 17 个编译错误证明的不是字段太贵，而是本仓有 17 处手搓领域值的地方。**
