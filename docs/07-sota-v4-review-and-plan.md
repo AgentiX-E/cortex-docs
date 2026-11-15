@@ -204,6 +204,7 @@ unrun: D1 S6 S7 S8 S9 S11 C3 P1
 | 项 | 内容 |
 | --- | --- |
 | **目标** | `corpus.ts`（`append`/`context`/`sessions`，带 `(sessionId, ordinal)` 次级索引）+ `CortexMemory.remember/askStored` + `assemble.ts` 三 profile + 浏览器后端（OPFS）作为语料后端之一 |
+| **状态** | **已完成**（第 112 轮，见 §17）。五条验收全过，可证伪条款实测 **0.13×**（阈值 2.0×）。实现修正计划两处：`StoredTurn` 不存 `hash`（第二份同一事实的表示，只是个会和原文分叉的字段），`assemble.ts` 的入口叫 `assembleMemory`（`cortex-core` 已有 `createMemory`）。另外**查出一个真缺陷**：`CortexMemory` 把调用方传入的嵌入 store 换成了自己的，于是组合后的装配把擦除器指向了一个永远没人写的 Map——`removed.vectors` 在索引确实嵌入过的句子上读 **0** |
 | **验收方法** | 五条，缺一不可：① `corpus` 缺省时所有 fixture 的 `promptDigest` 逐字节不变；② `remember` 重放报 `{appended:n, duplicates:n}`，语料不翻倍；③ 同 ordinal 异文本抛错；④ `askStored()` 与手工传同等 context 的 digest 相等；⑤ 新文件四维 100%、无 `v8 ignore` |
 | **测评集** | L2 + 10⁵ 行 fixture 的读放大计时（不是估算） |
 | **成本** | 0 |
@@ -804,3 +805,108 @@ pnpm ledger:check && pnpm coverage:gate && pnpm acceptance:check
 | --- | --- | --- | --- |
 | 1 | **仪器自己的持久化嵌入缓存把明文写进 `.bin`**：`cortex-eval/src/retrieval.ts` 的 `serializeEmbeddingCache` 把 `Map` 的**键**（就是句子）原样写进 `EMBEDDING_CACHE_PATH` 指向的文件，落在 evidence 目录 | 那是仪器，不是产品；改格式会让已归档的缓存失效并触发一次重嵌（有成本），而且它不在 I5 的验收里 | 与「计费口径」一起做：键改摘要 + 格式版本号，一次派发内顺带换掉，记录在 `MEASURE-EMBED-CACHE.md` |
 | 2 | `EmbeddingCacheStore` 从三个方法变成四个方法是一次**破坏性变更** | 版本仍在 `0.1.0`，且 `cortex-ai` 的再导出已同步；破坏面是可度量的（本仓库只有 1 处测试实现、1 处默认实现） | 发布前在 `ARCHITECTURE.md` 的稳定性表里写一行「接口变更 = 次版本」，不要等到 1.0 才补 |
+
+---
+
+## 17 I4 执行记录（第 112 轮）：产品终于持有语料，以及被组合暴露出来的第七次
+
+### 17.1 为什么这不是「给 `CortexMemoryOptions` 加一个 `storage` 字段」
+
+计划写的是四件事：`corpus.ts`、`CortexMemory.remember/askStored`、`assemble.ts` 三 profile、OPFS 作为语料后端之一。四件都是对的，而**把它们读成四个独立特性会做错方向**，因为这一轮真正的对象是三条同时成立的事实：
+
+| 事实 | 出处 | 后果 |
+| --- | --- | --- |
+| `answer(question, context[])` 的语料是**实参**，每次由调用方交来 | `memory.ts` | 产品不持有任何状态，一个问题结束就忘 |
+| `CortexMemoryOptions` 28 个字段，没有一个是 `Storage` | `types.ts`（本轮之前） | 集成方拿到一个类，**没有已知能跑的装配**——唯一非测试构造住在 `bench/`，而 `files: ["dist"]` 不发布它 |
+| `DisclosureSession` 有 store 没有 reader，`CortexMemory` 有 reader 没有 store | 两者构造签名 | 两个对象**零组合**，能力账本第 10、13、15 行因此全是 `blocked` |
+
+所以这一轮的交付物不是「加存储」，是**把已经存在的能力接成产品**，并给每一次搬家配一条「关掉时字节同一」的断言。判据不是「有没有 storage 字段」，而是：`assembleMemory({profile:'full'})` 之后，一个客户能不能 `remember` → `askStored` → `forget`。
+
+### 17.2 数据模型：两处对计划的修正，都是「同一事实不要写两遍」
+
+计划 §22.38.2 给了 `StoredTurn` 的草样，这一轮**删掉了它的一个字段、发现了它不必需要的另一个**：
+
+| 计划草样 | 实现 | 为什么 |
+| --- | --- | --- |
+| `hash: string // md5(text)` | **没有这个字段** | 它是**同一事实的第二份表示**：重放比较的是原文与原文，精确且无碰撞；存摘要只是多一个会和原文分叉、并且每次读都要重新校验的字段。而这个仓库唯一需要保存原文的地方就是语料本身——一个读不懂自己 transcript 的记忆不是记忆 |
+| 需要一个全局 `seq` 让顺序可复现 | 行里**没有** `seq`；顺序是 `(会话到达序, ordinal)`，前者住在 `corpus.session` 索引行里 | 计划担心的是「`query` 不保证顺序」，这个担心是对的（`sql.ts` 的 `kvQuery` 没有 `ORDER BY`），但结论应该是**把顺序变成数据**，而不是在每一行上再抄一遍顺序。到达序只有一处：`corpus.session.seq` |
+
+次级索引的形状也是被读数定下来的：`Storage.query` 的 `keyPrefix` 在三个后端上都**先物化再切片**（`selectPage`），所以「按前缀读一个会话」是一次全表扫描。`corpus.session` 因此不是普通的 `(sessionId, ordinal) → id` 表，而是一行一个会话、带 `ordinals: number[]`：`session(id)` 是一次点查加 k 次点查，k 是该会话的轮数。**这是产品侧唯一一处为了绕开端口能力而做的结构决定**，写在 `CorpusSessionRow` 的注释里。
+
+### 17.3 这一轮真正查到的缺陷：`CortexMemory` 把调用方的 store 换成了自己的
+
+`assemble.test.ts` 的第一版 `full` 冒烟测试里，`removed.vectors` 读 **0**——而那句话刚才确实被索引嵌入过。原因在 `CortexMemory` 的构造函数：
+
+```ts
+// 本轮之前
+if (index?.embed === undefined || index.reuse === false) { this.#indexOptions = index; return; }
+this.#embedStore = new MemoryEmbeddingCacheStore();      // ← 调用方传的 store 被丢掉
+this.#indexOptions = { ...index, store: this.#embedStore };
+```
+
+两个方向同时错，小的那个先发生：传一个持久 store（文件、数据库）的调用方**静默地**得到一个内存 Map，他买的重启复用从未发生。大的那个是这一轮才暴露的：`assemble.ts` 的 `full` profile 造**一个** store 交给两边——索引和披露边界——**因为擦除必须能到达索引写过的条目**；而 store 被换掉之后，边界的擦除器指向一个永远没人写的 Map。
+
+于是上一轮 I5 修好的东西，在组合处被抵消了：行全删、读路径全关、`removed` 逐项计数、`vectors: 0`。**I5 的普查看不见它**，因为普查直接构造 `SearchIndex({ embed, store })`，从不经过产品的构造器——**仪器量的是机制，而缺陷在接线**。修法是一行：`index.store ?? new MemoryEmbeddingCacheStore()`，外加一条断言把这个约定钉住（索引的 memo 与本装配的 memo 必须组合出同一个键；`SearchIndex` 若哪天命名了自己的 space，这条会红）。
+
+这条发现的形状值得单独说：**前一轮的验收通过，并不等于这一轮的组合成立**。`removed.vectors` 是唯一能看见它的读数，而它只有在端到端路径上才有值。
+
+### 17.4 验收：五条计划条款，五条都真的红过
+
+| 计划条款 | 实际验收 | 红在哪 |
+| --- | --- | --- |
+| ① `corpus` 缺省时 prompt 逐字节不变 | `corpus-equivalence.test.ts` 对**六条路由**各断言「带/不带语料同一次提问的提示词字符串相等」，且语料里放的是**无关句子** | 任一路由偷偷读了语料即红；语料为空时该断言会退化成「两条路径都没读」，所以控制臂是必需的 |
+| ② 重放报 `{appended, duplicates}` 且不翻倍 | 同一批两次 `remember`：`{appended:4,duplicates:0}` 然后 `{0,4}`，`context()` 长度不变 | 报成 `{4,0}` 第二次即红（那是对一个翻倍的语料说的实话） |
+| ③ 同 ordinal 异文本抛错 | `CorpusError.code === 'rewrite'`，跨批与**批内**都抛，且**整批不落盘** | 任一为假即红；「批内」那条是本轮加的，因为一批自带矛盾时，落一半就是语料与调用方视图不一致 |
+| ④ `askStored()` 与手工传同等 context 的 digest 相等 | 不比较 digest，直接比较**提示词字符串**；并断言路由确实是 `multi-session` | 任一处不同即红 |
+| ⑤ 新文件四维 100%、无 `v8 ignore` | `corpus.ts` **135 语句 / 54 分支 / 28 函数**、`assemble.ts` **15 / 24 / 3**，四维全 100%，零 `v8 ignore` | 覆盖率闸门逐文件判 |
+
+另外两条**不是计划里的**、但这一轮必须有的断言：
+
+- **语料是第八个表面。** 加了语料就等于给每句话增加了一份副本，所以擦除必须到达它，否则我把上一轮修好的东西又打回去一格。`Corpus` 实现 `TextEraser`，`DisclosureSessionOptions.turns` 接收它，`removed.turns` 计数，`erasure-census.mjs` 从 7 面扩到 **8 面**，新故障 `no-turn-forget` 就是「语料存在但没接线」——它的读数是 **残余 2、泄漏读路径 0**，即所有被枚举的读路径都干净而句子仍在。
+- **入口闭包可移植。** `cortex-memory` 此前**不在** `entry-guard` 的计划里，理由是「它没有自己的存储，谈不上浏览器主张」。语料改变了这一点：`Corpus` 接任意 `Storage`，手册对同一个装配同时承诺 SQLite / PostgreSQL / OPFS / IndexedDB。现在它的入口闭包被守着（30 个文件、818 KiB、零 `node:` 内建），预算也改成**按入口**声明——一个数字要么大到对产品无意义、要么小到对工具包才有意义。
+
+### 17.5 读数
+
+| 量 | 值 | 说明 |
+| --- | ---: | --- |
+| 读放大比（10⁵ 轮） | **0.13×** | 读 188.3 ms / 组装 1,433.5 ms；上限 2.0×。**`answerSessions` 本来就 O(语料)**，所以读只是它上面一个常数 |
+| `askStored()` 全流程 | 1,795.5 ms | 读 + 组装，同一台机、同一问、48K 房间 |
+| 语料写入 10⁵ 轮 | 3,370 ms | 500 批，一个 SQLite 文件 |
+| 能力账本 | **15/26 = 57.7%**（+3 行） | `#10`、`#13`、`#15` 三段债同时还清；余 **1 blocked**（`#25` 配对统计，在 `cortex-core` 里、产品不调用）、9 instrument、1 gap |
+| 账本边界 | 54 → **53** 个导出 | `DisclosureSession` 有了产品调用者，边界组收缩为一个存储适配器 |
+| TS 测试 | **6,453**（+43） | 6,410 → 6,453 |
+| pytest | **2,857 passed / 19 skipped**（+6） | 擦除普查 7 → 8 例（新故障），新增读放大 5 例 |
+| 覆盖率（改动文件，四维） | `corpus.ts`/`assemble.ts` **100/100/100/100**；`cortex-memory` 整包 29 文件 99.87/99.69/100/100 | 逐文件闸门 174 文件、4 维、0 违反 |
+| 派发 | **0 次、0 CNY** | 纯代码迭代 |
+
+### 17.6 复现
+
+```bash
+cd cortex
+node tools/corpus-read-census.mjs                                  # 0.13x, clause <= 2.0
+CORTEX_CORPUS_READ_CENSUS_FAULT=slow-read node tools/corpus-read-census.mjs   # 必须红：3.3x
+node tools/erasure-census.mjs                                      # 8 surfaces, 0 residual
+CORTEX_ERASURE_CENSUS_FAULT=no-turn-forget node tools/erasure-census.mjs      # 必须红：residual 2
+./node_modules/.bin/vitest run --root packages/cortex-memory src/__tests__/corpus.test.ts
+./node_modules/.bin/vitest run --root packages/cortex-memory src/__tests__/corpus-equivalence.test.ts
+./node_modules/.bin/vitest run --root packages/cortex-memory src/__tests__/assemble.test.ts
+pnpm ledger:check && pnpm coverage:gate && pnpm entry:guard && pnpm acceptance:check
+```
+
+### 17.7 这一步对后续迭代的影响
+
+| 迭代 | 影响 |
+| --- | --- |
+| `I6`（行内 superseded） | 无直接关系；但 `#5` 仍是 `gap`，而 `full` profile 之后它有了落点——渲染模式属于 `#10` 同一个装配里 |
+| `I7`（三格派发） | **无**。本轮零派发，所有读数都是本机 CPU 计时，不进入任何准确率表格 |
+| `I8`（候选集裁决与双时态） | 无；但它现在有了产品侧的落点（`assembleMemory`），不必再只住在 `cortex-eval` |
+| 产品发布口径 | 产品现在可以说「**客户可以记住、可以问、可以擦除**」：三个 profile 都有端到端冒烟，`full` 的擦除覆盖八个表面。**仍然不能**说「浏览器里跑通了语料」——闭包可移植性被机械守着，OPFS 后端有自己的浏览器套件，但**语料在真浏览器里的往返不是一条已登记读数** |
+| 能力账本 | 第 10、13、15 行由 `blocked` 转 `product`；第 13 行的 `site` 从 `sqlite.ts` 改到 `corpus.ts`，理由是**一个端口的适配器按构造永远不可能从产品入口可达**——这正是账本 D4 判据抓出来的声明缺陷 |
+
+### 17.8 这轮没做的三件事，写给下一轮
+
+| # | 发现 | 为什么这轮不做 | 下一轮怎么处理 |
+| --- | --- | --- | --- |
+| 1 | **语料在真浏览器里没有往返读数**：`entry-guard` 证明闭包可移植，OPFS 后端有 24 项浏览器检查，但「`Corpus` 跑在 OPFS 上、写三轮、重开浏览器读回」不是一条读数 | 要在 `cortex-memory` 建一个浏览器探针（打包 + CDP + 页面），是本轮之外的一件独立工作；本轮已经用机械手段守住可移植性 | 与「浏览器轴」一起做：`packages/cortex-memory/test/browser/probe.mjs`，产物进 `evidence/browser/corpus.json`，`guard:browser` 一并比较 |
+| 2 | **`#25` 配对统计仍 `blocked`**：`cortex-core/src/math/stats.ts` 声明在产品包内，产品不调用，只有 `cortex-eval` 的指标在用 | 修法是**移文件**到 `cortex-eval`（`variance.ts` 旁），会动 6 个导入点与边界组；与本轮主题无关 | 与 `I6`/`I7` 任一纯代码轮一起做，一次移完并更新边界组 |
+| 3 | **`Corpus` 的 `forget` 是 O(语料) 全扫** | 擦除是罕见且必须彻底的操作，为本轮范围内的正确性可以接受；代价有上限（与读同一面墙），已写在方法注释里 | 若擦除进入热路径（例如按用户删除整段会话），加 `corpus.text` 摘要索引；那需要先有「擦除频次」的读数，而不是先有结构 |

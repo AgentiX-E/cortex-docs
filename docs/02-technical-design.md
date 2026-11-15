@@ -11340,6 +11340,15 @@ export type StoredTurn = {
 
 **验收（五条，缺一不可）**：`corpus` 缺省时全部 fixture 的 `promptDigest` 与答案逐字节不变；重放报 `{appended:n, duplicates:n}` 而语料不翻倍；同 ordinal 异文本抛错；`askStored()` 与手工传同等 context 的 digest 相等；新文件四维 100% 且无 `v8 ignore`。
 
+**实现记录（第 112 轮，见 `07` §17）**：五条验收全过，另有**两处对上面草样的修正**，都由同一个理由驱动——*同一事实不要写两遍*：
+
+| 草样 | 实现 | 理由 |
+| --- | --- | --- |
+| `hash: string // md5(text)` | 无此字段 | 重放比较的是原文与原文，精确且无碰撞；存摘要只是多一个会与原文分叉、且每次读都要重新校验的字段。而这个仓库唯一需要保存原文的地方就是语料本身 |
+| 行上带全局 `seq` | 无 `seq`；顺序是 `(会话到达序, ordinal)`，到达序只住在 `corpus.session.seq` | 「`query` 不保证顺序」是对的（`kvQuery` 没有 `ORDER BY`），但结论应当是**把顺序变成数据**，而不是在每一行上再抄一遍 |
+
+另外 `corpus.session` 的形状不是普通映射而是**一行一会话 + `ordinals: number[]`**：`Storage.query` 的 `keyPrefix` 在三个后端上都先物化再切片，所以「按前缀读一个会话」是一次全表扫描；一行一会话把 `session(id)` 变成 1 + k 次点查。这条是产品侧唯一为绕开端口能力而做的结构决定。读完的代价有读数：10⁵ 轮上一次读 **188 ms**、同一批轮次的组装 **1,434 ms**，比 **0.13×**（上限 2.0×）。
+
 ### 22.38.3 变更二：known-good assembly —— 唯一的非测试构造不能住在 `bench/`
 
 **问题**：`CortexMemory` 唯一的非测试构造在 `cortex-memory/bench/run-ablation.ts`，而包声明 `files: ["dist"]`、`exports: { "." }`。所以集成方拿到一个类，**没有已知能跑的装配**。
@@ -11347,6 +11356,14 @@ export type StoredTurn = {
 **设计**：`assemble.ts` 导出 `createMemory({ llm, now, embed?, corpus?, profile })`，三个 profile（`minimal` / `reader` / `full`），每个都有一个冒烟测试：三会话语料 → `remember` → `askStored` → 非空答案。
 
 **一个故意的空缺**：`maxPromptChars` **不设默认值**。每路由的房间表是登记臂的配置，第二个默认值就是第二条臂——这条与 `§14.29`「闸门抓到了第一个运行，而声明没有生产者」是同一个教训。
+
+**实现记录（第 112 轮）**：三个 profile 落地，冒烟测试各自端到端（三会话语料 → `remember` → `askStored` → 非空答案）。三处与这份草样的差异，都写在 `07` §17：
+
+1. **函数名是 `assembleMemory` 而不是 `createMemory`**：`cortex-core` 已经导出 `createMemory`（构造领域层的 `Memory` 值），一个 import 之隔的两个同名函数是读者调错的那个方式。
+2. **`full` 需要第二个 store（`shared`）并在装配时拒绝**：把披露边界两侧放进一个文件，规则就落在一个表名上。拒绝发生在装配处而不是首次发布处。
+3. **这条草样没写、但实现必须有的东西：`full` 把 `Corpus` 传给边界**。语料是**第八个表面**——一个存下所听内容的记忆会把每句话再存一份，而披露边界不知道它的身份 `(sessionId, ordinal)`。擦除因此按**措辞**而不是按行进行，`removed.turns` 计数，`no-turn-forget` 故障的读数是「残余 2、泄漏读路径 0」。
+
+还有一条本轮才暴露的实现缺陷，值得写在这里而不是只写进执行记录：`CortexMemory` 会把调用方传入的 `index.store` **换成自己的**，于是 `full` 那个「造一个 store 交给两边」的设计被静默抵消——擦除器指向一个永远没人写的 Map，`removed.vectors` 读 0，而所有行计数都说擦除完整。**上一轮的验收通过，不等于这一轮的组合成立**；`removed.vectors` 是唯一能看见它的读数，而它只在端到端路径上有值。
 
 ### 22.38.4 变更三：行内 superseded 渲染 —— 判定与渲染必须分开改
 

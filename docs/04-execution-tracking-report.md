@@ -25499,3 +25499,76 @@ R0 完成。位置：`I2` 已闭，`I1` 上一轮已闭 → **R0 全部完成**�
 ### 107.8 依赖治理
 
 两仓 Dependabot：0 告警、0 待处理 PR（本轮检查时点）。本轮未引入新依赖；`sha256.ts` 的存在理由之一就是**不加依赖**。
+
+---
+
+## 108 第 112 轮：产品持有语料，与一个被组合抵消掉的擦除
+
+### 108.1 本轮做了什么
+
+| 类 | 内容 |
+| --- | --- |
+| **R1 产品侧（I4）** | `corpus.ts`（`append`/`context`/`sessions`/`session`/`turn`/`size`/`forget`/`held`）+ `CortexMemory.remember/askStored` + `assemble.ts` 三 profile（`minimal`/`reader`/`full`）+ `DisclosureSessionOptions.turns` |
+| **新增能力** | `Corpus`、`CorpusError`、`turnId`、`assembleMemory`、`Installation`、`TextEraser`（`cortex-core`）、`ErasureRecord.removed.turns` |
+| **修缺陷 2 个** | ① `CortexMemory` 丢弃调用方传入的嵌入 store（**使上一轮的向量擦除在组合处失效**）；② `cortex-memory` 的入口闭包此前不在任何可移植性守卫里 |
+| **仪器** | 擦除普查 7 → **8 表面**，新故障 `no-turn-forget`；新增 `tools/corpus-read-census.mjs`（10⁵ 轮读放大，带 `slow-read` 故障）；`manual-examples.mjs` 支持跨声明文件查类型 |
+| **产品行为** | 缺省 `corpus` 时六条路由的提示词逐字节不变；`full` profile 的擦除覆盖八表面；`maxPromptChars` 仍无默认值 |
+| **派发** | 0 次，**0 CNY** |
+| **测试** | TS **6,453**（+43）、pytest **2,857 / 19 skipped**（+6）；新文件四维 100%；账本、验收、手册、文档交叉、8 道守卫全过 |
+| **完成度** | 能力口径 **15/26 = 57.7%**（+3 行，见 108.5） |
+
+### 108.2 这一轮的对象不是「加存储」，是「接成产品」
+
+三条事实同时成立：`answer(question, context[])` 的语料是**实参**；`CortexMemoryOptions` 28 个字段里没有 `Storage`；唯一非测试装配住在 `bench/`，而 `files: ["dist"]` 不发布它。于是集成方拿到一个类、没有已知能跑的组合，而能力账本第 10、13、15 行全是 `blocked`——`DisclosureSession` 有 store 没 reader，`CortexMemory` 有 reader 没 store，两者零组合。
+
+`Corpus` 因此只做一件事：把行变成 `context[]` 与 `sessions[][]` 两个实参，然后调用**公开方法**。它不进提示词组装——这是可证伪性的来源：因为只产出实参，「存起来的语料答得一样」就是**两个提示词字符串相等**，而不是「逻辑相似」。
+
+`assembleMemory({ profile })` 是那个缺失的组合根：`minimal` / `reader` / `full`，每个都被端到端冒烟驱动（三会话语料 → `remember` → `askStored` → 非空答案）。
+
+### 108.3 查到的缺陷：`CortexMemory` 把调用方的 store 换成了自己的
+
+`full` 的冒烟测试第一版里 `removed.vectors` 读 **0**，而那句话刚被索引嵌入过。`CortexMemory` 的构造函数在 `index.embed` 存在时无条件 `new MemoryEmbeddingCacheStore()`，把调用方传的 `index.store` 丢掉。小的后果：传持久 store 的调用方静默得到内存 Map，重启复用从未发生。大的后果：`assemble.ts` 的 `full` **造一个 store 交给两边**（索引与披露边界），因为擦除必须到达索引写过的条目——store 被换掉后，边界的擦除器指向一个永远没人写的 Map。
+
+**上一轮 I5 修好的东西，在组合处被抵消了**：行全删、四条读路径全关、`removed` 逐项计数、`vectors: 0`。而 I5 的普查看不见它，因为普查直接构造 `SearchIndex({ embed, store })`，从不经过产品构造器——**仪器量的是机制，缺陷在接线**。
+
+修法一行（`index.store ?? new MemoryEmbeddingCacheStore()`），外加一条断言钉住「索引的 memo 与本装配的 memo 必须组合出同一个键」。教训写进 §17.3：**前一轮验收通过不等于这一轮组合成立**，`removed.vectors` 是唯一能看见它的读数，而它只在端到端路径上有值。
+
+### 108.4 验收：五条计划条款 + 两条本轮新增，七条都红过
+
+| 条款 | 红在哪 |
+| --- | --- |
+| ① `corpus` 缺省时字节不变 | 六条路由 × 带/不带语料，提示词字符串相等；语料里放**无关句子**作为控制臂 |
+| ② 重放不翻倍 | 两次 `remember` → `{4,0}` 然后 `{0,4}`，`context()` 长度不变 |
+| ③ 同 ordinal 异文本抛错 | `code: 'rewrite'`，跨批与批内都抛，且**整批不落盘** |
+| ④ `askStored` == 手工传 | 比较提示词字符串（比 digest 更强），并断言路由是 `multi-session` |
+| ⑤ 新文件四维 100% | `corpus.ts` 135 语句/54 分支/28 函数，`assemble.ts` 15/24/3，零 `v8 ignore` |
+| ⑥（新增）语料是**第八个表面** | `no-turn-forget` → 残余 **2**、泄漏读路径 **0**：读路径全干净而句子仍在 |
+| ⑦（新增）入口闭包可移植 | `cortex-memory` 进 `entry-guard`：30 文件 / 818 KiB / 零 `node:` 内建；预算改为按入口声明 |
+
+### 108.5 读数与位置
+
+| 量 | 值 |
+| --- | ---: |
+| 读放大比（10⁵ 轮） | **0.13×**（188.3 ms 读 / 1,433.5 ms 组装，上限 2.0×） |
+| `askStored()` 全流程 | 1,795.5 ms；写入 10⁵ 轮 3,370 ms |
+| 能力账本 | **15/26 = 57.7%**（+3）；1 blocked / 9 instrument / 1 gap；边界 53 |
+| TS / pytest | 6,453（+43）/ 2,857（+6） |
+| 覆盖率 | 改动文件四维 100%；整仓 174 文件逐文件闸门 0 违反 |
+| 派发 | 0 次、0 CNY |
+
+**位置**：R0 完成（I1、I2），R1 完成两项（I5、**I4**）。
+
+| 优先级 | 项 | 为什么是这个顺序 | 成本 | 对完成度的影响 |
+| --- | --- | --- | --- | --- |
+| 1 | `I6` 行内 superseded 渲染 | 唯一带分数的产品机制；`#5` 的 `gap` 一落地就红；`full` profile 已经给了它落点 | 14.26 CNY | 能力 +1 |
+| 2 | `I7` 三格一次派发 | `S9`/`S11`/右下格三个 `unrun`；回答「6,000 token 下能不能守住 91%」 | 42.78 CNY | 不改能力，改**结论** |
+| 3 | `I8` 候选集裁决与双时态 | R2/R3，两段 | ~75 CNY | 能力 +1 起 |
+| — | 浏览器语的语料往返读数 | 优先级 9 的浏览器轴；本轮只做到闭包可移植 + 后端套件 | 0 | 不改能力，补一条读数 |
+
+**与 SOTA 的量化差距（未变）**：`S1` **91.05%**，准确率 SOTA 是 **Maximem Synap 95.6%**（−4.5 pp）；成本 SOTA 是 **Mem0 ≈6.8K token/题**，cortex **9,201**（+35%）。**cortex 目前不是 SOTA**，两轴都还差。
+
+**产品完成度 57.7%（15/26），本轮无发布信号。** 功能清单口径仍是 13/13，但它回答的是「机制是否都实现了」，不是「客户能不能用」；后者由能力账本判，而账本还有 1 行 blocked（`#25` 配对统计住在 `cortex-core`、产品不调用）与 1 行 gap（`#5`）。**本轮的产品口径进展**：产品现在可以诚实地说「**记住、提问、擦除**」，因为 `full` profile 端到端成立且擦除覆盖八个表面；**不能说**「浏览器里跑通过语料」。
+
+### 108.6 依赖治理
+
+两仓 Dependabot：0 告警、0 待处理 PR（本轮检查时点）。本轮未引入新依赖：`corpus.ts` 只 import 一个类型，`assemble.ts` 只 import 本包与 `cortex-core`。

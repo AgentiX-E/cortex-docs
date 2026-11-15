@@ -6,7 +6,7 @@
     "released": "h1",
     "survivor": "unrelated"
   },
-  "surfaces": 7,
+  "surfaces": 8,
   "before": {
     "surfaces": [
       {
@@ -40,6 +40,12 @@
         "health": 0
       },
       {
+        "role": "corpus-turns",
+        "rows": 6,
+        "secret": 1,
+        "health": 1
+      },
+      {
         "role": "embedding-keys",
         "rows": 3,
         "secret": 0,
@@ -52,7 +58,7 @@
         "health": 1
       }
     ],
-    "occurrences": 7,
+    "occurrences": 9,
     "readPaths": {
       "privateEvidence": true,
       "sharedEvidence": true,
@@ -93,6 +99,12 @@
         "health": 0
       },
       {
+        "role": "corpus-turns",
+        "rows": 2,
+        "secret": 0,
+        "health": 0
+      },
+      {
         "role": "embedding-keys",
         "rows": 1,
         "secret": 0,
@@ -118,20 +130,23 @@
       "facts": 1,
       "cards": 1,
       "releases": 0,
-      "vectors": 1
+      "vectors": 1,
+      "turns": 1
     },
     "released": {
       "facts": 1,
       "cards": 0,
       "releases": 1,
-      "vectors": 1
+      "vectors": 1,
+      "turns": 1
     },
     "total": 4,
-    "vectors": 2
+    "vectors": 2,
+    "turns": 2
   },
   "residualOccurrences": 0,
   "leakingReadPaths": 0,
-  "controlOccurrences": 7,
+  "controlOccurrences": 9,
   "controlReadPaths": 4,
   "keySurface": {
     "rowsBefore": 3,
@@ -139,7 +154,8 @@
     "wordingAfter": 0
   },
   "survivor": {
-    "cached": 1
+    "cached": 1,
+    "turns": 1
   },
   "tombstones": 1,
   "records": 2

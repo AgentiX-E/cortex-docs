@@ -1,0 +1,12 @@
+{
+  "$comment": "Written by tools/corpus-read-census.mjs. A corpus of 10^5 turns in a real SQLite file, then three timings: the read (`corpus.sessions()`), the assembly (`answerSessions` over the same array with a stub reader at the registered 48k room), and the two together through `askStored()`. The ratio is the registered falsifiable clause: above 2.0 the read-amplification design does not hold and `askStored` is withdrawn in favour of `remember` alone.",
+  "dataset": "100000 turns, 500 sessions x 200, one SQLite file",
+  "room": 48000,
+  "fault": null,
+  "readMs": 188.92,
+  "assembleMs": 1379.51,
+  "storedMs": 1619.9,
+  "writeMs": 3197,
+  "ratio": 0.14,
+  "reading": "read / assemble. One number, because the clause is one comparison: does the transcript scan cost more than twice the work the answer path was already doing over the same turns?"
+}
