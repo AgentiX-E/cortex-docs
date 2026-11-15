@@ -24966,6 +24966,7 @@ S13  8    >= 1    pass    semantic layer: whether the treatment reached any wind
 2. `tools/__tests__/test_semantic_carry_analysis.py`：**13 条**。此前零测试的正是那条决定 `S12` 拿注册数还是根本没有数的分支——`screening` **不得**写 `paired`。三条拒绝（缺 `population`、无 `#w2`、bitstring 不对齐）+ 一条 tier 开关 + 一条 usage 缺席。
 3. `cortex/docs/ACCEPTANCE-MATRIX.md`：`S12` `—` → `-2`、`S13` `8` → `27` 两个 marker，以及整段把「`S12` stays `unrun`」换成注册读数——原文现在是错的。
 4. `cortex/ARCHITECTURE.md`（「E6 尚未运行」是状态描述，必须改）+ `docs/DECISION-SEMANTIC-LAYER-ROUTE.md`（7/8 → 8/8，并写明 `S10`/`S9` 闸开但本轮不花）。
+5. `cortex/.github/workflows/verify.yml` 检出 `cortex-docs` 到 `path: cortex-docs`。**第一次推送 CI 就红了**：13 条测试报 `No such file or directory`——本机能过只因为两仓并排。修法选**检出**而非 **skip**（那个脚本决定 `S12` 拿注册数还是根本没数，缺它等于停止测量），并加第 14 条测试把布局写成断言、缺脚本时失败并指名要恢复哪个步骤。
 
 一条测试为什么用 8 语料：`withinThreshold` 是 `>= -5`，四题的第二窗口最差只能到 −4，**一个要证明判据会 miss 的用例必须有能力 miss**。它先红了，红的理由正是它要证明的事。
 

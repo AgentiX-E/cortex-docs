@@ -1375,6 +1375,7 @@ McNemar 在首 rep 上是 `b = 8 / c = 8`，`p = 1.0`。**这不是「机制有�
 2. **`tools/__tests__/test_semantic_carry_analysis.py`（13 条）**：这个脚本决定 `S12` 拿到**一个注册数**还是**根本没有数**，而那条分支此前零测试。三条拒绝（缺 `population`、无 `#w2`、bitstring 不对齐）+ 一条 tier 开关（`screening` **不得**写 `paired`）+ 一条 `usage` 缺失即缺席。
 3. **`cortex/docs/ACCEPTANCE-MATRIX.md`**：两个 marker（`S12` `—` → `-2`，`S13` `8` → `27`）与整段散文重写——原文写的是「`S12` stays `unrun`」，现在它是错的。
 4. **`cortex/ARCHITECTURE.md` 与 `DECISION-SEMANTIC-LAYER-ROUTE.md`**：前者那句「E6 尚未运行」是状态描述、必须改；后者「7 of 8 closed」改成 8/8，并写明 `S10`/`S9` 的闸已开但本轮不花。
+5. **`cortex/.github/workflows/verify.yml` 检出 `cortex-docs`**（`path: cortex-docs`，public 仓、无凭据）。第一版推送的 CI 直接红了：13 条测试报 `No such file or directory`——它们在本机能过，只因为两个仓并排。修法是**检出**而不是 **skip**：那个脚本正是决定 `S12` 拿注册数还是根本没有数的那条分支，缺了它整套测试就停止测量。另加第 14 条测试把布局写成断言，缺脚本时**失败**并指名该恢复哪个 checkout 步骤，而不是让十三行 file-not-found 去暗示。
 
 一条测试为什么用 8 语料而不是 4：`withinThreshold` 是 `>= -5`，而四题的第二窗口最差只能读到 −4，**一个「证明判据会 miss」的用例必须有能力 miss**。这条在写的时候先红了，红的理由正是它要证明的那件事。
 
