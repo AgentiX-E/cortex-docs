@@ -1,0 +1,72 @@
+{
+  "generatedBy": "evidence/longmemeval/scripts/turn_window_analysis.py",
+  "tier": "registered",
+  "sources": {
+    "control": "43673528695",
+    "treatment": "43673618979"
+  },
+  "population": {
+    "questions": 500,
+    "runs": 4
+  },
+  "arm": {
+    "reader": "deepseek-chat",
+    "judge": "deepseek-chat",
+    "maxTurnChars": 400,
+    "window": {
+      "control": "head",
+      "treatment": "match"
+    }
+  },
+  "windows": {
+    "paired": {
+      "n": 500,
+      "deltaQuestions": 2.5,
+      "discordant": {
+        "controlOnly": 13,
+        "treatmentOnly": 19
+      }
+    }
+  },
+  "mcnemar": {
+    "p": 0.377086,
+    "b": 13,
+    "c": 19
+  },
+  "turnWindow": {
+    "control": {
+      "cut": 2426,
+      "marked": 0,
+      "whole": 32034,
+      "questions": 378,
+      "unreported": 122
+    },
+    "treatment": {
+      "cut": 2457,
+      "marked": 2457,
+      "whole": 32287,
+      "questions": 378,
+      "unreported": 122
+    },
+    "reached": 1.0128,
+    "reachedBasis": "run-level: treatment.marked / control.cut, not an item-level pairing"
+  },
+  "usage": {
+    "calls": 11168,
+    "promptTokens": 43233849,
+    "cacheHitPromptTokens": 38021380,
+    "completionTokens": 722545
+  },
+  "verdict": {
+    "withinThreshold": true,
+    "rule": "paired delta >= -5 questions"
+  },
+  "paired": {
+    "n": 500,
+    "deltaQuestions": 2.5,
+    "discordant": {
+      "controlOnly": 13,
+      "treatmentOnly": 19
+    }
+  }
+}
