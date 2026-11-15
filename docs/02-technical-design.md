@@ -11293,3 +11293,150 @@ return `${head}${excerptAround(turn.content.slice(head.length), cap.focusQuery, 
 两条测试先写先红：窗口落得很远时仍保住日期；cap 小到容不下「头部 + 窗口」时仍保住日期（40 个字符里 31 个给头部，规则退化成对**剩余部分**的纯切，而不是对头部）。`prompt.ts` 与 `excerpt.ts` 四维仍是 100%。
 
 一条关于仪器的结论值得单独写下来：这一对是被**三个不是分数的读数**检查出来的——落在 cap 的条目数、带省略号的条目数、以及这次新加的「保住日期的条目数」。前两个说「窗口到了提示词上」，第三个说「它还顺手拿走了东西」。一个只看准确率的读数会报出 +0.50，然后采纳一个在问日期的能力上删日期的窗口。
+
+## 22.38 产品侧与测评侧的权责分离：四条判据，以及被它们改掉的五个设计
+
+### 22.38.1 为什么这一节在技术设计里，而不在计划里
+
+因为 v4 报告（`docs/07-sota-v4-review-and-plan.md`）的结论不是"少一个机制"，而是**一处架构错位**：产品的能力有一半住在仪器里。架构错位要改的是设计，不是排期。这一节记录采纳后的五个设计变更，每一条都带"关掉时字节同一"的验收。
+
+四条判据（D1–D4），一个能力属于产品当且仅当四条全中：
+
+| 判据 | 问法 | 失败时的实例 |
+| --- | --- | --- |
+| **D1 可安装性** | 只装产品、不装 harness 时，这个能力还在吗 | `Fact`、`anchor-recall`：论文里的分数客户装不上 |
+| **D2 独立性** | 把 `cortex-eval` 删掉，产品还剩什么 | `fact-store.ts`：删掉测量等于删掉功能 |
+| **D3 自足性** | 输入来自产品自己持有的状态，还是每次由调用方交来的实参 | `relevanceFor` 注入：同一产品在两套 harness 下是两个产品 |
+| **D4 可调用性** | 有没有用户会调的入口，且在**默认路径**上 | `tally` / `aggregation` / `DisclosureSession`：实现了、有测试、调不到 |
+
+按这四条对 26 项能力分账，结论是 **16 项产品 / 7 项越界到仪器 / 3 项正确地留在仪器**。其中 4 项是"实现了、有测试、用户调不到"，1 项是"有后端无前端"。
+
+### 22.38.2 变更一：双模式语料 —— 等价性由实参相等证明
+
+**问题**：`CortexMemoryOptions` 的 28 个字段无一为 `Storage`；`answer(question, context[])` 让产品无法持有语料。`DisclosureSession` 有 store 没有 reader，`CortexMemory` 有 reader 没有 store，**两者零组合**。
+
+**设计**：`corpus.ts` 只做一件事——把存储里的行变成 `(context[], sessions[][])` 两个实参，然后调用**公开方法** `answerSessions`。它不进入 prompt 组装。
+
+这个约束是刻意的：store 路径若不碰组装，等价性就是"实参相等 ⇒ 输出相等"，可以用 `promptDigest` **逐字节断言**；若它参与组装，等价性就退化成"逻辑相似"，而"逻辑相似"不可证。
+
+```ts
+export type StoredTurn = {
+  readonly v: 1;            // schema version: read and refused, never guessed
+  readonly id: string;      // `${sessionId}/${padStart(ordinal,6)}`
+  readonly sessionId: string;
+  readonly ordinal: number;
+  readonly text: string;
+  readonly at: number;      // corpus clock, never Date.now()
+  readonly hash: string;    // md5(text): dedupe key, and the only field a replay touches
+};
+```
+
+**身份是 `(session, ordinal, hash)` 三元组**，不是 `(session, ordinal)`：同一 ordinal 写入不同文本是**重写历史**，必须拒绝——一个可以被原地编辑的语料，它的已发布数字不可复现。
+
+**两个已知边界写在设计里而不是留给读者发现**：
+
+1. `Storage.query` 的 `keyPrefix` 在三个后端上都**先物化再切片**，`limit` 挡不住工作量。所以 `Corpus` 必须自带 `(sessionId, ordinal)` 次级索引表，而不是靠前缀扫描。10⁵ 行以内这是常量级浪费，超过就不是。
+2. `context()` 每次全量读，`askStored()` 因此是 O(语料)。这与今天"调用方每次传全量 context"同阶，所以它不引入新上限，只是把上限搬进了产品。
+
+**验收（五条，缺一不可）**：`corpus` 缺省时全部 fixture 的 `promptDigest` 与答案逐字节不变；重放报 `{appended:n, duplicates:n}` 而语料不翻倍；同 ordinal 异文本抛错；`askStored()` 与手工传同等 context 的 digest 相等；新文件四维 100% 且无 `v8 ignore`。
+
+### 22.38.3 变更二：known-good assembly —— 唯一的非测试构造不能住在 `bench/`
+
+**问题**：`CortexMemory` 唯一的非测试构造在 `cortex-memory/bench/run-ablation.ts`，而包声明 `files: ["dist"]`、`exports: { "." }`。所以集成方拿到一个类，**没有已知能跑的装配**。
+
+**设计**：`assemble.ts` 导出 `createMemory({ llm, now, embed?, corpus?, profile })`，三个 profile（`minimal` / `reader` / `full`），每个都有一个冒烟测试：三会话语料 → `remember` → `askStored` → 非空答案。
+
+**一个故意的空缺**：`maxPromptChars` **不设默认值**。每路由的房间表是登记臂的配置，第二个默认值就是第二条臂——这条与 `§14.29`「闸门抓到了第一个运行，而声明没有生产者」是同一个教训。
+
+### 22.38.4 变更三：行内 superseded 渲染 —— 判定与渲染必须分开改
+
+**问题**：`conflict.ts` 已经算出"哪两句说同一件事、哪句更晚"，但它只被用来在 prompt 尾部**旁挂**一个块，且 `conflicts !== true` 时直接返回原 prompt（`memory.ts:2828`）。于是读者要在两万多字符里自己发现"这两句是一对，后一句更晚"。
+
+**设计**：不动判定，只加一个渲染模式（默认 `off`）：
+
+| 模式 | 行为 | 动的是什么 |
+| --- | --- | --- |
+| `off` | 现状，逐字节不变 | 无 |
+| `mark` | 两句都留在原位，给较旧的一句尾附 `[superseded by a later statement on <date>]` | **只增加读者原本没有的信息**，不改顺序、不删证据 |
+| `collapse` | 只留较晚的一句，较旧的一句换成一行指针 | 删证据，风险由 `mark` 先量 |
+
+**判定与渲染分开改的理由**：判定已被 `MEASURE-CONFLICT-SURFACING` 测过，渲染没测过。混在一次改动里，读数就无法归因到哪一半。
+
+**为什么这是产品机制而不是提示词**：它不要求读者做比较，它**把比较的结果写进证据**。`MEASURE-KU-STALE` §4 的判据是"读者不是缺证据，是缺一个做判断的地方"——这里给的正是一个地方。
+
+**验收**：`off` 时字节同一；`mark` 时只有 `pair.olderId` 命中，且 `Δchars` 等于标记长度 × 命中数（可算）；KU 的四个陈旧孪生题**配对** ≥3 题修复才算有效（<3 题落在噪声里）。
+
+### 22.38.5 变更四：擦除的第六、第七表面 —— 一个删不掉的键
+
+这一条是读代码读出来的，先给证据：
+
+```ts
+// packages/cortex-core/src/cache/embedding-cache.ts:166
+export function defaultEmbeddingCacheKey(fingerprint: string, text: string): string {
+  return `${fingerprint}\u0000${text}`;      // ← 原文逐字在键里
+}
+
+// :64
+export interface EmbeddingCacheStore {
+  get(key: string): Float64Array | undefined;
+  set(key: string, vector: Float64Array): void;
+  size(): number;                             // ← 没有 delete，没有 clear，没有迭代
+}
+```
+
+三件事同时成立：`index.reuse` 打开时产品持有一个**进程生命周期**的 `Map`；这个 Map 的**键里逐字包含原文**；**接口没有删除方法**。于是 `forget()` 做到了四个表面 + SQLite 文件字节零残留（`C7/C8`），而回答侧的另一半把同一句话以明文留在内存里，且无路径移除。
+
+**必须同时说清的一件事**：登记臂的 `memoryConfig.index = null`，所以这个缺陷**不在 91.05% 里**。它不是"分数作弊"，它是"产品承诺的一半"。排 P1 而非 P0 的理由就是这个。
+
+**设计（三处最小改动）**：
+
+```ts
+export interface EmbeddingCacheStore {
+  get(key: string): Float64Array | undefined;
+  set(key: string, vector: Float64Array): void;
+  delete(key: string): void;                                    // 新增，一个方法而不是一套淘汰策略
+  size(): number;
+}
+
+export function defaultEmbeddingCacheKey(fingerprint: string, text: string): string {
+  return `${fingerprint}\u0000${sha256(text)}`;                 // 32 字节，原文不再落键
+}
+
+async forget(turnId: string): Promise<{ rows: number; vectors: number }> {
+  const row = await this.#corpus.get(turnId);
+  const rows = await this.#corpus.remove(turnId);
+  const vectors = row === undefined ? 0 : this.#embedStore.delete(this.#keyOf(this.#fingerprint, row.text)) ? 1 : 0;
+  return { rows, vectors };                                     // 行是文本，向量是它的像，两条都要
+}
+```
+
+**键改摘要会改变什么**：不会改变 `memoHits`（命中率只取决于"同一条文本是否给出同一个键"）。**会**改变两处可观察量，必须一起处理：`index-reuse.test.ts` 里逐字比较键的断言要改成语义断言（"第二问只嵌 1 条"），以及任何把键当调试输出的地方要打印 `sha256` 前 8 位。
+
+**验收**：`erasure-census.mjs` 的表面表从 5 扩到 7（行 / 键 / 向量），gating 仍是"0 出现 0 泄漏路径"；外加一条**反向断言**——`index.reuse` 实例擦除后 `size()` 减 1 且 `get(keyOf(text))` 为 `undefined`。反向断言是这一条的全部：一个只报"删了多少行"的计数器，在键还留着的时候也是绿的。
+
+### 22.38.6 变更五：`now` 是能力而不是配置
+
+`now: number` 一个常量，全生命周期不前进。于是：
+
+- `recency = exp(−Δ / 30d)` 中 Δ 恒为 0 → 写入价值恒为 `confidence × sourceTrust`；
+- `retention` 的驱逐顺序在长驻进程里**恒等于插入序**。
+
+一个"长期记忆"产品的保留策略如果永远不随时间变化，它就不是保留策略。所以 `now: number | (() => number)`，默认仍是常量（归档运行逐字节不变），函数形态只是让 Δ 能不为零。
+
+配套三小项：`close()` 幂等（`Storage.close` 第一次从产品侧可达）；行带 `v: 1` 且读到更高版本**拒绝而不是猜**；`writer.cross` 包进事务（它现在的正确性靠"先写后删 + 幂等"，对 `release()` 不够）。
+
+**验收**：常量时钟下全部 fixture 字节不变；函数时钟下跨两次调用 `recency` 严格递减；`close()` 二次调用不抛；`readRow` 对 `v:2` 抛且消息含版本号；注入失败时事务两侧都不变。
+
+### 22.38.7 一个必须进 CI 的边界测试
+
+现在有一条守卫（`bench-memory-arm.test.ts:1603` 读 manifest 断言仪器不 import 产品），且只查一个方向。补成三条：
+
+1. **依赖方向双向**：`dependencies` + `devDependencies` + `peerDependencies` 全都不得含产品包。
+2. **协议一致性**：`conformance(CortexMemory)` 八条。其中第 3 条——"声明了 `answerSessions` 就必须让 `answer()` 也遵守 `sessions`"——是能抓住 `_sessions` 那类缺陷的唯一断言。
+3. **能力归属**：每个只出现在仪器里的"能力词"，必须在一份**生成的**账本里登记为"基线"或"已命名缺口"，否则红。
+
+第 3 条是这一节最重要的产出：**它把"越界"从一次审计变成一道不能重新长回来的门**。只有显式登记过的机制，才允许只存在于仪器里。
+
+---
+
+**一句话**：这五条设计变换的共同形式不是"加功能"，而是**把已经存在的能力从测量侧搬回产品侧，并给每一次搬家配一条"关掉时字节同一"的断言**。它们全部零派发即可合入，全部可以单独 revert。
