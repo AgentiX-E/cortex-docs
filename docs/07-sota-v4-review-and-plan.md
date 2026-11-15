@@ -253,6 +253,16 @@ unrun: D1 S6 S7 S8 S9 S11 C3 P1
 | **成本** | 200 题筛选 ≈ 2.85 CNY + 500×4 ≈ 14.26 CNY（两段各一次） |
 | **可否证** | 抽取器覆盖率 < 90% → 先修锚点，**不进基准**；裁决相同率 ≥ 80% → 机制无增量，撤回；MR 子群 < +5 题 → 落在噪声里，写"未检出" |
 
+### I9 · 浏览器轴的语料往返（R1，产品成熟度）
+
+| 项 | 内容 |
+| --- | --- |
+| **目标** | 让「产品能在浏览器里跑」从**推断**变成**读数**：`assembleMemory({ profile: 'full' })` 在真 Chromium 上、以 OPFS 为语料后端与披露边界后端跑通 `remember → askStored → 关浏览器 → 重开 → 再问 → 擦除`，且**提示词字节与 `node:sqlite` 相同** |
+| **验收方法** | ① 同一场景在同一进程里用 `node:sqlite` 跑一遍、在页面里用 sqlite-wasm 跑一遍，两侧提示词摘要**相等**（重启前后各一次）；② 会话到达序在第二个引擎上仍成立（表键序与到达序故意相反）；③ 擦除后两张表的语料行、会话索引行、卡片、向量计数与「任一张表里搜不到那句话」同时成立；④ 故障臂：撤掉语料擦除接线 → 4 条红；基线摘要 +1 → 摘要那 2 条红；⑤ 读数入 `B3` 准则与提交的读数文件，CI 比较 committed 与 fresh |
+| **测评集** | 无基准集。**不看准确率**：这一轮问的是「同一段语料在另一个运行时上是否产出同一段提示词」，与模型无关，因此零派发 |
+| **成本** | **0 CNY**（本机 Chromium 与 Node，全部是 CPU 计时） |
+| **可否证** | 摘要不等 → 运行时差异是真缺陷（先修，不谈浏览器发布）；任一表格扫描命中被擦句子 → 第八表面在 wasm 上不成立；集合检查红 → 组合在浏览器里不可达 |
+
 ### 6.1 迭代与报告 12 周段的映射
 
 | 报告段 | 迭代 | 累计派发 | 累计成本 |
@@ -1010,3 +1020,102 @@ pnpm ledger:check && pnpm census:check && pnpm manual:check && pnpm coverage:gat
 | 1 | **③ 的派发**：4 个孪生题配对修复是否 ≥ 3 | 一次派发 ≈14.26 CNY，且必须在 ABAB 交错下跑；本轮把交付物限定在「零派发可验收」的一侧 | 与 `I7` 的 3 臂合并成 4 臂一次派发，成本从 14.26 + 42.78 压到 42.78 附近的分摊 |
 | 2 | **`L5 STALE` 作为第二仪器**：问句自带过期前提时的抵抗 | 该集在产品侧还没有接入点（`supersededRendering` 只是渲染，STALE 需要问句形状的识别）；先有机制读数再谈第二仪器，否则是给一个未验的机制配两把尺 | ③ 通过后接 `L5`；不通过则机制进 `RETRACTIONS.md` 并保持默认 `off` |
 | 3 | **`#25` 配对统计移出产品包** | 与本轮主题无关，且会同时动 6 个导入点与边界组 | 与 `I7` 一起做：那是纯派发轮，代码面只有工具与文档 |
+
+---
+
+## 19 I9 执行记录（第 114 轮）：浏览器轴，以及「可移植」与「能跑」之间的距离
+
+### 19.1 这不是又一套后端测试
+
+`packages/cortex-storage/test/browser` 已经有两套浏览器套件，并且都是绿的：
+
+| 套件 | 它证明的事 | 它不能证明的事 |
+| --- | --- | --- |
+| `probe.mjs` + `restart-suite.mjs` | OPFS/IndexedDB 两档能打开、写读、关掉浏览器再读回（24 项检查） | 产品的任何一次装配能在浏览器里**产出提示词** |
+| `bundle-probe.mjs` | 同一份 `dist/` 经过 esbuild 之后仍能拿到 worker（4 项检查） | 同上 |
+
+而「产品能在浏览器里跑」这句话在这轮之前由**两件互不相干的事实**推出来：`tools/entry-guard.mjs` 证明 `cortex-memory` 的入口闭包零 `node:` 内建（30 个文件 / 818 KiB），`page.html` 证明存储档会动行。**导入闭包是源码的性质，存储档是引擎的性质，组合两者都不是。** §17.7 把这句话写下来了：「仍然不能说『浏览器里跑通了语料』」；§17.8 第 1 条把它列为下一轮的第一件事。这轮就是那件事。
+
+### 19.2 验收是一条等式，不是「没抛异常」
+
+判断「跑通了」最省事的写法是 `expect(() => assemble()).not.toThrow()`，而它几乎不携带信息：一个把所有轮次都丢掉的装配不会抛异常。所以这轮的验收是**两个运行时上同一段语料产出同一段提示词**：
+
+```
+node:sqlite（探针进程内）  ──▶ prompt 580 chars, digest 536714097
+chromium + sqlite-wasm（worker 内，重启前）──▶ 536714097
+chromium + sqlite-wasm（同一个 profile，关掉浏览器再开，重启后）──▶ 536714097
+```
+
+提示词是产品在**成本被计数的那条边界**上的输出：它同时覆盖装配、路由、排序、渲染、检索与存储。字节相等因此是一条能失败的、关于整条链的断言，而它不需要模型——这也解释了为什么这轮可以零派发。
+
+三段读数分别对应三个不同的问题，缺一条就不成立：
+
+| 比较 | 它排除了什么 |
+| --- | --- |
+| 浏览器 ↔ `node:sqlite` | 运行时差异：worker 的 RPC 有没有丢掉字段、结构化克隆有没有改变类型、两档的事务语义是否一致 |
+| 重启前 ↔ 重启后 | 「存在同一个对象里」被当成持久化。OPFS 是磁盘，但只有关掉进程再开才能问这件事 |
+| 到达序在**第二个引擎**上仍成立 | 引擎的行序。两条会话的 id 故意与到达序相反（`s3` 先到、`s1` 排前），所以按键序返回的引擎会给出另一段提示词 |
+
+### 19.3 这轮查到的两件事，都不是「机制错了」
+
+**第一件：`Corpus` 的排序不变量在第二个引擎上被真正检验了。** 这不是新缺陷，而是既有设计第一次在「行序不保证」的引擎上被验证：`Storage.query` 无 `ORDER BY`，顺序住在 `corpus.session.seq` 里。Node 侧的 `corpus.test.ts` 用的是 `SqliteStorage`，它恰好按 rowid 返回；浏览器侧的检查把「按到达序」变成一条不依赖引擎的读数。
+
+**第二件：写读数这件事本身有个格式陷阱。** 探针用 `JSON.stringify(report, null, 2)` 写 `corpus-run.json`，而仓库的 `format:check` 会用 prettier 重排——一个只含一个元素的字符串数组 `[""]` 会被 prettier 折成一行，于是**每次跑完探针，工作树都是脏的**。修法不是给探针加 prettier 依赖，而是让读数里不出现这种形状：那个字段改成 `join(' | ')` 的字符串。教训写在这里而不是留在提交里：一份被提交的读数必须是**探针能原样重写出来的**，否则「重跑一遍」就不是幂等的。
+
+**没有修的东西也值得写下来。** 擦除后边界仍留下一条 `text: ''` 的卡片记录（`cardsAfter` 读数是空串）。它是墓碑，不是漏网：`stringsIn` 已经把该行持有的每一个字符串都清空了，而留下一条「这里曾经有一张卡」的记录，正是擦除记录存在的意义。所以这轮的检查写的是「任何一张表里都搜不到那句话」，而不是「卡片数量归零」——后者会把墓碑当成缺陷，然后被「修」成不留痕。
+
+### 19.4 验收：11 条检查，两条故障臂，都真的红过
+
+| 计划条款（§I9） | 落地 | 怎么证明它会红 |
+| --- | --- | --- |
+| ① 两侧提示词摘要相等（重启前后各一次） | 页面 `the prompt is the same bytes as the one node:sqlite produces` + `the same question after the restart produces the same prompt` | `CORTEX_CORPUS_PROBE_FAULT=stale-baseline` 把基线摘要 +1 → 这 2 条红，其余 9 条绿 |
+| ② 到达序在第二个引擎上成立 | `the order the sessions arrived in is the order the corpus reports`（id 序与到达序故意相反） | 与 ① 同一条臂：任何改变会话顺序的改动都会移动摘要；另有 `corpus.test.ts` 在 Node 侧守比较器 |
+| ③ 擦除在 wasm 上成立 | `erasure removes the turn...rewrites the index row` + `the erased sentence reaches neither the corpus nor the reader` + `the card is gone...` + `no table on either store still holds the sentence` | 把 `assemble.ts` 的 `turns: corpus` 撤掉 → **4 条红**（`removed 0 turns`、`corpus still holds the sentence`、`4 turn rows, one still carries it`、`the sentence survives in private:turn`） |
+| ④ 读数进准则与提交文件，CI 比较 committed 与 fresh | `B3`（第 40 条准则，`summary.failed = 0`）、`packages/cortex-memory/test/browser/corpus-run.json`、`verify.yml` 的第二步比较 | 用仓库既有的 `tools/browser-reading-check.mjs` 比对 committed 与自身 → 打印 `11 checks, identical in order and string, both on opfs, both digest-matched`；改名一条检查即红 |
+
+表格扫描那条（`no table on either store still holds the sentence`）是刻意照着 `tools/erasure-census.mjs` 的形状写的：读**两张 store 上的七张表**并把行序列化后搜文本，而不是去查这一页恰好知道的那个字段。上一轮的经验是「字段没人枚举的地方才是第二份副本活着的地方」，所以这轮不重复那个错误。
+
+### 19.5 读数（本机，零派发）
+
+| 项 | 值 |
+| --- | --- |
+| 新增文件 | `packages/cortex-memory/test/browser/corpus-page.html`、`corpus-probe.mjs`、`corpus-run.json`（提交的读数） |
+| 检查 | **11 / 11**，两个浏览器阶段（write / read），一次 Chromium 关开 |
+| 提示词 | 580 字符，摘要 `536714097`，`node:sqlite` / OPFS 重启前 / OPFS 重启后三者相等 |
+| 时序 | append 4 轮 **12.4 ms**，ask **4.1 ms**（wasm in worker，含 RPC） |
+| 擦除 | `facts 1 / cards 1 / vectors 1 / turns 1`，八表面之一在 wasm 上成立；七张表扫描 0 命中 |
+| 打包 | consumer 入口 82 输入 / 419 KB；worker 单独一个入口（esbuild 不发射 worker 资产，§5.2 的配方） |
+| 准则 | `B3` = 0（gate）；矩阵 **40** 条 |
+| 派发 | **0 次，0 CNY** |
+
+**与计划的一处偏离，写明理由**：§17.8 第 1 条拟的文件名是 `test/browser/probe.mjs`、证据放 `evidence/browser/corpus.json`。实际是 `corpus-probe.mjs`（`cortex-storage` 已有一个 `probe.mjs`，两个同名文件是读错对象的经典原因），读数只留一份、住在 `cortex/packages/cortex-memory/test/browser/corpus-run.json`——因为 `B3` 这条准则按 `cortex/...` 路径读它，再复制一份到 `evidence/` 就是同一事实的第二份表示，而这个仓库为此付过代价（§18.4 的标记长度算术就是靠「唯一差异」成立的）。
+
+### 19.6 一个这轮发现、但没有在本轮修的缺陷（附实测数字）
+
+`tools/export-census.mjs` 与 `packages/cortex-core/src/export-census.ts` 的 `isTestFile` 只认**两种**测试拼法：路径含 `__tests__/`，或后缀 `.test.ts` / `.spec.ts`。仓库里还有**第三种**：`packages/<pkg>/test/**`（`cortex-ai` 的 `test/parity`、`test/profile`、`test/proposer`，`cortex-core` 的 `test/card-volume`、`test/echo`，`cortex-eval` 的 `test/mr-census`、`test/review-page`，`cortex-storage` 的 `test/browser`、`test/pg`）。这些是探针脚本，不是产品，但普查把它们算作**产品调用者**。
+
+这轮把语料的控制臂（`node:sqlite` 那一侧）写在 `packages/cortex-memory/test/browser/` 里，账本立刻报：
+
+> `SqliteStorage` is recorded as instrument-only but is not: the record is stale and must shrink
+
+也就是说，一份探针脚本足以把「SQLite 适配器只有工具在用」这条记录推翻。给 `isTestFile` 加上第三种拼法以后，实测代价是：
+
+| 量 | 改前 | 改后 |
+| --- | --- | --- |
+| 边界组 | 53 个导出 | **53 + 7**（`OpenAICompatibleLLM`、`createLocalLLM`、`describeProfile`、`readApiKey`、`resolveLlmProfile`、`ProfileError`、`PROPOSER_PROMPT_VERSION`） |
+| 孤儿 | 489 | 488 附近（随引用图变动） |
+
+那 7 个名字**全是 `cortex-ai` 的 provider 接线**，唯一调用者是 `packages/cortex-ai/test/profile/` 下的脚本。这是一条真发现——「产品发了一整层 provider 接线，只有 harness 在用」——但它属于**审计轮**，不属于浏览器轮：在一个以「同一段语料在两个运行时上是否产出同一段提示词」为主题的轮次里改调用者分类，会产出两份主题混杂的记录，而且边界组那 7 条 rationale 会被「为了让 gate 变绿」的动机写出来。§13.158 的纪律是「红是朝向代码当前状态的两行编辑」，不是「先把定义改到红消失」。
+
+所以本轮的处置是**换位置**而不是改定义：控制臂放进 `packages/cortex-memory/src/__tests__/browser-baseline.mjs`（`__tests__` 是普查已经认识的拼法），账本回到 53 与 `the record and the code agree`；这条发现连同上面的数字留给专门的一轮，届时那 7 条 rationale 要回答的是「它们该被产品接上，还是该搬去 `cortex-eval`」，而不是「怎么让 gate 变绿」。
+
+### 19.7 这一步对后续迭代的影响
+
+| 迭代 | 影响 |
+| --- | --- |
+| 产品发布口径 | 现在可以说「**这段语料在浏览器里跑通了，而且答的是同一段提示词**」——这是 §17.7 明说不能说、§19.2 用三段读数挣回来的那一句。仍然不能说「浏览器里的性能与 Node 一样」：这轮测的是字节与时序的一次采样，不是吞吐 |
+| `I6` 的 ③ | 无影响，仍未派发（唯一未完成项） |
+| `I7`（三格一次派发） | 无影响 |
+| `#25` | 仍待处理（唯一 blocked 行）；建议与 `I7` 的纯派发轮一起做 |
+| 浏览器轴的下一步 | 语料往返有了，**浏览器里的向量通道还没有**：这轮 `embed` 是常量向量，OPFS 上的向量缓存跨重启的行为没有读数。它是「浏览器里能不能跑满 `full`」的最后一格，下一次浏览器轮做 |
+| 成本口径 | 0 CNY；`B3` 是一条零成本 gate，和 `B1`/`B2` 一样只读提交的读数 |

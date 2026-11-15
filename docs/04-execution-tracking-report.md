@@ -25646,3 +25646,89 @@ R0 完成。位置：`I2` 已闭，`I1` 上一轮已闭 → **R0 全部完成**�
 ### 109.6 依赖治理
 
 两仓 Dependabot：0 告警、0 待处理 PR（本轮检查时点）。本轮未引入新依赖：`superseded.ts` 只 import `conflict.ts` 的两个函数与一个类型。
+
+---
+
+## 110 第 114 轮：浏览器轴，以及「可移植」与「能跑」之间的距离
+
+### 110.1 本轮做了什么
+
+| 类 | 内容 |
+| --- | --- |
+| **R1 产品侧（I9）** | 新增 `packages/cortex-memory/test/browser/corpus-probe.mjs`（esbuild 双入口 + CDP 两次启动 + 与 `node:sqlite` 的摘要比对）与 `corpus-page.html`（11 条具名检查，两个阶段）；提交读数 `corpus-run.json` |
+| **准则** | `acceptance.ts` 新增 **`B3`**（第 40 条，gate，`summary.failed = 0`，读提交的语料读数）；`docs/ACCEPTANCE-MATRIX.md` 增行与说明段 |
+| **文档** | `docs/USER-MANUAL.md` §6.8「浏览器部署，端到端」（两 store / 两 pool / worker 第二入口的完整配方 + 四条会被踩到的事实）；`ARCHITECTURE.md` 两道门表新增一行、`Corpus ownership` 行补浏览器半边 |
+| **CI** | `verify.yml` 的 browser 作业新增 `CORTEX_RESULTS_CORPUS`、committed-vs-fresh 比较、读数上传 |
+| **修缺陷 1 个** | 读数文件的形状：`JSON.stringify` 写出的 `[""]` 会被 prettier 折成一行，于是每跑一次探针工作树就脏；改成字符串字段。见 110.3 |
+| **产品行为** | 无变化。这轮改的是**证据**：同一段语料在浏览器里跑通，并且答案与 `node:sqlite` 逐字节相同 |
+| **派发** | 0 次，**0 CNY** |
+
+### 110.2 这一轮的对象不是「再写一套后端测试」
+
+`cortex-storage` 已经有两套绿着的浏览器套件：24 项的存储档套件（OPFS/IndexedDB、重启、重开）和 4 项的打包套件（esbuild 之后的 worker）。它们证明**档能开、行能动**。而「产品能在浏览器里跑」这句话，在这轮之前由两件互不相干的事实推出来：`entry-guard` 证明 `cortex-memory` 的入口闭包零 `node:` 内建，`page.html` 证明档会动行。
+
+**导入闭包是源码的性质，存储档是引擎的性质，组合两者都不是。** §17.7 因此明写「仍然不能说『浏览器里跑通了语料』」。这轮把那句话变成一条读数，方法是让同一段语料在两个运行时各跑一遍，并要求**提示词字节相等**：
+
+```
+node:sqlite          580 chars, digest 536714097
+chromium+wasm（重启前） 580 chars, digest 536714097
+chromium+wasm（重启后） 580 chars, digest 536714097
+```
+
+提示词是产品在成本被计数那条边界上的输出，覆盖装配、路由、排序、渲染、检索与存储；字节相等因而是一条能失败、又不需要模型的断言——这就是这轮零派发的原因。
+
+三段比较各排除一件事：跨运行时排除 worker RPC 与结构化克隆的字段丢失、两档事务语义差异；跨重启排除「存在同一个对象里」被当成持久化；到达序则在**第二个引擎**上被检验（会话 id 序与到达序故意相反，按键序返回的引擎会给出另一段提示词）。
+
+### 110.3 查到的缺陷：一份提交的读数必须能被探针原样重写
+
+探针用 `JSON.stringify(report, null, 2)` 写 `corpus-run.json`，仓库的 `format:check` 用 prettier——一个只含一个空串的数组 `[""]` 会被 prettier 折成一行，于是**每跑一次探针，工作树就脏一次**。这不是格式小事：一份提交的读数如果无法被生成它的工具原样重写，那么「重跑一遍再提交」就不是幂等的，而 CI 里那个 committed-vs-fresh 的比较会永远在 diff 一个不存在的变化。
+
+修法不是给探针加 prettier 依赖，而是让读数里不出现这种形状：该字段改成 `join(' | ')` 的字符串。
+
+**同一处还有一个「不修」的决定，也写下来。** 擦除后边界留下一条 `text: ''` 的卡片记录（`cardsAfter` 读到空串）。它是墓碑而不是漏网：`stringsIn` 已把该行持有的每个字符串清空，而留下「这里曾经有一张卡」正是擦除记录的意义。所以检查写的是「任何一张表里都搜不到那句话」，不是「卡片数量归零」——后者会把墓碑当缺陷，然后被「修」成不留痕。
+
+### 110.4 验收：11 条检查，两条故障臂都真的红过
+
+| 条款 | 落地 | 红在哪 |
+| --- | --- | --- |
+| ① 两侧摘要相等（重启前后） | `the prompt is the same bytes as the one node:sqlite produces` + `the same question after the restart produces the same prompt` | `CORTEX_CORPUS_PROBE_FAULT=stale-baseline`（基线 +1）→ 2 条红、9 条绿 |
+| ② 到达序在第二个引擎上成立 | `the order the sessions arrived in is the order the corpus reports` | 同上：任何改变顺序的改动都移动摘要 |
+| ③ 擦除在 wasm 上成立 | `erasure removes the turn, keeps its sibling, and rewrites the index row`（会话索引行被**改写**为 `ordinals [1]`，不是删除）/ `the erased sentence reaches neither the corpus nor the reader` / `the card is gone from the boundary as well` / `no table on either store still holds the sentence`（两张 store 七张表） | 撤掉 `assemble.ts` 的 `turns: corpus` → **4 条红** |
+| ④ 读数入准则，CI 比较 committed 与 fresh | `B3` = 0，`verify.yml` 第二步 | 改名任一检查 → `browser-reading-check` 打印 `check N is "…" in the committed reading and "…" in this run` |
+
+### 110.5 读数与位置
+
+| 量 | 值 |
+| --- | ---: |
+| 检查 | **11 / 11**（write 4 条 + read 7 条） |
+| 提示词 | 580 字符 / 摘要 536714097，三处相等 |
+| 时序 | append 4 轮 12.4 ms、ask 4.1 ms（wasm in worker） |
+| 擦除 | facts 1 / cards 1 / vectors 1 / turns 1；七表扫描 0 命中 |
+| 打包 | consumer 82 输入 / 419 KB，worker 独立入口 |
+| 准则 | **40** 条，`B3` pass |
+| 派发 | **0 次、0 CNY** |
+
+**位置**：R0 完成（I1、I2），R1 完成四项（I5、I4、I6 的产品半、**I9 浏览器轴**）。`I6 的读数半`、`I7`、`I8` 未做。
+
+| 优先级 | 项 | 为什么是这个顺序 | 成本 | 对完成度的影响 |
+| --- | --- | --- | --- | --- |
+| 1 | `I6 ③` + `I7` 合并成 4 臂一次派发 | 唯一能让「标记有效」可证的读数；与 `I7` 三格同批可摊掉一次固定开销 | ≈42.78 CNY | 不改能力，改**结论** |
+| 2 | `I8` 候选集裁决与双时态 | R2/R3，两段 | ~75 CNY | 能力 +1 起 |
+| 3 | `#25` 配对统计移出产品包 | 唯一剩余 blocked；纯代码轮，动 6 个导入点与边界组 | 0 | 能力 +1 |
+| 4 | 浏览器里的向量通道 | `full` 的最后一格：这轮 `embed` 是常量向量，OPFS 上向量缓存跨重启无读数 | 0 | 不改能力，补一条读数 |
+
+**与 SOTA 的量化差距（未变）**：`S1` **91.05%**，准确率 SOTA 是 **Maximem Synap 95.6%**（−4.5 pp）；成本 SOTA 是 **Mem0 ≈6.8K token/题**，cortex **9,201**（+35%）。**cortex 目前不是 SOTA**，两轴都还差。
+
+**产品完成度 16/26 = 61.5%，本轮仍无发布信号。** 剩余 1 行 blocked（`#25` 配对统计住在 `cortex-core`、产品不调用）。功能清单口径仍是 13/13。**本轮的产品口径进展**：可以说「**这段语料在浏览器里跑通了，而且答的是同一段提示词**」；**不能说**「浏览器里的吞吐与 Node 相同」（这是字节与时序的一次采样）。**不能说**「浏览器里能跑满 `full` 的向量通道」。
+
+### 110.6 一个查出来、但没有在这轮修的缺陷
+
+`isTestFile`（`packages/cortex-core/src/export-census.ts`）只认两种测试拼法：`__tests__/` 与 `.test.ts`/`.spec.ts`。仓库里还有第三种——`packages/<pkg>/test/**`，那里放的是探针脚本（`cortex-ai/test/profile`、`cortex-eval/test/review-page`、`cortex-storage/test/browser` …）。普查把这些脚本算成**产品调用者**。
+
+这轮把控制臂（`node:sqlite` 那一侧）写在 `packages/cortex-memory/test/browser/` 里时，账本立刻报 `SqliteStorage is recorded as instrument-only but is not`——一份探针脚本就足以推翻「SQLite 适配器只有工具在用」。给 `isTestFile` 补第三种拼法后实测：边界组 53 → **53 + 7**，那 7 个名字（`OpenAICompatibleLLM`、`createLocalLLM`、`describeProfile`、`readApiKey`、`resolveLlmProfile`、`ProfileError`、`PROPOSER_PROMPT_VERSION`）全是 `cortex-ai` 的 provider 接线，唯一调用者是 `packages/cortex-ai/test/profile/`。
+
+那是一条真发现（「产品发了一整层 provider 接线，只有 harness 在用」），但属于审计轮：在以「两个运行时是否产出同一段提示词」为主题的轮次里改调用者分类，会产出两份主题混杂的记录，且那 7 条 rationale 会被「让 gate 变绿」的动机写出来。所以本轮**换位置而不是改定义**：控制臂放进 `src/__tests__/browser-baseline.mjs`（普查认识的拼法），账本回到 53 与 `the record and the code agree`；发现连同数字留给专门一轮。
+
+### 110.7 依赖治理
+
+两仓 Dependabot：0 告警、0 待处理 PR（本轮检查时点）。本轮未引入新依赖：探针复用 `esbuild`（`cortex-storage` 的 devDependency）与仓库自己的 CDP 客户端，没有任何浏览器自动化库。
