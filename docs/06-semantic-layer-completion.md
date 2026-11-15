@@ -1377,6 +1377,8 @@ McNemar 在首 rep 上是 `b = 8 / c = 8`，`p = 1.0`。**这不是「机制有�
 4. **`cortex/ARCHITECTURE.md` 与 `DECISION-SEMANTIC-LAYER-ROUTE.md`**：前者那句「E6 尚未运行」是状态描述、必须改；后者「7 of 8 closed」改成 8/8，并写明 `S10`/`S9` 的闸已开但本轮不花。
 5. **`cortex/.github/workflows/verify.yml` 检出 `cortex-docs`**（`path: cortex-docs`，public 仓、无凭据）。第一版推送的 CI 直接红了：13 条测试报 `No such file or directory`——它们在本机能过，只因为两个仓并排。修法是**检出**而不是 **skip**：那个脚本正是决定 `S12` 拿注册数还是根本没有数的那条分支，缺了它整套测试就停止测量。另加第 14 条测试把布局写成断言，缺脚本时**失败**并指名该恢复哪个 checkout 步骤，而不是让十三行 file-not-found 去暗示。
 
+   这处修了两次，因为第一次我把 `actions/checkout` 的 `path` 当成了相对父目录：它相对 `$GITHUB_WORKSPACE`，所以仓库落进 checkout **内部**（`cortex/cortex-docs`），而测试向上找一层——同一个文件、同一个错误、又一次全红（`43665209152`）。第二次改为**两个根都解析**（本机并排、CI 嵌套）并在失败消息里列出试过的路径，run `43665657697` 三 job 全绿。
+
 一条测试为什么用 8 语料而不是 4：`withinThreshold` 是 `>= -5`，而四题的第二窗口最差只能读到 −4，**一个「证明判据会 miss」的用例必须有能力 miss**。这条在写的时候先红了，红的理由正是它要证明的那件事。
 
 ### 20.8 E6 关闭，8/8
