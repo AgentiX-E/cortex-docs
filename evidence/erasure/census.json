@@ -1,10 +1,12 @@
 {
-  "$comment": "Written by tools/erasure-census.mjs. One DisclosureSession over two SQLite files, two sentences with different lineage (a deferred card, a released rule-claimed row), erased with one call each. `residue` reads every row of every surface and counts occurrences of the sentence, so a field nobody thought of fails the criterion rather than escaping it. `before` is the control: a run whose control finds nothing is reported as a failure, not as a clean erasure.",
-  "dataset": "synthetic: 2 sentences, 2 erasure calls, 5 surfaces, 2 stores",
+  "$comment": "Written by tools/erasure-census.mjs. One DisclosureSession over two SQLite files and one vector store, two sentences with different lineage (a deferred card, a released rule-claimed row), erased with one call each. `residue` reads all seven surfaces -- five tables, the cache key list and the cache entries -- and counts what still answers about each sentence, so a field nobody thought of fails the criterion rather than escaping it. `before` is the control: a run whose control finds nothing is reported as a failure, not as a clean erasure.",
+  "dataset": "synthetic: 2 sentences + 1 survivor, 2 erasure calls, 7 surfaces, 2 stores, 1 cache",
   "sentences": {
     "deferred": "s1",
-    "released": "h1"
+    "released": "h1",
+    "survivor": "unrelated"
   },
+  "surfaces": 7,
   "before": {
     "surfaces": [
       {
@@ -36,9 +38,21 @@
         "rows": 0,
         "secret": 0,
         "health": 0
+      },
+      {
+        "role": "embedding-keys",
+        "rows": 3,
+        "secret": 0,
+        "health": 0
+      },
+      {
+        "role": "embedding-vectors",
+        "rows": 2,
+        "secret": 1,
+        "health": 1
       }
     ],
-    "occurrences": 5,
+    "occurrences": 7,
     "readPaths": {
       "privateEvidence": true,
       "sharedEvidence": true,
@@ -77,6 +91,18 @@
         "rows": 2,
         "secret": 0,
         "health": 0
+      },
+      {
+        "role": "embedding-keys",
+        "rows": 1,
+        "secret": 0,
+        "health": 0
+      },
+      {
+        "role": "embedding-vectors",
+        "rows": 0,
+        "secret": 0,
+        "health": 0
       }
     ],
     "occurrences": 0,
@@ -91,19 +117,30 @@
     "deferred": {
       "facts": 1,
       "cards": 1,
-      "releases": 0
+      "releases": 0,
+      "vectors": 1
     },
     "released": {
       "facts": 1,
       "cards": 0,
-      "releases": 1
+      "releases": 1,
+      "vectors": 1
     },
-    "total": 4
+    "total": 4,
+    "vectors": 2
   },
   "residualOccurrences": 0,
   "leakingReadPaths": 0,
-  "controlOccurrences": 5,
+  "controlOccurrences": 7,
   "controlReadPaths": 4,
+  "keySurface": {
+    "rowsBefore": 3,
+    "wordingBefore": 0,
+    "wordingAfter": 0
+  },
+  "survivor": {
+    "cached": 1
+  },
   "tombstones": 1,
   "records": 2
 }
