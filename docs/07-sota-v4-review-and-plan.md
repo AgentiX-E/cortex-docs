@@ -182,6 +182,7 @@ unrun: D1 S6 S7 S8 S9 S11 C3 P1
 | 项 | 内容 |
 | --- | --- |
 | **前置事实（审核补齐）** | **`SOTA-BASELINE.md` 目前不存在**，26 行账本也是报告提出的**待建物**，不是既有资产：两仓 `docs/` 下都搜不到这个文件（`docs/` 的 7 个文件与 1 份本轮审计）。所以 I2 的第一件事是**建账本**，而不是给账本加检查；下文第 ③ 条 mutation 里的「删掉一个后缀」以「账本已建」为前提 |
+| **状态** | **已完成**（第 110 轮，见 §15）。账本在 `cortex/docs/PRODUCT-CAPABILITY-LEDGER.md`，由 `tools/product-capability-ledger.mjs` 生成，`pnpm ledger:check` 已进 `pnpm check`。可证伪条款的结论：**26 行中 0 行与手写判定相反**（阈值 ≥5），判据可机械化；但实现过程修正了报告的 **3 处事实**，并查出**仪器本身的 3 个缺陷** |
 | **目标** | 26 行账本由脚本从代码生成，四条判据 D1–D4 各由一个机械检查判定；"只在仪器里的能力词"必须有 `reason` |
 | **验收方法** | 三条 mutation，每条都必须红：① 加一个无 `reason` 的仪器能力词 → `--check` 红；② 把某行的 `product` 改成真但删掉产品侧调用者 → 红；③ 从 `SOTA-BASELINE.md` 删掉一个 `[product+instrument]` 后缀 → `docs-crosscheck` 红 |
 | **测评集** | 无（静态分析） |
@@ -577,3 +578,122 @@ python3 tools/judge-agreement.py \
 即：转发会让 **91.05% 立刻不可比**，而 6348 条测试**全绿**——没有任何单测会重生成 artifact。抓住它的不是测试，是问一句「谁会用三个参数调用这条忽略第三个参数的路由」。
 
 因此本轮的正确交付是**把现状钉死**：`answer-sessions-forwarding.test.ts` 固定「带 sessions 仍走 flat」「带与不带第三参数的提示词逐字节相同」「多会话路由只能按名字到达」，并把理由写进 `answer` 的文档注释。让平面路由变成会话感知是**一次准确率实验**（要派发、要配对、要读数），不是一次缺陷修复。
+
+---
+
+## 15 I2 执行记录（第 110 轮）：账本不是表格，是三条可证伪的事实
+
+### 15.1 为什么不能直接抄那 26 行
+
+报告 §3.2 是 26 行、每行四个判据（D1 可安装 / D2 独立 / D3 自足 / D4 可调用）的表，判据由读者手打。手打的判据没有保质期，而这张表**在报告里就已经自相矛盾**：
+
+| 报告说 | 普查说 | 两者不能同时为真 |
+| --- | --- | --- |
+| `DisclosureSession` 零非测试调用者 | 它有 3 个调用者：`tools/a3-review.mjs`、`tools/erasure-census.mjs`、`tools/triage-demo.mjs` | 普查把 `tools/*.mjs` 算作调用者 |
+
+两句都站得住，因为它们量的是不同的东西。这正是 `AUDIT-SILENT-DENOMINATOR.md` 记录的那类发现：**不是谁错了，是同一个词被两件事共用**。
+
+所以 I2 的交付不是一张表，是**把判定从人手里拿走**：
+
+```
+tools/product-capability-declarations.json   只声明「我在说哪个能力、哪个符号、哪个文件」
+tools/product-capability-ledger.mjs          从代码推导状态，并在声明与代码不一致时报错
+cortex/docs/PRODUCT-CAPABILITY-LEDGER.md     生成物，不可手改（--check 比对字节）
+```
+
+### 15.2 四个状态，每条都由三条事实推出
+
+| 状态 | 含义 | 推导方式 |
+| --- | --- | --- |
+| **product** | 客户能到达 | 声明在产品包内 ∧ 声明文件的 import 闭包不触达仪器 ∧ 从 `memory.ts` 经引用链可达 |
+| **blocked** | 实现了、有测试、到不了 | 声明在产品包内，且**没有任何引用从入口到达它** |
+| **instrument** | 它只为测量而存在 | 声明在 `tools/**` 或 `packages/cortex-eval/**` |
+| **gap** | 命名了、代码里没有 | 符号不存在（并且 `absent` 记号在源码里也搜不到） |
+
+`--check` 在**两个方向**都报错，这是这张表不会腐烂的唯一原因：
+
+- `product` 行的调用者消失 → `blocked` → 红（一个已发布能力刚刚变得不可达）；
+- `product-blocked` 行的债还了 → `product` → 红（行必须升级）；
+- `gap` 行的记号出现 → 红（缺口被填上了）；
+- `instrument` 行的机制搬进产品 → 红（否则边界论证会一直引用一个已经不存在的越界）。
+
+外加一条 `gate` 列：能力所在的配置开关以**字面量**校验，所以「开关被删掉」和「开关从来没写过」是同一个缺陷。
+
+### 15.3 可证伪条款的结论：0 行翻转，但查出三处事实错误
+
+计划写的可证伪条件是「若账本生成后 ≥5 行的自动判定与手写判定相反，则判据不可机械化」。
+
+**实测：0 行相反。** 报告的 16 个「产品」、7 个「越界到仪器」、3 个「正确地留在仪器」全部被推导结果确认；4 个「产品但不可达」全部落为 `blocked`。判据可机械化，`--strict` 因此可以作为发布门。
+
+但**推导过程修正了报告的三处事实**——这正是「推导而非断言」的收益：
+
+| # | 报告说 | 代码说 | 影响 |
+| --- | --- | --- | --- |
+| 1 | `CardQueue` 与 `DisclosureSession` 同属「产品但无装配」 | `CardQueue` **有**一个产品调用者：`DisclosureSession`，而它无人调用 | 一跳计数说 `product`，可达性说 `blocked`。报告的结论对，理由错 |
+| 2 | 提示词词表是「产品有词、测量选词」（D3 的尖锐形式） | 词表**声明了两遍**：`cortex-memory/src/prompt.ts` 与 `cortex-eval/src/bench-memory-arm.ts` 各一份，产品那份只被一个 docblock 引用 | 不是「测量选词」，是**产品那份是死代码** |
+| 3 | 配对统计在 `eval/variance.ts`、`paired-test.ts`、`metrics.ts` | `welchTTest`、`binomialCdf`、`wilsonScoreInterval` 声明在 **`cortex-core/src/math/stats.ts`** | 仪器代码住在产品包里，随产品发布给从不调用它的客户 |
+
+### 15.4 为了拿到这三条，先修了仪器本身的三处缺陷
+
+| # | 缺陷 | 它造成的误读 | 修法 |
+| --- | --- | --- | --- |
+| 1 | 普查按**名字**认定调用者（`P1-census`，`AUDIT-CENSUS-CALLER-BY-NAME.md` 已登记） | 本轮**第二次**触发：账本自己的本地 `isBarrelFile` 被算成普查模块 `isBarrelFile` 的调用者，中间没有任何 import | 按该文件登记的修法实现：跟随 `export … from`，所以经 barrel 的 118 处跨包使用**全部保留**；散文、字符串、前缀不同的标识符不再计数。**20 个导出因此进入孤儿账本**（即从「有调用者」变成「没有」），逐个核对全部是「提及而非调用」 |
+| 2 | `declare module '@huggingface/transformers' { … }` 里的 4 个名字被当成 `cortex-ai` 的导出 | `env` 收了 12 个「调用者」，全都是各自在读自己的环境变量 | `ambientModuleLines` 把环境模块块整段跳过；块外的 `export declare` 仍然读，因为随包发布的 `.d.ts` 是真导出 |
+| 3 | 普查只数**一跳**（README 决策：不解析 import） | `CardQueue` 因为被一个不可达的类调用而读作 `product` | 账本改走**可达性**：import 让*文件*可达、引用让*符号*可达，只被 import 的文件不把它的符号借给任何人 |
+
+第 1 条是**修根因**而不是再改一次名：`AUDIT-CENSUS-CALLER-BY-NAME.md` §5 写下「同类翻转第二次出现时修」，这是第二次。
+
+### 15.5 读数
+
+| 量 | 值 | 说明 |
+| --- | ---: | --- |
+| 账本行数 | **26** | 报告的 26 行，`#6/#7` 与 `#9` 按其配置开关单列 |
+| `product` | **12** | 客户可达；其中 **4 行在配置开关之后** |
+| `blocked` | **4** | `#10` 擦除、`#13` 存储后端、`#15` 披露边界、`#25` 统计（后者属*仪器代码在产品包*） |
+| `instrument` | **9** | `#17`–`#23` 七条越界 + `#24`/`#26` 正确留在仪器 |
+| `gap` | **1** | `#5` 行内 superseded 渲染 |
+| **产品完成度（按能力）** | **12/26 = 46.2%** | 这是本项目第一个**机械推导**的完成度口径 |
+| 边界集合 | **54** 个产品导出 | 报告的 §3.3 从散文变成 54 个具名符号，`--check` 拒绝它静默增长 |
+| 普查总量 | 1190 导出 / 478 孤儿 / 712 有调用者 | 修完名称与导入之后 |
+
+三条数字值得单独看：
+
+1. **54 而不是 57**：修完名称碰撞后，6 个「被仪器调用」的产品导出其实是**孤儿**（`PROMPT_CONTRACTS`、`DEFAULT_PROMPT_CONTRACT`、`ASK_ROUTES`、`TURN_CAP_ROUTES`、`WidthPlan`、`SearchHit`），它们从来没有被任何人按导入调用过；同时账本自己的 3 个 import（`isBarrelFile`、`stripComments`、`stripStringContent`）作为「仪器调用产品包」进入集合。−6 +3 = 54。
+2. **产品完成度 46.2%**：报告说「26 行里 16 行是产品」。按「客户能不能到达」算，是 12 行；差的 4 行正是 `#6/#7/#9` 的配置开关与 `#25` 的位置错误——这是**口径差异**，不是两套事实。
+3. **边界 54 里最大的一组是统计与检索原型**（11 个），第二是提示词词表（已消失）——边界的主要成分不是「机制写错了地方」，而是「度量工具写在了产品包里」。
+
+### 15.6 验收：三条 mutation 都真的红过
+
+计划要求三条 mutation 各红一次。实现为 `tools/__tests__/test_product_capability_ledger.py` 的 16 条用例，全部在 `CAPABILITY_LEDGER_ROOT` 指向的临时树上跑（与 `EXPORT_CENSUS_ROOT` 同一个理由：测试套件不能是自己断言对象的生产者）。
+
+| 计划 mutation | 实际用例 | 红在哪 |
+| --- | --- | --- |
+| ① 加一个无 `reason` 的仪器能力词 | `test_a_non_product_row_without_a_reason_is_refused` + `test_a_placeholder_reason_is_refused`（`TBD`/`n/a`/`todo`/`later`） | 退出码 1，消息给出长度要求 |
+| ② 标 `product` 但删掉产品侧调用者 | `test_a_product_row_whose_caller_disappears_fails_and_says_blocked` | 退出码 1，`derived blocked` + 修法提示 |
+| ③ 删掉一个 `[product+instrument]` 后缀 | 该文件不存在，改为**等价且更强**的三条：`gap` 记号出现即红、`--check` 与生成物字节不符即红、边界集合多一个或少一个即红 | 三条各自有独立用例 |
+
+另有两条计划未要求、但实现对得住追问的：
+
+- `test_a_blocked_row_with_an_unreachable_caller_stays_blocked`——把 `CardQueue` 的形状固化成单元；
+- `test_a_barrel_does_not_make_its_exports_reachable`——barrel 不是调用，这是普查最老的一条规则，这里再钉一次。
+
+### 15.7 复现
+
+```bash
+cd cortex
+pnpm ledger:check          # 账本与代码一致？不一致就红，并说哪一行、哪个方向
+pnpm ledger:write          # 重新生成 docs/PRODUCT-CAPABILITY-LEDGER.md
+node tools/product-capability-ledger.mjs --json   # 每行的状态、调用者、问题，供下游读取
+node tools/product-capability-ledger.mjs --strict # 发布口径：任何一行不是 product 就红
+python3 -m pytest tools/__tests__/test_product_capability_ledger.py -q
+```
+
+### 15.8 这一步对后续迭代的影响
+
+| 迭代 | 影响 |
+| --- | --- |
+| `I4`（产品语料 / OPFS） | 账本给出**验收口径**：`corpus`/`remember`/`askStored` 落地后，`#10`、`#13` 应从 `blocked` 变 `product`；行没变就是没接上 |
+| `I5`（擦除第六/七表面） | `#10`/`#15` 的 `blocked` 是这条迭代**存在的原因**，不是它的结果 |
+| `I6`（行内 superseded） | `#5` 的 `gap` 行带 `absent` 记号，机制一落地就红，强制填写符号 |
+| `I8`（候选集裁决） | `#21` 的 `instrument` 判定与报告一致：这是仪器专有诊断，不进产品 |
+| 排名搬迁（报告 §9.3） | `#17`/`#18` 是 `instrument`，搬一条边界就少一条；`--check` 会要求同步修改声明，这正是「搬迁」在 CI 里的样子 |
