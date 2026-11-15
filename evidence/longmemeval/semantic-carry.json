@@ -1,61 +1,71 @@
 {
   "generatedBy": "evidence/longmemeval/scripts/semantic_carry_analysis.py",
-  "sourceRun": "43590434060",
-  "tier": "screening",
+  "sourceRun": "43624717757",
+  "tier": "registered",
   "population": {
     "windows": 2,
-    "corpora": 72,
-    "marker": "#w"
+    "corpora": 500,
+    "marker": "#w",
+    "merged": {
+      "shards": 16,
+      "parts": 16
+    }
   },
   "arm": {
     "reviewPass": "supersede",
     "semanticCarry": true,
     "reader": "deepseek-chat",
     "judge": "deepseek-chat",
-    "runs": 2
+    "runs": 4
   },
   "semanticCarry": {
-    "absorbed": 3,
+    "absorbed": 5,
     "dropped": 0,
-    "matched": 8,
-    "served": 8,
-    "withheld": 8,
+    "matched": 27,
+    "served": 27,
+    "withheld": 27,
     "stored": {
       "episodic": 0,
       "procedural": 0,
-      "semantic": 3
+      "semantic": 5
     }
   },
   "windows": {
     "all": {
-      "n": 144,
-      "deltaQuestions": -0.5,
+      "n": 1000,
+      "deltaQuestions": -1.25,
       "discordant": {
-        "baselineOnly": 4,
-        "featureOnly": 3
+        "baselineOnly": 27,
+        "featureOnly": 25
       }
     },
     "first": {
-      "n": 72,
-      "deltaQuestions": -0.5,
+      "n": 500,
+      "deltaQuestions": 0.5,
       "discordant": {
-        "baselineOnly": 3,
-        "featureOnly": 2
+        "baselineOnly": 12,
+        "featureOnly": 15
       }
     },
     "second": {
-      "n": 72,
-      "deltaQuestions": 0.0,
+      "n": 500,
+      "deltaQuestions": -1.75,
       "discordant": {
-        "baselineOnly": 1,
-        "featureOnly": 1
+        "baselineOnly": 15,
+        "featureOnly": 10
       }
     }
   },
   "mcnemar": {
-    "p": 0.625,
-    "b": 3,
-    "c": 1
+    "p": 1.0,
+    "b": 8,
+    "c": 8
+  },
+  "usage": {
+    "calls": 11083,
+    "promptTokens": 81236803,
+    "cacheHitPromptTokens": 79044904,
+    "completionTokens": 1184629
   },
   "verdict": {
     "reached": true,
@@ -63,9 +73,9 @@
     "readable": true,
     "rule": "delta over the second window >= -5 AND reach >= 1"
   },
-  "screening": {
-    "deltaQuestions": 0.0,
-    "n": 72,
-    "blocker": "measured on a scoped population; S12 is registered on 500 corpora x 4 repetitions, where -5 questions is -1.0 point rather than the ratio this sample carries"
+  "paired": {
+    "deltaQuestions": -1.75,
+    "deltaQuestionsAllWindows": -1.25,
+    "n": 500
   }
 }

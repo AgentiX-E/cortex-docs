@@ -103,6 +103,29 @@ def first_repetition(report: dict[str, Any], side: str) -> dict[str, bool]:
     return {qid: runs[0][position] == "1" for position, qid in enumerate(ids)}
 
 
+USAGE_KEYS = ("calls", "promptTokens", "cacheHitPromptTokens", "completionTokens")
+
+
+def usage_of(report: dict[str, Any]) -> dict[str, int] | None:
+    """The token counts the run reports, copied verbatim, or `None` when the arm keeps no accounting.
+
+    Copied rather than priced: `tools/spend-projection.mjs` owns the one price table, and a second
+    one here would agree with it until one of them was edited. What this file must not do is publish
+    a **partial** block -- a usage object missing `promptTokens` prices the run at zero input and
+    passes any budget, which is the failure `--limit 0` produced on the dispatch side.
+    """
+    usage = report.get("llmUsage")
+    if usage is None:
+        return None
+    missing = [key for key in USAGE_KEYS if not isinstance(usage.get(key), int)]
+    if missing:
+        raise SystemExit(
+            f"refusing: llmUsage carries no integer {', '.join(missing)}, so the bill derived from it "
+            "would be smaller than the run and would pass a budget it should fail"
+        )
+    return {key: usage[key] for key in USAGE_KEYS}
+
+
 def window_of(question_id: str, marker: str) -> int | None:
     """The window a question id names, or `None` when it names none.
 
@@ -192,6 +215,7 @@ def main(argv: list[str]) -> int:
     if regressions:
         print(f"  lost:   {', '.join(regressions)}")
 
+    usage = usage_of(report)
     reach = None if carry is None else carry["matched"]
     verdict = {
         "reached": None if reach is None else reach >= REACH_FLOOR,
@@ -222,6 +246,7 @@ def main(argv: list[str]) -> int:
             "second": second_window,
         },
         "mcnemar": {"p": round(p, 6), "b": len(regressions), "c": len(gains)},
+        **({} if usage is None else {"usage": usage}),
         "verdict": verdict,
     }
     # The registered key is written only by a registered run. A screening pair writes its delta under
