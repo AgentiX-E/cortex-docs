@@ -11383,6 +11383,16 @@ export type StoredTurn = {
 
 **验收**：`off` 时字节同一；`mark` 时只有 `pair.olderId` 命中，且 `Δchars` 等于标记长度 × 命中数（可算）；KU 的四个陈旧孪生题**配对** ≥3 题修复才算有效（<3 题落在噪声里）。
 
+**实现记录（第 113 轮，cortex `superseded.ts`）**：设计成立，两处按可证伪性修正，一处按组合修正。
+
+| 设计写的 | 实现改成 | 为什么 |
+| --- | --- | --- |
+| `mark` 尾附 `[superseded by a later statement on <date>]` | 尾附常量 `\n[this states a value a later turn replaces]`，**不含日期** | 日期取自**另一轮**。带日期的标记不再是常量，`Δchars = 标记长度 × 命中数` 这条可算的验收就退化成"长度取决于内容"，而它正是唯一能证明"标记是唯一差异"的算术。另有一半语料的语句没有日期行（`ConflictStatement.date` 是 `string \| undefined`），带日期的标记会在那里渲染成第二种形态 |
+| `collapse` 只留较晚的一句，较旧的一句换成一行指针 | 保留**较旧**的那一句，前面加常量标签 `[replaced value] ` | 换成较晚的一句会**删掉**较旧的那一条，读者再也看不出"曾经有两条"。`conflict.ts` 已登记的教训（run `42754985453`）是删一侧不是渲染变更而是改变证据说了什么；`collapse` 因此只做"把该轮压到有问题的那一句"，读者仍能看到两条语句的存在 |
+| 触及范围 = 四条平路由（抄 `conflicts`） | **五条**：多加 multi-session | `assembleMemory` 给客户的唯一提问方法 `askStored` 走 `answerSessions`；在 multi-session 上排除等于"包里有、组合根看不见"。单元测试全绿也发现不了，抓到它的是 `assemble.test.ts` 的 `remember → askStored` 断言，变异测试确认撤掉接线后红 4 条。`conflicts` 排除 multi-session 的理由（会压平会话）不迁移：标记附在块内某一轮之后，边界一个都没动 |
+
+另一处不在设计里、执行时才显露的取舍：**标记计入证据预算**。侧块（`insertRelatedStatements`）在 `fitToBudget` 之后插入，因此落在房间之外；标记住在证据内部，藏进长度算术之外会让一次运行报告一个自己装不进去的房间，而房间是成本读数的分母。代价是"离预算只差一个标记的 prompt 会少交付一轮"，这条被刻意构造成测试（`maxEvidenceChars` 卡在三与二之间），而不是留到派发时才发现。
+
 ### 22.38.5 变更四：擦除的第六、第七表面 —— 一个删不掉的键
 
 这一条是读代码读出来的，先给证据：

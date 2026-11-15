@@ -3,10 +3,10 @@
   "dataset": "100000 turns, 500 sessions x 200, one SQLite file",
   "room": 48000,
   "fault": null,
-  "readMs": 188.92,
-  "assembleMs": 1379.51,
-  "storedMs": 1619.9,
-  "writeMs": 3197,
+  "readMs": 196.4,
+  "assembleMs": 1376.4,
+  "storedMs": 1656.33,
+  "writeMs": 3722,
   "ratio": 0.14,
   "reading": "read / assemble. One number, because the clause is one comparison: does the transcript scan cost more than twice the work the answer path was already doing over the same turns?"
 }

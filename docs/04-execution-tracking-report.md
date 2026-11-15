@@ -25572,3 +25572,77 @@ R0 完成。位置：`I2` 已闭，`I1` 上一轮已闭 → **R0 全部完成**�
 ### 108.6 依赖治理
 
 两仓 Dependabot：0 告警、0 待处理 PR（本轮检查时点）。本轮未引入新依赖：`corpus.ts` 只 import 一个类型，`assemble.ts` 只 import 本包与 `cortex-core`。
+
+---
+
+## 109 第 113 轮：把标记搬到读者遇见它的地方，与一次只有组合才看得见的落空
+
+### 109.1 本轮做了什么
+
+| 类 | 内容 |
+| --- | --- |
+| **R1 产品侧（I6 的产品半）** | 新增 `packages/cortex-memory/src/superseded.ts`：`SupersededRendering`、`SUPERSEDED_MARKER`、`SUPERSEDED_COLLAPSED`、`SupersededMarks`、`SupersededTurn`、`supersededTurns()`、`renderSupersededInline()` |
+| **接线** | `PromptOptions.superseded` / `TurnCap.superseded` / `capOption` 保活（不随 cap 折叠）/ `contentFor` 两阶段（cap 后加标记；`collapse` 绕过 cap）/ `CortexMemoryOptions.supersededRendering` / `#supersededMarks()` / `#promptSessionAware` 组合 / `AssembleOptions.supersededRendering` |
+| **修缺陷 1 个** | 第一版照抄 `conflicts` 的四路由触及范围，**排除 multi-session**——而组合根的唯一提问方法 `askStored` 走的正是那条路由，机制在产品里不可达。见 109.3 |
+| **仪器** | 无新仪器；`export-census-baseline.json` 三进三出（`conflictStatements`/`valueSignature`/`ConflictOptions` 离开，`SUPERSEDED_*`/`SupersededTurn` 进入），孤儿总数 **489 不变** |
+| **产品行为** | 缺省（`off`）时六条路由提示词逐字节不变；`mark` 只在被替换的那一轮之后加一句括号从句；`collapse` 把该轮换成「标签 + 有问题的那一句」 |
+| **派发** | 0 次，**0 CNY** |
+| **测试** | TS **6,478**（+25：新文件 23 条 + 组合 2 条）、pytest **2,857 / 19 skipped**（不变）；`superseded.ts` 四维 **100%**，受改文件四维 100% |
+| **完成度** | 能力口径 **16/26 = 61.5%**（`#5` 由 `gap` 转 `product`），**0 gap** |
+
+### 109.2 这一轮的对象不是「再加一个 `conflicts`」
+
+计划（§I6）写得很干净，但执行时最顺手的方向是把侧块换个排版——那会得到一份漂亮实现和一次没有信息量的派发，因为侧块已经被价过：**−4.75，四轮全负，单调加深**（§13）。那份读数的解释是**位置**的而不是措辞的：侧块插在证据之后，读者读到它时答案已经成形；§13.6 里被价过的第三句"若问的是以前的状态，较早的语句就是答案"正是同一件事的证明——一句话把读者推向较早的值，代价是三个本该答对的问题。
+
+所以 I6 改的是**在哪里说**：一句括号从句附在**那一轮自己的渲染里**，紧跟语句，不点名任何值、不提问。点名值会把它变成侧块的分布式版本，继承侧块的读数而不是检验自己的假设。
+
+### 109.3 查到的缺陷：`askStored` 走的正是被 `conflicts` 排除的那条路由
+
+第一版把 `conflicts` 的触及范围原样抄过来——四条平路由，排除 abstention 与 multi-session。理由是「一个比对照多触及一条路由的臂，在以单变量为全部价值的运行里是两个变量」。
+
+组合把它打翻了：`assembleMemory` 给客户的唯一提问方法 `askStored` 走 `answerSessions`，也就是 **multi-session**。一个在 multi-session 上被排除的标记，在产品里就是「包里有这个机制，组合根永远看不见它」。
+
+这个失败有一个很恶劣的性质：**每一份单元测试都绿**。四路由断言会通过、覆盖率 100%、账本会把 `#5` 从 `gap` 翻成 `product`，而客户拿不到。抓到它的是 `assemble.test.ts` 里那条 `remember → askStored` 的断言；变异测试确认：撤掉 multi-session 接线后，`assemble.test.ts` 与 `superseded-inline.test.ts` 同时红 **4** 条。
+
+`conflicts` 排除 multi-session 的理由**不迁移**：那条理由是「把会话压平成一块会毁掉这个 builder 唯一的意义」，而标记不是一段——它附在块内某一轮之后，边界一个都没动；它也不点名值，所以不构成「邀请作答」。abstention 的排除（其 gold 是拒答）仍然成立，因此仍然排除。
+
+### 109.4 验收：计划三条，怎么红
+
+| 条款 | 落地 | 红在哪 |
+| --- | --- | --- |
+| ① `off` 逐字节不变 | 无对时五条路由逐条相等；abstention 恒等；`assemble.test.ts` 默认关 | 把 `capOption` 的 `superseded` 折叠进 cap 分支 → **12 条红** |
+| ② 只 `olderId` 命中、`Δchars = 标记长 × 命中数` | 五条路由逐条 `on.replace(MARKER,'') === off` 且长度差恰一个标记；标记紧跟较早语句、不跟较晚语句 | 同一变异；去掉 `slice(0,-1)` → 「只标较早那条」红 |
+| ③ KU 四个孪生题配对 ≥ 3 题修复 | **未执行**（1 次派发 ≈14.26 CNY） | 判据已按 §13.4 修订：收益须**超过 −4.75**，且治疗臂与对照 **ABAB 交错** |
+| 〇（计划外、必须有）**组合可达性** | `assembleMemory({profile:'reader'\|'full', supersededRendering:'mark'})` → `remember` → `askStored`，断言标记出现且对照不出现 | 撤掉 `#promptSessionAware` 的接线 → 4 条红（含 2 条组合断言） |
+
+一条被**刻意构造**的边界读数：标记被计入证据预算（它住在证据内部），所以离预算只差一个标记的 prompt 会少交付一轮。这不是缺陷，是取舍的代价，因此有专门一条测试用 `maxEvidenceChars` 把房间卡在三与二之间，而不是留到派发时被发现。
+
+### 109.5 读数与位置
+
+| 量 | 值 |
+| --- | ---: |
+| 新文件覆盖（`superseded.ts`） | **100 / 100 / 100 / 100** |
+| 受改文件覆盖（`prompt.ts`/`memory.ts`/`types.ts`/`assemble.ts`） | 均 100 / 100 / 100 / 100 |
+| 整仓逐文件闸门 | **175 文件 × 4 维，0 违反**（16 exempt，0 ratcheted） |
+| 能力账本 | **16/26 = 61.5%**（+1）；1 blocked / 9 instrument / **0 gap**；边界 53 |
+| 导出普查 | 1,215 导出 / 726 有调用者 / 489 孤儿（三进三出） |
+| TS / pytest | 6,478（+25）/ 2,857 / 19 skipped |
+| 派发 | **0 次、0 CNY** |
+
+**位置**：R0 完成（I1、I2），R1 完成三项（I5、I4、**I6 的产品半**），`I6 的读数半`未做。
+
+| 优先级 | 项 | 为什么是这个顺序 | 成本 | 对完成度的影响 |
+| --- | --- | --- | --- | --- |
+| 1 | `I6 ③` + `I7` 合并成 4 臂一次派发 | ③ 是唯一让「标记有效」可证的读数；与 `I7` 三格同批可把两次派发的固定开销摊一次 | ≈42.78 CNY（分摊后） | 不改能力，改**结论** |
+| 2 | `I7` 三格（`S9`/`S11`/右下格） | 回答「6,000 token 下能否守住 91%」 | 见上 | 不改能力，改结论 |
+| 3 | `I8` 候选集裁决与双时态 | R2/R3，两段 | ~75 CNY | 能力 +1 起 |
+| — | `#25` 配对统计移出产品包 | 唯一剩余的 blocked；纯代码轮，动 6 个导入点与边界组 | 0 | 能力 +1 |
+| — | 浏览器轴的语料往返读数 | 优先级 9 的浏览器轴；本轮只做到闭包可移植 + 后端套件 | 0 | 不改能力，补一条读数 |
+
+**与 SOTA 的量化差距（未变）**：`S1` **91.05%**，准确率 SOTA 是 **Maximem Synap 95.6%**（−4.5 pp）；成本 SOTA 是 **Mem0 ≈6.8K token/题**，cortex **9,201**（+35%）。**cortex 目前不是 SOTA**，两轴都还差。
+
+**产品完成度 61.5%（16/26），本轮仍无发布信号。** 剩余 1 行 blocked（`#25` 配对统计住在 `cortex-core`、产品不调用）。功能清单口径仍是 13/13，但它回答的是「机制是否都实现了」，不是「客户能不能用」。**本轮的产品口径进展**：可以诚实地说「**被替换的语句会在读者读到它的地方被标出来，且默认关闭**」；**不能说**它提高了 `KU`——那要 ③。**不能说**「浏览器里跑通过语料」。
+
+### 109.6 依赖治理
+
+两仓 Dependabot：0 告警、0 待处理 PR（本轮检查时点）。本轮未引入新依赖：`superseded.ts` 只 import `conflict.ts` 的两个函数与一个类型。
