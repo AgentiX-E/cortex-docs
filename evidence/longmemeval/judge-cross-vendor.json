@@ -1,0 +1,31 @@
+{
+  "what": "Two regrade readings of one artifact under two judges, and the gap between their deltas.",
+  "generatedAt": "2026-11-15T10:31:25.017Z",
+  "same": {
+    "label": "same-vendor",
+    "selection": "deepseek-v4-pro",
+    "providerId": "deepseek",
+    "judged": 467,
+    "recordedCorrect": 427,
+    "regradedCorrect": 414,
+    "delta": -13,
+    "unreadable": 0
+  },
+  "cross": {
+    "label": "cross-vendor",
+    "selection": "zhipu:glm-4.6",
+    "providerId": "zhipu",
+    "judged": 467,
+    "recordedCorrect": 427,
+    "regradedCorrect": 416,
+    "delta": -11,
+    "unreadable": 0
+  },
+  "gapQuestions": 2,
+  "thresholds": {
+    "undetectableMax": 1,
+    "splitAbove": 5
+  },
+  "maxUnreadable": 1,
+  "verdict": "inconclusive"
+}

@@ -458,3 +458,121 @@ MemStrata 的受控臂把两件事分开量：**同预算、仅换选择方式 =
 ### 13.5 一个工程闭环值得记下来
 
 上轮为第三格加的 `marker` 双侧记录（`arm.marker: {control, treatment}`），在这一轮第一次救了场：没有它，`turn-window.json` 与 `turn-window-window.json` 都会写 `window: head → match`，而它们一个是捆绑、一个是纯窗口——**两份证据文件会长得一模一样**。这条字段的价值不在它被写下的那天，而在它第一次区分两个对比的那天。
+
+---
+
+## 14 I1 执行记录（第 109 轮）：判官的三处仪器缺口，与一条被证据撤回的迭代项
+
+### 14.1 为什么 I1 不是「跑一次重判」
+
+计划把 I1 写成「用 GLM 重判已归档答案，读 `Δ_judge^{cross}`」。真正动手时发现，这条派发在此之前**不可达**，而且是三处独立的静默缺口：
+
+| # | 缺口 | 后果 | 修法 |
+| --- | --- | --- | --- |
+| 1 | `judge-audit.yml` 只导出 `DEEPSEEK_API_KEY`，且 preflight 按名字检查它 | 一个 `zhipu:` 判官会通过一项为它**不用**的凭据写的检查，然后在 ~500 题上收 401 | 新增 `tools/judge-credential.mjs`：凭据由**判官所选 provider** 决定，通过 `reader-provider.ts` 的声明表解析，不打印值只打印长度 |
+| 2 | `parseJudgeResponse` 对不认识的回复返回 `false` | 判官若用别的回复格式（`**Yes**, the response matches.`），508 次判官调用全部被判为「否」，跨厂牌差距 = 整个判官信道的宽度，且读起来像「对手更严」 | `parseJudgeVerdict` 在判决旁报告「是否读懂」；`createLlmJudge` 通过 `onUnrecognised` 暴露；读数记录 `judge.parse` |
+| 3 | 两读数的比较没有算术工具 | 「≤1 不可检出 / >5 须拆半」写在计划里，却要人肉比对两个 JSON | 新增 `tools/judge-cross-vendor.mjs`：三道拒绝 + 三个状态 |
+
+第 2 条是本轮最重要的发现：**它不是判官的问题，是解析器与判官格式不匹配的问题**，而两者在读数里长得一模一样。修复只加字段、不改判决——`parseJudgeResponse` 对既有调用者返回的布尔值与改动前逐位相同，这也是历史读数仍可比的前提。
+
+### 14.2 同族半边重取：−13，而不是 −15，差的那 2 题正好是旧的 tie
+
+旧读数（`auditRun 43164165343`）与本次重取（`43699688162`）是同一个判官（`deepseek-v4-pro`，`temperature 0`，`full` scorer）、同一个 artifact（`43140878641`）、同一个 467 题总体：
+
+| 量 | 旧读数 | 重取 | 差 |
+| --- | ---: | ---: | --- |
+| artifact 判对 | 427 | 427 | 0 |
+| 重判判对 | 412 | **414** | +2 |
+| `Δ_same` | **−15** | **−13** | +2 |
+| 两次 pass 翻转 | 2 | 0 | −2 |
+| 1–1 平票 | 2 | 0 | −2 |
+| 判官信道调用 | 508 | 508 | 0 |
+| 未读懂回复 | —（当时无此字段） | **0** | — |
+
+结论不是「旧读数错了」，而是：
+
+> **同一个判官跨轮复现到 ±2 题（0.43 pp）。** 那 2 题在旧轮是 1–1 平票（两侧都不计），本轮两 pass 都回 NO（计入判官侧）。
+
+这条数字有一个直接后果：**I1 的判据线（`≤1` 题 = 不可检出）落在复现带之内**。所以「gap ≤ 1」只能读作**「没有证据表明存在同源偏袒」**，不能读作「已证明不存在」。判据不因此改动（预先写死的线不在看到数据后移动），但报告必须带上这条带子。
+
+### 14.3 跨厂牌半边：gap = 2 题，落在判据的「inconclusive」区间
+
+| 读数 | 判官 | artifact 判对 | 重判判对 | `Δ` | 翻转 | 1–1 平票 | 未读懂/调用 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| 同族（`43699688162`） | `deepseek-v4-pro` | 427 | 414 | **−13** | 0 | 0 | 0 / 508 |
+| 跨厂牌（`43699694292`） | `zhipu:glm-4.6` | 427 | 416 | **−11** | 1 | 1 | **0 / 508** |
+
+同一 artifact（`43140878641`）、同一 467 题、同一 `full` scorer、同两次 pass，**只有判官的厂牌变了**。
+
+`tools/judge-cross-vendor.mjs` 的判决（`evidence/longmemeval/judge-cross-vendor.json`）：
+
+```
+gap              2 question(s) between the two deltas
+thresholds       undetectable <= 1, split > 5, between is inconclusive
+verdict          inconclusive
+```
+
+**两处必须同时写明的事实**：
+
+1. **`unrecognised` 是 0/508。** GLM 的回复完全落在解析器能读的语法里，所以这 2 题的差距**不是格式**，是两个判官的意见。若这一栏非 0，上表的 `Δ` 就不能读作判官的严格度（§14.1 第 2 条）。
+2. **跨厂牌判官比同族强判官更宽，不是更严**（−11 vs −13）。如果「同源偏袒」是主导机制，外部厂牌应当更严；观察到的是反向 2 题。方向性证据与「偏袒」相反。
+
+### 14.4 逐题分解：8 题被两个厂牌同时判错，而**没有任何一题被救回**
+
+`Δ` 是差的差，它无法区分「两个判官否掉同一批题」与「各否一批」。`tools/judge-agreement.py` 回答的是逐题问题（`evidence/longmemeval/judge-agreement.json`）：
+
+| 格 | 题数 | 占 467 | 占 427 判对 | 含义 |
+| --- | ---: | ---: | ---: | --- |
+| **两个判官都判错** | **8** | 1.71% | 1.87% | 两个独立仪器都认为 artifact 收错了 → 现状分数的**确定高估** |
+| 只 `deepseek-v4-pro` 判错 | 5 | 1.07% | 1.17% | 单纯判官意见 |
+| 只 `glm-4.6` 判错 | 3 | 0.64% | 0.70% | 单纯判官意见 |
+| 并集（上限） | 16 | 3.43% | 3.75% | 最严的一个判官的视角 |
+| **救回** | **0** | — | — | 两个判官都没有把 artifact 判错的题改判为对 |
+
+两个判官在 459/467 = **98.29%** 的题上给出相同判决。
+
+**这张表比 `Δ` 更有信息量，因为它给出一个有方向的结论**：
+
+> 在 467 道可判题目上，任何一个独立判官**都只收回、从不追加**。`deepseek-chat` 是单向更宽的判官。所以 `Δ_judge` 不是噪声，是一次**单向的宽松度修正**；同时，被两个厂牌共同否掉的 8 题（1.71 pp）与厂牌无关。
+
+### 14.5 对 `J1` 与 `M1` 的影响（按计划预先写死的判据）
+
+| 计划判据 | 触发条件 | 实际 | 结论 |
+| --- | --- | --- | --- |
+| `Δ_cross` 与 `Δ_same` 差 ≤ 1 题 → `J1` 降为必填字段 | ≤1 | **2** | **未触发**，`J1` 仍是门；但理由从「可能偏袒」改为「仪器分辨率不足以判定 ≤2 题」 |
+| 差 > 5 题 → `M1` 的 4.3 pp 拆成两半 | >5 | **2** | **未触发**，`M1` 不拆 |
+| 8 题被两厂牌共同判错 | — | 1.71 pp | 新增一条独立结论：现状 91.43%（427/467）**至少高估 1.71 pp** |
+
+**为什么 `M1` 不拆，但也不能当作「判官无影响」**：`Δ_judge` 作用在**绝对分数**上（427 → 414/416）；它是否影响一次**臂间差**，取决于两个臂是否共享这 8 题——本轮只重判了 control 一个 artifact，所以关于臂差只能说「未测」，不能说「无影响」。这句话必须写进任何引用 `M1` 的文档里。
+
+### 14.6 复现命令
+
+```bash
+# 两臂读数（零生成，各约 508 次短判官调用）
+gh workflow run judge-audit.yml -f run_id=43140878641 -f limit=500 -f mode=regrade \
+  -f passes=2 -f population=all -f scorer=full -f model=deepseek-v4-pro
+gh workflow run judge-audit.yml -f run_id=43140878641 -f limit=500 -f mode=regrade \
+  -f passes=2 -f population=all -f scorer=full -f model=zhipu:glm-4.6
+
+# 判决 + 逐题分解（都是离线，零成本）
+node tools/judge-cross-vendor.mjs \
+  --same  evidence/longmemeval/judge-regrade-deepseek-v4-pro.json \
+  --cross evidence/longmemeval/judge-regrade-zhipu-glm-4.6.json
+python3 tools/judge-agreement.py \
+  --a evidence/longmemeval/judge-verdicts-deepseek-v4-pro.json \
+  --b evidence/longmemeval/judge-verdicts-zhipu-glm-4.6.json
+```
+
+### 14.7 I3① 撤回：`answer()` **不**转发 `sessions`
+
+计划 §6 的 I3 第①项写的是「`answer()` 转发 `sessions`（或显式抛错）」。实现、测试、全绿之后撤回，原因是可测的：
+
+| 事实 | 出处 | 后果 |
+| --- | --- | --- |
+| 加载器为**每个**实例都构造 `sessions`，`context = sessions.flat()` | `longmemeval-loader.ts:158` | 不存在「没有会话视图」的题目 |
+| 兜底分支调用 `answer(q.question, q.context, q.sessions)` | `benchmark.ts:1031` | `IE` 与非偏好单会话题型（**467 题中的 150 题**）都会带上非空 `sessions` |
+| `answerSessions` 用的是多会话聚合提示词 | `memory.ts` | 转发即把这 150 题的提示词换掉 |
+
+即：转发会让 **91.05% 立刻不可比**，而 6348 条测试**全绿**——没有任何单测会重生成 artifact。抓住它的不是测试，是问一句「谁会用三个参数调用这条忽略第三个参数的路由」。
+
+因此本轮的正确交付是**把现状钉死**：`answer-sessions-forwarding.test.ts` 固定「带 sessions 仍走 flat」「带与不带第三参数的提示词逐字节相同」「多会话路由只能按名字到达」，并把理由写进 `answer` 的文档注释。让平面路由变成会话感知是**一次准确率实验**（要派发、要配对、要读数），不是一次缺陷修复。

@@ -1,0 +1,83 @@
+{
+  "what": "How often the judge changes its verdict on the same answer, re-read with the same template.",
+  "artifact": "readings/artifact/benchmark-cortex-memory-ablation-report.json",
+  "generatedAt": "2026-11-15T10:13:40.550Z",
+  "passes": 2,
+  "scorer": "full",
+  "channels": {
+    "structural": 0,
+    "exact": 356,
+    "numeric": 70,
+    "judge": 508,
+    "verdicts": 934,
+    "unjudged": 0
+  },
+  "judge": {
+    "artifact": {
+      "provider": "deepseek",
+      "model": "deepseek-chat",
+      "temperature": 0,
+      "judgeSource": "reader"
+    },
+    "regrade": {
+      "selection": "zhipu:glm-4.6",
+      "providerId": "zhipu",
+      "source": "pinned",
+      "temperature": "0",
+      "thinking": "disabled"
+    },
+    "matchesArtifact": false,
+    "parse": {
+      "calls": 508,
+      "unrecognised": 0,
+      "samples": []
+    }
+  },
+  "reading": {
+    "judged": 467,
+    "flips": 1,
+    "rate": 0.0021413276231263384,
+    "up": 0,
+    "down": 1,
+    "p": 1,
+    "recordedCorrect": 427,
+    "agreesWithArtifact": 455,
+    "regradedCorrect": 416,
+    "artifactOnlyCorrect": 11,
+    "regradeOnlyCorrect": 0,
+    "ties": 1,
+    "byCapability": {
+      "IE": {
+        "n": 150,
+        "flips": 1,
+        "rate": 0.006666666666666667
+      },
+      "KU": {
+        "n": 72,
+        "flips": 0,
+        "rate": 0
+      },
+      "MR": {
+        "n": 118,
+        "flips": 0,
+        "rate": 0
+      },
+      "TR": {
+        "n": 127,
+        "flips": 0,
+        "rate": 0
+      }
+    },
+    "flippedIds": [
+      "57f827a0"
+    ]
+  },
+  "meta": {
+    "reading": "judge-regrade",
+    "auditRun": "43699694292",
+    "sourceRun": "43140878641",
+    "population": "all",
+    "limit": 500,
+    "note": "Cross-vendor half of the I1 pair: the same 467 recorded answers, the same artifact, the same scorer and the same two passes, re-judged by zhipu:glm-4.6 instead of deepseek-v4-pro. `judge.parse.unrecognised` is 0 of 508, which is the fact that makes the delta interpretable: a judge whose replies the parser could not read would have been scored as rejecting everything."
+  }
+}

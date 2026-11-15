@@ -1,0 +1,26 @@
+{
+  "what": "Two judges over one population: the questions each calls wrong, and the ones both do.",
+  "runA": "43699688162",
+  "runB": "43699694292",
+  "a": "../cortex-docs/evidence/longmemeval/judge-verdicts-deepseek-v4-pro.json",
+  "b": "../cortex-docs/evidence/longmemeval/judge-verdicts-zhipu-glm-4.6.json",
+  "judged": 467,
+  "recordedCorrect": 427,
+  "both": 8,
+  "aOnly": 5,
+  "bOnly": 3,
+  "union": 16,
+  "rescued": 0,
+  "judgeDisagreement": 8,
+  "judgeAgreementRate": 0.9828693790149893,
+  "bothIds": [
+    "195a1a1b",
+    "66f24dbb",
+    "a89d7624",
+    "b0479f84",
+    "b759caee",
+    "caf03d32",
+    "d24813b1",
+    "d905b33f"
+  ]
+}
