@@ -1472,10 +1472,12 @@ population: 500 corpora x 1 windows = 500 questions over 16 shards, 4 repetition
 | --- | --- | --- | --- |
 | `400` | head | `none` | control，`43673528695` |
 | `400::match` | match | `ellipsis` | treatment，`43673618979` |
-| `400:ellipsis` | head | `ellipsis` | **未跑** |
+| `400:ellipsis` | head | `ellipsis` | **已派发**，run [`43685170817`](https://github.com/AgentiX-E/cortex/actions/runs/43685170817) |
 | （`match` + `none`） | match | `none` | 被设计拒绝，而这条拒绝是对的 |
 
-第三格同 cap、同账单、可派发。在它跑之前，这一行的读数是「**注册捆绑不劣于 head 切法**」；把增益归给**窗口**会过归因。
+第三格同 cap、同账单，本轮结束前已派发（`43685170817`，投影 14.26 CNY，与已有的 control 配对——**不需要重跑 control**）。在它读回来之前，这一行的读数只能是「**注册捆绑不劣于 head 切法**」；把增益归给**窗口**会过归因。
+
+为了能派发第三格，workflow 的 `turn_window`（两值）改成了 `turn_rendering`（三值：`head` / `ellipsis` / `match`），映射从「带 `|| '400'` 兜底的表达式」改成「无兜底的 `case`」。兜底本身就是缺陷：拼错的值会**落回注册渲染**，于是派发跑成 control 对 control，delta 为 0 却报成功。`tools/__tests__/test_turn_rendering_input.py` 直接执行 workflow 里那段 `case` 的真实文本，并把产出的每个字符串喂给 `cortextMemoryArmOptions` 断言三个字段——拼写在两端都被检查，用秒而不是用一次 14.26 CNY 的派发。
 
 ### 21.6 成本
 

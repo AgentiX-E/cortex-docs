@@ -16,6 +16,10 @@
     "window": {
       "control": "head",
       "treatment": "match"
+    },
+    "marker": {
+      "control": "none",
+      "treatment": "ellipsis"
     }
   },
   "windows": {

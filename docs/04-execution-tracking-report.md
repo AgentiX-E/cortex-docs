@@ -25044,7 +25044,7 @@ CI：`Verify` 在 `39f3a418` 全绿。此前 `d33a7b9d` / `c9081d3d` 两次红�
 
 ### 102.6 下一步的最优路径
 
-1. **`400:ellipsis` 第三格**（同 cap、同账单、约 14.26 CNY）——把标记从窗口里分离出来，`S10` 的读数才有归因资格。
+1. **`400:ellipsis` 第三格**（同 cap、同账单、14.26 CNY）——**本轮已派发**：run [`43685170817`](https://github.com/AgentiX-E/cortex/actions/runs/43685170817)，与已有 control（`43673528695`）配对，不重跑 control。它把标记从窗口里分离出来，`S10` 的读数才有归因资格。为派发它，`turn_window` 改为三值 `turn_rendering` 并去掉 `|| '400'` 兜底（拼错会静默跑成 control 对 control）。
 2. **`S11`**（`relevanceSignal: none`，≥ 88.0%，500 × 4）——它量的正是**调用方默认拿到的那个形状**，产品成熟度最直接的一行。
 3. **token 削减审计**——87.9% 的缓存命中说明前缀复用已经很好；下一个杠杆是 prompt 结构本身（`S10` 的 census 显示 `whole` 32,287 个完整 turn 对 2,457 个切口，即 93% 的 turn 是整段进 prompt 的）。
 4. **竞品复刻对比**——按用户策略 A/B：固定 DeepSeek + GLM，跑我们的 harness 与竞品 harness 在同一权威集上。

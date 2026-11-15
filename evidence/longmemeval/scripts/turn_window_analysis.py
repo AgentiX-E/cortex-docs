@@ -94,6 +94,16 @@ def first_repetition(report: dict[str, Any], side: str) -> dict[str, bool]:
     return {qid: runs[0][position] == "1" for position, qid in enumerate(ids)}
 
 
+def cap_of(report: dict[str, Any]) -> Any:
+    """The per-turn width the arm ran at, as the artifact records it."""
+    return report.get("memoryArmConfig", {}).get("maxTurnChars")
+
+
+def marker_of(report: dict[str, Any]) -> str:
+    """Which rendering the cut used; `none` is what an absent field renders."""
+    return report.get("memoryArmConfig", {}).get("turnCutMarker") or "none"
+
+
 def reader_of(report: dict[str, Any]) -> tuple[Any, Any]:
     config = report.get("memoryArmConfig", {})
     return (
@@ -127,6 +137,15 @@ def compare(control: dict[str, Any], treatment: dict[str, Any]) -> None:
         raise SystemExit(
             f"refusing: the reader or judge differs between the sides: {reader_of(control)} against "
             f"{reader_of(treatment)}. Every difference would then be attributed to the window."
+        )
+    # The row is registered "at the same cap", so a pair at two widths is a pair measuring two things.
+    # Written here rather than left to the dispatch: `S10`'s third cell adds a marker and keeps the
+    # width, and a pair that changed both would be read as a marker effect.
+    if cap_of(control) != cap_of(treatment):
+        raise SystemExit(
+            f"refusing: the sides ran at different caps ({cap_of(control)} against {cap_of(treatment)}). "
+            "The row is registered at one cap, and a pair that moved the width and the rendering at once "
+            "cannot attribute its delta to either."
         )
 
 
@@ -225,6 +244,11 @@ def main(argv: list[str]) -> int:
                 "control": control.get("memoryArmConfig", {}).get("turnWindow", "head"),
                 "treatment": treatment.get("memoryArmConfig", {}).get("turnWindow", "head"),
             },
+            # Recorded on both sides because the two axes are separable at one cap and the reading has
+            # to say which of them moved: `match` forces `ellipsis`, so a window pair also moves the
+            # marker, and a pair that holds the window at `head` moves only the marker. Without this
+            # field the two pairs produce the same `window: head -> head` line and cannot be told apart.
+            "marker": {"control": marker_of(control), "treatment": marker_of(treatment)},
         },
         "windows": {
             "paired": {
