@@ -26231,3 +26231,65 @@ run `43829744532` / #180，1h27m，`relevanceSignal=self-index` + `CORTEX_MEMORY
 | 4 | `#25` 配对统计移出产品包 | 未开始 |
 | 5 | 可发布信号 | **未到**：`#25` 未决 + `I7` 未回填 |
 | 6 | 距 SOTA | Mastra OM 94.87%（−3.47）／MemCog `MR` 92.48%（−9.01）／Zep 4,400 token（2.06×） |
+
+## 117. 第 121 轮：`#25` 结清——产品导出了十二个统计，自己用了一个
+
+### 117.1 这一轮不是重构，是一个计数问题
+
+`cortex-core/src/math/stats.ts` 有十二个导出。在产品路径上被调用的有一个：`vector.ts` 的 `norm` 用 `kahanSum` 求模。其余十一个的唯一调用者是 `cortex-eval`——`metrics.ts`、`ablation.ts`、`a3.ts`、`efficiency-frontier.ts`、`types.ts`。
+
+于是 barrel 在做一件它不该做的事：**把「配对统计库」作为产品的一个能力对外声明**。`tools/export-census.mjs` 一直把这十一个分类为 `exported-unreferenced`，而分类是对的——从 barrel 那一侧看，产品确实在提供十一个它从不使用的功能。`#25` 在能力账本里记为 `instrument-misplaced`，本轮把它结清：文件移到 `cortex-eval/src/stats.ts`，`variance.ts` 旁边——那本来就是同类的读数住的地方。
+
+### 117.2 四件不是机械的事
+
+| # | 事 | 为什么不能机械 |
+|---|---|---|
+| 1 | **`kahanSum` 不搬** | 它是唯一在产品路径上的一个，留在 `cortex-core/src/math/kahan.ts`，搬走的文件反过来导入它。另一条路是在 `mean` 旁边放第二份实现——那是「一个数值例程两份代码」，今天一致，第一次改动之后就不一致，而且没有任何 artifact 能说清跑的是哪一份 |
+| 2 | **测试跟着搬，搬不动的拆** | `stats.test.ts`、`stats-degenerate.test.ts`、`stats-guard-coverage.test.ts` 整文件搬。`math.test.ts` 是混合的，只搬 `stats` 那一段。`branch-coverage.test.ts` 与 `coverage-annotations.test.ts` 里各有 `logGamma`／`studentTCdf` 的**行为断言**（不是元属性断言），这些搬走了——因为 `cortex-core` 连测试都不能 import `cortex-eval`：依赖边是单向的，那正是「仪器能看见产品、产品看不见仪器」的原因 |
+| 3 | **`fast-check` 成为 `cortex-eval` 的 devDependency** | 搬过去的两份是生成式测试。替代方案是把生成改成表格，而这正是 `logGamma` 那次回归失败的修法：八个手挑的点，全落在恰好能工作的两个半周期里，于是 `NaN` 在每一个普通的负非整数输入上活着 |
+| 4 | **`index.test.ts` 断言缺席，而不是删行** | 公开面测试原来写着 `welchTTest`；现在写 `kahanSum`，并对搬走的八个名字逐个断言 `not.toHaveProperty`。**删掉一行与从未写过一行，在 diff 里留下同样的痕迹**，而这一行的全部主题就是一个看起来比实际大的面 |
+
+### 117.3 两个 gate 的读数
+
+| gate | 之前 | 之后 |
+|---|---|---|
+| 能力账本 | 16 product ／ **1 blocked** ／ 9 instrument | 16 product ／ **0 blocked** ／ 10 instrument |
+| 导出账本 | 1221 ／ 725 有调用者 ／ 496 孤儿 | **三项全不变** |
+| `cortex-core` 覆盖率 | 98.77 / 96.29 / 99.49 / 99.20 | **99.63 / 98.42 / 99.79 / 99.83** |
+| `cortex-eval` 覆盖率 | 99.21 / 97.74 / 99.65 / 99.39 | **99.58 / 98.66 / 99.84 / 99.77** |
+
+导出账本三项不变，是因为**那四个已经在账上的孤儿**（`clampAwayFromZero`、`degenerateDfPValue`、`logGamma`、`studentTCdf`，各自 `referenced-locally`——只被自己所在的文件调用）换了包、没换分类，而另外八个一直有真实调用者。账本由 `rebuild-export-census-baseline.py` 重写而不是手改，所以提交的字节是生成器的字节——这一点由 `test_rebuild_census_baseline.py` 的逐字节比对守着。
+
+### 117.4 gate 先红了一次，而且红得对
+
+`ledger:check` 第一次跑：
+
+```
+row 25 names a site that does not exist: packages/cortex-core/src/math/stats.ts
+```
+
+这不是需要绕过的报错，而是这个 gate 的设计：声明还指着一个已经搬走的路径。改法是把它改成 `instrument` 并写下搬的理由——**一个 `blocked` 行在债还清之后仍然说 `blocked`，是账本在撒谎**。同一次运行里 `statistics-in-a-product-package` 这个 boundary 类目整条消失（六个符号全部离场），`docs/PRODUCT-CAPABILITY-LEDGER.md` 由声明重新生成而不是手编。
+
+### 117.5 验收
+
+| 项 | 结果 |
+|---|---|
+| `pnpm check` | **exit 0**（build → 8 个 guard → lint → typecheck → 5 个 census/ledger 检查 → test → coverage:gate → acceptance → docs:crosscheck → format） |
+| TS 测试 | `cortex-core` **963**、`cortex-eval` **3593**（158 文件）、`cortex-memory` **1527**、`cortex-ai`／`cortex-storage` 全绿 |
+| Python 工具 | **2925 passed, 19 skipped** |
+| 覆盖率 | 178 文件四维受闸，**0 ratcheted**；五个包全部 ≥95（core 98.42 最低项） |
+| 新文件覆盖 | `cortex-eval/src/stats.ts` **100 / 100 / 100 / 100**；`cortex-core/src/math/kahan.ts` 100 / 100 / 100 / 100 |
+| 格式 | `prettier` 全绿；`product-capability-declarations.json` 保持 `indent=1` 原样，diff 只有 3 增 15 删 |
+
+### 117.6 位置与剩余
+
+| # | 项 | 状态 |
+|---|---|---|
+| 1 | 能力账本 | 16 / 26 = **61.5%**，**0 blocked**，0 gap，boundary 54 |
+| 2 | `#25` 配对统计移出产品包 | **已结清**（`cortex` `4d51abcb`） |
+| 3 | `I7` 右下格 | **在跑**：run `43967433821`，基于 `687cb3dd`（含 I18 的四项修复），500×4，投影 14.26 CNY |
+| 4 | `I17` 词法零召回 | 预登记已写，离线 0 CNY，下一步首选 |
+| 5 | 可发布信号 | **只剩 `I7` 一格**：`#25` 已清，等读数回填 |
+| 6 | 距 SOTA | 端到端 91.40% 对 Mastra OM **94.87%**（−3.47）；`MR` 83.47% 对 MemCog **92.48%**（−9.01）；9,106 token/问 对 Zep **4,400**（2.06×） |
+
+**这一轮把可发布信号从「两个阻塞」改成「一个阻塞」。** 剩下的那一个是读数，不是代码：`I7` 的右下格要回答的是「24K 房间能不能守住 91%」，而它是本仓库唯一还没有直接证据的档位。
