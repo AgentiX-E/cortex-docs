@@ -26169,3 +26169,65 @@ run `43829744532` / #180，1h27m，`relevanceSignal=self-index` + `CORTEX_MEMORY
 ### 115.7 主动回退的一项
 
 `#25`（配对统计移出产品包）本轮尝试后回退：`stats.ts` 无 `cortex-core` 内部消费者，但移动会牵动 `coverage-annotations.test.ts`（6 段围绕该文件的历史散文）、`branch-coverage.test.ts`、`stats-guard-coverage.test.ts` 与 `export-census` 边界，改动面远大于「移一个文件」。半完成的 refactor 比不做更坏，留给专门一轮，理由与计划原条目一致。
+
+## 116. 第 120 轮：`I7` 死于供应商余额，而产品在那一刻只有「死」这一个选择
+
+### 116.1 没有读数，根因在供应商侧
+
+`I7` 右下格 run `43866639154`（1h56m）失败：智谱 embedding `429 / code 1113 余额不足或无可用资源包`，发生在 **repetition 3 / 8、q=436/500**，约 3/8 的预算已花，432 条已判分答案在内存里。
+
+### 116.2 揭开的四件事
+
+| # | 缺陷 | 这一轮的做法 |
+|---|---|---|
+| 1 | **`preflight` 通过 ≠ 预算足够**。12:27:39 探测成功（1 条文本），14:22 余额归零。一个点不能证明一条曲线，任何前置探测都不可能救 | 方向改为「中途失败时不要丢掉整轮」，而不是「更早地探测」 |
+| 2 | **余额耗尽被当成瞬时 429**。`attempts 15578, retried 7, 429 answered 8`，白等 127 秒 | 白名单判据（`insufficient_quota`／`quota_exhausted`／`billing_hard_limit`／`余额不足`／智谱 `1113`），**明确排除** `rate_limit_*`；`EmbeddingQuotaExhaustedError` 定型，上层用 `instanceof` 而非匹配文案 |
+| 3 | **失败运行的账单不可读**。partial 只有 8 个键，没有 `llmUsage`；第 17 步 `[Errno 2]` exit 2 | `PartialAblation.llmUsage` 在 throw 处读；`--spend`/`--transport` 前置到 roster guard 之前；`runs` 缺失时用 `completed` 的长度做除数；workflow 缺 report 时读 partial |
+| 4 | **设计错误**：产品支持「没有 embedder」（词法索引，`S14` = 85.75%），不支持「配置了 embedder 但中途失效」，后者只有「死」 | `SearchIndexOptions.onEmbedFailure: 'fail' \| 'lexical'`，默认 `'fail'`；`census().embedDegraded` 恒在，`embedFailure` 保留供应商原话 |
+
+第 4 条是本轮唯一架构级的判断。默认选响的那个，理由与整个项目的规则一致：**静默降级的数字看起来完全合理**（85.75% 不是 0），所以没有人会去查。
+
+两个失败点分开处理：query 嵌不出来只丢一次检索；`prime()` 嵌不出来丢整个索引，且**半嵌入必须丢掉已到达的批次**——`#vectors[position]` 要对应 `#turns[position]`，短表会让每条轮次对着邻居的向量算余弦。
+
+### 116.3 测试抓到的自身缺陷
+
+第一版 `try` 包住了整个 `#vectorOrder`，把「query 与语料宽度不一致」的检查也吞了，注释却写着「structural check sits outside this block」。`test_a_width_mismatch_still_throws` 红。修法是把方法拆成「取 query」（可能失败）与 `#orderByVector(query, k)`（同步，含宽度检查），边界变成结构而不是一句话。
+
+### 116.4 四道门，而不是一道
+
+| 门 | 后果 |
+|---|---|
+| `SearchIndex` | 一次检索 / 一个索引降级 |
+| `arm-reading-ledger.py` | 两行（`S11`/`S14`）都拒，证据文件写不出来 |
+| `readout-arm-run.py --audit` | **CI 红**，artifact 不得作为该臂读数归档 |
+| `readout-arm-run.py --spend` | 能读失败记录的账单（本轮新增） |
+
+第三道是本轮补的，也是最关键的：**一份降级 artifact 在 `--audit` 下 pass = CI 绿 + 归档 + 下一个人当它是 `S11`**。`indexEmbedding: injected` 加 `embedDegraded: 40` 就是自我矛盾，而 `--audit` 的职责正是查这个。
+
+判定的三态（不是两态）：字段缺失 = 构建里没有策略 = **不可能降级**（`S9`/`S14` 走 SKIP）；`0` = 健康；`>0` = FAIL；`null`/`true`/小数/负数 = **FAIL**（不可读不得冒充健康）。
+
+最后一格是参数化测试逼出来的：第一版用 `is None` 判缺失，于是**显式 `null` 走了 SKIP 分支**——损坏的块伪装成健康的缺席。修法是查键不查值。
+
+### 116.5 验收
+
+| 项 | 结果 |
+|---|---|
+| TS | `retry.test.ts` **82**（+4）、`llm.test.ts` **44**（+4）、`search-index-degrade.test.ts` **9**（新）、`self-index.test.ts` **14**（+2） |
+| Python | 全部工具 **2917 passed, 19 skipped**；`test_arm_reading_ledger.py` **30**（+3）、`test_readout_arm_run.py` **+4** |
+| 失败记录可计价（真实 artifact 验证） | `calls 15,571` / `prompt 9,100,000`（81.3% 前缀缓存）/ `repetitions 3` |
+| 手册 | `manual:check` 36 示例、3 表 49/49；新增 §12.1 + 可编译的 `index.onEmbedFailure` 示例 |
+| 回归 | `S14` 证据仍 `verdict: miss`；`S9`/`S14` 的 `--audit` 走 SKIP 且 exit 0 |
+| `test_readout_audit_census.py` | **+8**：健康 pass／混合 FAIL／老 artifact SKIP／五种不可读值全 FAIL |
+| 导出账本 | 1219 → **1221**、有调用者 723 → **725**、**孤儿 496 不变**，差异写入 `note` |
+| 覆盖率 | `retry.ts` 因不可达 `catch` 掉到 99.07%，删分支（非 `v8 ignore`）回到 100%；`search-index.ts` 两处非 `Error` 拒绝臂补齐后 **100/100/100/100** |
+
+### 116.6 位置与剩余
+
+| # | 项 | 状态 |
+|---|---|---|
+| 1 | 能力账本 | 16 / 26 = **61.5%**，1 blocked（`#25`），0 gap |
+| 2 | `I7` 右下格 | **供应商余额阻塞**，代码侧就绪，余额恢复后重派 |
+| 3 | `I17` 词法零召回 | 预登记已写，**离线 0 CNY**，下一轮首选 |
+| 4 | `#25` 配对统计移出产品包 | 未开始 |
+| 5 | 可发布信号 | **未到**：`#25` 未决 + `I7` 未回填 |
+| 6 | 距 SOTA | Mastra OM 94.87%（−3.47）／MemCog `MR` 92.48%（−9.01）／Zep 4,400 token（2.06×） |

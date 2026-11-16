@@ -1864,3 +1864,182 @@ declared but unchanged: indexEmbedding -- the declaration names a field this dis
 | `#25` | **本轮尝试后主动回退**：`stats.ts` 的移动牵动 `cortex-core` 三个审计测试（`coverage-annotations` 里 6 段历史、`branch-coverage`、`stats-guard-coverage`）与 `export-census` 边界，改动面比「移一个文件」大一个数量级；半个 refactor 比不做更坏，留给专门一轮（理由与计划原条目一致） |
 | 下一轮首选 | `I17`：词法零召回，**预登记已写**（`docs/PREREGISTRATION-LEXICAL-RECALL.md`），离线判据三条 + 校准闸门，确认性派发 1 次（14.26 CNY） |
 | 可发布信号 | **未到**：`#25` 未决、`I7` 右下格未回填 |
+
+## 28 I18 执行记录（第 120 轮）：`I7` 右下格死于供应商余额，而产品在那一刻的选择只有「死」
+
+### 28.1 读数：没有读数，而根因不在代码里
+
+`I7` 右下格（run `43866639154`，`head_sha 286fc60`，12:26 → 14:22，1h56m）**失败**：
+
+```
+Embedding request failed: 429 Too Many Requests —
+{"error":{"code":"1113","message":"余额不足或无可用资源包,请充值。"}}
+    at OpenAIEmbedding.embed (packages/cortex-ai/src/embedding/openai.ts:84:13)
+    at EmbeddingMemo.embed (packages/cortex-core/src/cache/embedding-cache.ts:296:23)
+    at SearchIndex.#vectorOrder (packages/cortex-memory/src/retrieval/search-index.ts:498:21)
+```
+
+智谱 embedding 余额耗尽。发生在 **repetition 3 / 8**、`cortex-memory run=3 q=436/500`，也就是约 3/8 的钱已经花掉、432 条已判分答案在内存里。
+
+**这一轮的价值不在读数，而在这个失败揭开的四件事**。前三件是缺陷，第四件是设计错误。
+
+### 28.2 缺陷一：`preflight` 回答的是「能不能嵌一次」，运行需要的是「够不够跑完」
+
+日志时间线是决定性的：
+
+| 时刻 | 事件 |
+|---|---|
+| 12:27:38 | `Embedding backend: openai-compatible (model=embedding-3, dimensions=1024)` |
+| 12:27:39 | `Embedding preflight: ok (one vector of 1024 dimensions)` |
+| 12:27:49 | `Restored 282641 embedding vectors` |
+| 14:22:07 | `429 / code 1113` |
+
+preflight **通过了**。它是 1 条文本的探测，答案是「此刻余额 > 0」；而运行需要的是「余额 ≥ 本轮全部语料的嵌入成本」。这两个问题在余额单调递减时不同，且**任何前置探测都无法回答第二个**——一个点不能证明一条曲线。
+
+这条推论直接决定了本轮的方向：既然前置探测不可能救，唯一能救的是**中途失败时不要把整轮丢掉**。
+
+### 28.3 缺陷二：余额耗尽被当成瞬时 429，重试了 7 次、白等 127 秒
+
+transport 段：`attempts 15578, retried 7, 429 answered 8`。`isRetryableStatus(429) === true`，而 payload 明写「请充值」。
+
+`429` 是**两个事件共用一个状态码**：一个是「你太快了」，一个是「这个账户付不出钱」。前者一分钟内自己变真，后者不会变真。§13.216 的整个梯子（8 次、255 秒几何和、`Retry-After`）是为前者造的，对后者是纯浪费。
+
+修法必须是**白名单而非模糊匹配**：`insufficient_quota` / `quota_exhausted` / `exceeded your current quota` / `billing_hard_limit` / `余额不足` / `无可用资源包` / 智谱 `"code": "1113"`。**明确排除** `rate_limit_exceeded` / `rate_limit_error`——`S9` 跑过 16,166 次调用、0 次重试、429 二十余次，它需要每一次重试。一个把 `rate_limit` 也吞掉的匹配器，会把这个缺陷**反过来**：每一处可恢复的节流都变成致命错误。
+
+判定放在 `retryableFetchWithStats` 的循环里（`withBufferedBody` 已经读过体，所以那次读取是免费的，且 clone 之后响应仍可重放给上层）；`OpenAIEmbedding` 把它定型为 `EmbeddingQuotaExhaustedError`（带 `status` 与 `detail`，原文不转述），于是上层可以用 `instanceof` 而不是 `message.match` 来分类——后者活不过一次供应商改文案。
+
+### 28.4 缺陷三：失败运行的账单不可读，因为生产者没带它
+
+workflow 第 17 步红了：
+
+```
+packages/cortex-memory/benchmark-cortex-memory-ablation-report.json:
+[Errno 2] No such file or directory
+```
+
+死掉的运行不写 report，这是设计；但它写了 partial，而 partial 里**只有 8 个键，没有 `llmUsage`**：
+
+```
+['baselineAnswers','completed','featureAnswers','reached','run','system','total','transportRetry']
+```
+
+也就是说：两小时、15,571 次调用、`attempts 15578` 被记下来了，**token 数一个都没有**。一个不能给失败定价的预算不是预算——用户约束⑧要求的正是这个。
+
+修法是一行生产者 + 一处读者：
+
+| 位置 | 改动 |
+|---|---|
+| `PartialAblation` | 加 `llmUsage?: UsageSnapshot`（与 `transportRetry` 同一条「可选」理由：字段与工具同生，缺失只能读作「未计价」） |
+| `attachPartial` | 在 throw 处 `llmUsage()`，因为那是唯一知道运行要异常结束的地方 |
+| `spend_section` | `runs` 缺失时读 `completed` 的长度——partial 说 `run`（死的序号）而非 `runs`，而已完成的重复就写在 `completed` 里 |
+| `main` | `--spend` 与 `--transport` 移到 roster guard **之前**：两者都只需要账单，而 partial 按定义没有 roster |
+| workflow | report 缺失 → 读 partial，两者都缺 → `::notice::` 并 exit 0（不是 exit 2） |
+
+用**那份真实的失败记录**验过（`/tmp/i7/…-partial.json`）：
+
+```
+provider spend (llmUsage)
+  calls        15,571
+  prompt       9,100,000 tokens, of which 7,400,000 were served from the prefix cache (81.3%)
+  completion   320,000 tokens
+  prompt:completion ratio 28.4:1
+  repetitions  3, so a 500-question pass over two sides issues 3,000 answer calls of the 15,571 recorded
+```
+
+`repetitions 3` 来自 `completed` 的长度，与第 16 步打印的「repetitions finished before it: 3」是同一个字段。
+
+### 28.5 设计错误：产品在「供应商中途失效」这件事上只有一个选项，而它是「死」
+
+这是本轮真正的产出，也是唯一一个**架构级**的判断。
+
+产品早就支持第三种状态：`SearchIndexOptions.embed` 不存在即词法索引，是一条工作的路径，`S14` 刚刚把它的价格量了出来（**85.75%**，配对 −28 题，p=2.5e-5）。所以「没有向量通道」不是坏掉的配置。
+
+产品**不支持**的是第四种状态：**配置了 embedder，跑到一半它不回答了**。那一刻的唯一行为是把错误穿过 `lookup` 抛出去，让整轮死掉。
+
+修法是给这条路一个**调用方声明的策略**，而不是一个静默默认：
+
+| `onEmbedFailure` | 行为 | 谁该用 |
+|---|---|---|
+| `'fail'`（默认） | 照抛 | 服务：一个错的答案比一个错误更坏 |
+| `'lexical'` | 这次检索按词法打分，`embedDegraded` 计数，`embedFailure` 保留供应商原话 | 长批：丢掉整轮比丢掉四分之一更坏 |
+
+**默认必须是响的那个**：`indexEmbedding: injected` 在 artifact 里意味着向量通道参与了排名；一个静默降级的部署会把「部分词法」的数字印在「有向量」的配置下，而那些数字看起来完全合理（词法索引是 85.75%，不是 0）。
+
+两个失败点必须分开处理，因为它们后果不同：
+
+- **query 嵌不出来**：丢一次检索的向量通道，语料向量完好，供应商恢复后下一问就能用。
+- **语料嵌不出来**（`prime()`，`CortexMemory` 每题建一次索引，所以每问都跑）：丢掉这个索引的全部向量通道。语料分批嵌入，所以**半嵌入是可达到的**，而半张表比没有表更坏——`#vectors[position]` 必须对应 `#turns[position]`，短表会让每一条轮次对着**邻居的**向量算余弦，产生一个「看起来像通道不同意」的排名。`prime()` 在降级路径上因此**丢掉已到达的批次**，`vectors` 读 0。
+
+### 28.6 测试抓到的自身缺陷：注释说边界在 try 外面，实现里不在
+
+第一版在 `search()` 里这样写：
+
+```ts
+try {
+  vectors = await this.#vectorOrder(model, question, k);   // 里面同时做 embed 与宽度检查
+} catch (error) {
+  if (this.#options.onEmbedFailure !== 'lexical') throw error;   // 把宽度检查也吞了
+}
+```
+
+注释写着「structural check sits outside this block」，但 `#vectorOrder` 里既有 embed 也有 ragged 宽度检查，两者被同一个 `catch` 抓住。
+
+`test_a_width_mismatch_still_throws` 是红的：两个 embedder 接错会产出**看起来合理的错误排名**，那正是 `#vectorOrder` 那段长注释要防的事。
+
+修法不是改注释，是把方法**拆开**：`#vectorOrder` 拆成「取 query」（可能失败）与 `#orderByVector(query, k)`（同步，含宽度检查）。于是 `try` 只能包住前者——边界变成结构，而不是一句话。
+
+### 28.7 四道门都认得这个字段，而不只是产生它的那道
+
+一个计数只有在**每一道能拒的门都读它**时才有意义。本轮的字段落了四处：
+
+| 门 | 读的是什么 | 触发后的后果 |
+|---|---|---|
+| `SearchIndex` 本身 | 按 `onEmbedFailure` 降级或抛 | 一次检索 / 一个索引 |
+| `arm-reading-ledger.py` | 两行都拒（`S11` 与 `S14` 的臂都不接受混合栈） | 证据文件写不出来 |
+| `readout-arm-run.py --audit` | artifact 自洽：配置说 `injected`，计数说有 40 次没有向量 | **CI 红**，artifact 不被归档为该臂的读数 |
+| `readout-arm-run.py --spend` | 无关；但它现在能读失败记录的账单 | — |
+
+第三行是这一轮补的，也是最关键的一道：**一份降级 run 的 artifact 在 `--audit` 下的 `pass` 意味着 CI 绿、artifact 归档、下一个读者把它当 `S11`/`S14` 的读数**。`--audit` 的职责正是「artifact 与自己是否矛盾」，而 `indexEmbedding: injected` 加 `embedDegraded: 40` 就是一条自我矛盾。
+
+判定上有一处必须区分的三态，而不是两态：
+
+| `selfIndex` | `embedDegraded` | 读法 |
+|---|---|---|
+| 不存在 | 不存在 | `S9`/`S14` 的形态：构建里没有这个策略，**不可能降级** |
+| 存在 | 不存在 | 同上，但索引建过 —— 仍然不可能降级 |
+| 存在 | `0` | 健康：每一次检索都有向量通道 |
+| 存在 | `> 0` | **FAIL**：混合栈 |
+| 存在 | `null` / `true` / `40.5` / `-1` | **FAIL**：不可读的计数不得冒充健康的零 |
+
+最后一格是被一条参数化测试逼出来的：第一版用 `degraded is None` 判「字段缺失」，于是**显式 `null` 走进了 SKIP 分支**——一个损坏的块伪装成一次健康的缺席，正是这一节反过来要防的形状。修法是查键（`'embedDegraded' in self_index`）而不是查值。
+
+### 28.8 验收
+
+| 项 | 结果 |
+|---|---|
+| TS `retry.test.ts` | **82**（+4：终态不重试／体仍可读／普通 429 仍重试／判据表 9 例） |
+| TS `llm.test.ts` | **44**（+4：类型化错误／只问一次／400 不是配额／节流不是配额） |
+| TS `search-index-degrade.test.ts` | **9**（新文件：默认抛／降级计数／跨问累计／宽度不吞／prime 降级／半嵌入不留短表／健康读 0／fold 累计） |
+| TS `self-index.test.ts` | **14**（+2：`+degraded:0` 渲染、跨 worker 求和 10） |
+| Python `test_arm_reading_ledger.py` | **30**（+3：降级拒两行／老 artifact 读 0／零不拒） |
+| Python `test_readout_arm_run.py` | **+4**：失败记录可计价（含 `repetitions 3`）／无账单说清楚／roster guard 仍拒其余模式 |
+| 全部 Python 工具 | **2917 passed, 19 skipped** |
+| 手册 | `manual:check` 36 示例编译、3 表 49/49；新增 §12.1 与一段可编译的 `index.onEmbedFailure` 示例 |
+| 真实 artifact 回归 | `S14` 证据仍可读（`verdict: miss`）；`S9` 与 `S14` 的 `--audit` 走 SKIP 且 exit 0（字段与机制同生，缺失只能读作「不可能降级」） |
+| `test_readout_audit_census.py` | **+8**：健康 pass／混合 FAIL 且 exit 非零／老 artifact SKIP／五种不可读值全 FAIL |
+| 导出账本 | 1219 → **1221** 导出、723 → **725** 有调用者、**孤儿 496 不变**（两个新导出都有 `openai.ts` 这个真实调用者），差异已写入 `note` |
+| 覆盖率 | `retry.ts` 曾因一个**不可达的 `catch`** 从 100% 掉到 99.07%——按规矩删掉该分支而不是加 `v8 ignore`，回到 100%；`search-index.ts` 的两处 `String(error)` 臂（注入的 embedder 可以 reject 任何值）补齐后 **100/100/100/100** |
+
+### 28.9 位置与剩余
+
+| 项 | 状态 |
+|---|---|
+| 能力账本 | 16 / 26 = **61.5%**，1 blocked（`#25`），0 gap |
+| `I7` 右下格 | **被供应商余额阻塞**：`43866639154` 死于 `code 1113`。代码侧已就绪（本轮修的四件事），需要余额恢复或换供应商后重派 |
+| `S14` | 已回填，85.75%，矩阵第 70 个可验证标记 |
+| `I17` 词法零召回 | 预登记已写（三条离线判据 + 校准闸门），**离线可跑，0 CNY** |
+| `#25` | 未开始，唯一需要删公开 API 的一轮 |
+| 可发布信号 | **未到**：`#25` 未决、`I7` 右下格未回填 |
+| 距 SOTA | 端到端 91.40% 对 Mastra OM **94.87%**（−3.47）；`MR` 83.47% 对 MemCog **92.48%**（−9.01）；9,106 token/问 对 Zep **4,400**（2.06×） |
+
+**下一步的顺序被这一轮改写了一次**：`I7` 与任何需要向量通道的派发现在都不可派发，所以最优路径上**成本为 0 的项**必须先做——`I17` 的离线读数（按预登记的三条判据改 `lexical` 检索、在本机读零召回题数），它不需要余额、不需要模型、不需要派发。余额恢复后再回来回填 `I7`。
