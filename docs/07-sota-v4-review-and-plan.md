@@ -1862,5 +1862,5 @@ declared but unchanged: indexEmbedding -- the declaration names a field this dis
 | `S14` | **已回填并注册为矩阵行**，手册已定价 |
 | `I7` 三格 | 两格完成；**右下格（`self-index` @24K）已派发**：run `43866639154`，`head_sha 286fc60`，投影 14.26 CNY |
 | `#25` | **本轮尝试后主动回退**：`stats.ts` 的移动牵动 `cortex-core` 三个审计测试（`coverage-annotations` 里 6 段历史、`branch-coverage`、`stats-guard-coverage`）与 `export-census` 边界，改动面比「移一个文件」大一个数量级；半个 refactor 比不做更坏，留给专门一轮（理由与计划原条目一致） |
-| 下一轮首选 | `I17`：词法零召回，离线判据三条，确认性派发 1 次（14.26 CNY） |
+| 下一轮首选 | `I17`：词法零召回，**预登记已写**（`docs/PREREGISTRATION-LEXICAL-RECALL.md`），离线判据三条 + 校准闸门，确认性派发 1 次（14.26 CNY） |
 | 可发布信号 | **未到**：`#25` 未决、`I7` 右下格未回填 |
