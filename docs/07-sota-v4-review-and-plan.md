@@ -1298,3 +1298,131 @@ the vector channel discriminates, and costs the same as it does under node:sqlit
 | 全链 | `pnpm check` **exit=0** |
 | 读数一致性 | `browser-reading-check`：`12 checks, identical in order and string, both on opfs, both digest-matched` |
 | 派发 | **0 次，0 CNY** |
+
+---
+
+## 23 I13 执行记录（第 116 轮）：一条无处安放的缓存，装进调用方自己的存储里
+
+### 23.1 上一轮留下的是一句话和一个数
+
+`§22.4` 写的是：`assembleMemory` 自己构造 `MemoryEmbeddingCacheStore`，那是**内存**里的，一次页面加载会把语料重新嵌入一遍，套件的 read 阶段在重启后也再付了一次；起点是 **5 个文本、2 次调用、每次装配**。写这句话的时候它是结论。这一轮把它变成一个**差值**——同一个语料、同一个问题、两次页面加载，第二次付 0。
+
+### 23.2 为什么「再写一个 store」不是答案
+
+`EmbeddingCacheStore` 的四个方法是**同步**的，而且不能改：`EmbeddingMemo.embed` 在决定命中还是未命中的那个循环里调用 `get(key)`，每个文本一次 `await` 会拆掉这个 memo 存在的理由（批的次序）。而本仓库已有的每一个后端都是异步的——`MessageChannel` 背后的 SQLite worker、`IndexedDB`、Postgres socket。所以「一个持久的同步 store」在任何价位上都买不到。
+
+剩下的诚实形状只有一个：**持久化不是 store 实现，是一对边**——装配前 hydrate，装配后 flush。`StorageEmbeddingCache` 就是这一对边的携带者：对内是内存（同步四方法），对外是 `open()` / `flush()` 两个 `await`。这条判断写进了类注释的第一段，也写进了手册 `§6.6` 的选项行——因为一个只在类注释里成立的契约，装的人看不到。
+
+### 23.3 为什么落在 `Storage` 上，而不是第五个后端接口
+
+因为产品已经有四个 `Storage`（`sqlite`、`pg`、`opfs`、`idb`），再设计一个 KV 后端接口就是**第五处会忘记擦除的地方**。落在转写本自己的存储上以后，擦除规则从「第九个表面」退化成**一条**：`forget()` 摸到表的地方，就摸到它——同一个 `Storage`，同一把 `del`。
+
+代价是表里多一行「键 + 数组」的记录，键仍然是 `fingerprint\0sha256(text)`，不含任何措辞。所以 `no table on either store still holds the sentence` 那条扫描（按明文搜）对这张表**永远命中不了**，这恰好是它需要自己那一格计数的原因：扫不到的表格，是擦除失败也没人会注意到的表格。
+
+### 23.4 三种能静默错的方式
+
+| 方式 | 症状 | 挡它的检查 |
+| --- | --- | --- |
+| 向量被 JSON 序列化 | `JSON.stringify(new Float64Array([1,2]))` 是 `{"0":1,"1":2}`；读回 `Float64Array.from` 得到长度 0，每个余弦 `NaN`。所有只看「键对不对」的往返断言都会通过 | 写侧 `Array.from`，测试**绕过类**从 `Storage` 直接读回那一行，断言 `[1.5,-2,0]` |
+| 跨空间的命中 | 一个网关的向量喂给另一个网关的同一段文本，只表现成检索差异 | 键含 fingerprint；第二轮换 `space-2` 必须零命中、三次嵌全走网络 |
+| 跳过行变成擦不掉的行 | 一句还在盘上的话，`forget()` 报 0 条 | `#known` 记住**键**而不只是可读的行，`delete` 摸得到它；「it can still erase a row it declined to read」 |
+
+第二条是这一轮唯一一条**关于缓存本身**的断言，也是持久缓存最需要的：它的失败模式是一个**命中**。
+
+### 23.5 组装根上那一行
+
+产品层的缺陷不是类，是 `assembleMemory` 里那一行：`new MemoryEmbeddingCacheStore()` 无条件，于是调用方传进来的持久 store 被**丢掉**，而且丢得没有声音。这与 `memory.ts` 里 `index.store` 那次修正是同一类错的上一层——那次修的是「类被替换了 store」，这次修的是「组装根把类的选项吃掉了」。
+
+变异 M2（把 `supplied ?? …` 改回无条件新建）实测红两条：`does not pay again for a corpus a previous assembly embedded`（第二轮把 4 个语料文本又送了一遍）与 `points the erasure at the store it was handed`（`store.size()` 在擦除前后都是 0，因为擦除走的不是这个 store）。两条都不是「断言太紧」，它们是这个缺陷的两个面。
+
+选项还带两个**拒绝**：没有 `embed` 的 store（没有人会往里写）与 `minimal` 上的 store（没有索引会读）。理由是 `memory.ts` 里每一条 guard 的理由：一个不可能生效的字段，是配置行在命名一次运行从未做过的治疗。
+
+### 23.6 读数
+
+| 项 | 值 |
+| --- | --- |
+| 新文件单测 | **12 / 12**，`storage-embedding-cache.ts` 四项覆盖 **100 / 100 / 100 / 100** |
+| 组装层测试 | 16 / 16（新增 4 条：跨装配零付费、擦除指向传入 store、两个拒绝） |
+| 浏览器套件 | **14 / 14**（原 12 + `the second assembly pays nothing…` + `the erasure reached the vector cache…`） |
+| 第二次装配的账单 | **5 row(s) hydrated, 0 texts over 0 call(s) after the restart** |
+| 提示词 | 580 字符 / **536714097**，重启前后与 `node:sqlite` 三者相等 |
+| 首次加载的对照 | `hydrated 0, skipped 0`（空库不该凭空 hydrate 出东西） |
+| 擦除 | 内存 **1** 个向量、落盘 **1** 行删除；两张 store 八个表扫不到那句话 |
+| 全链 | `pnpm check` **exit=0** |
+| 变异 | M2 红 2（组装层）；M1（`open` 不读行）只红 1 条浏览器检查、其余 13 条全绿 |
+| 派发 | **0 次，0 CNY** |
+
+M1 的一红十三绿是这一轮最该记下来的一行：**在常量向量那一版套件里，这条缺陷会被 13 条绿静静地判成通过**。
+
+### 23.7 为什么这不是能力账本的第 27 行
+
+新增的四个导出（`StorageEmbeddingCache`、`StorageEmbeddingCacheOptions`、`StorageEmbeddingCacheReport`、`DEFAULT_EMBEDDING_CACHE_TABLE`）进了普查，**没有**进能力账本：
+
+- 账本行 12「embedding memoisation」的能力是「一段文本只嵌一次」，持久化是那个接口背后的**存储选择**；
+- 账本行 13「an injected store: any Storage backend」已经确立「注入的存储」本身是产品能力；
+- 再加一行就是 `§21.3` 的那条教训（能力清单 vs 能力计数）的复现——同一个能力数三遍。
+
+代价是诚实的：账本仍是 **26 行 / 16 product / 1 blocked / 边界 60**，完成度数字这一轮**不动**；普查从 492 个孤儿变 **496**，新增第 11 组 `storage-embedding-cache-api`，rationale 写的是「它的调用者是部署：`open` 是异步的而 `assembleMemory` 是同步的，所以唯一正确的构造点在调用方的代码里」——与 `browser-storage-surface` 组同一条理由。
+
+### 23.8 顺手修掉的一个 gate：三条时间样本上的序关系断言
+
+这一轮的第四次 `pnpm check` 红在一个与主题无关的地方：`test_corpus_read_census.py::test_the_read_is_a_fraction_of_the_work_the_answer_path_already_did` —— `storedMs 1848.67 >= assembleMs 2004.87` 不成立。单跑那条测试是绿的（5 passed / 25.5s），所以它不是「测试写错了」，是**估计量在负载下不成立**：`read`/`assemble`/`stored` 是三次独立计时，而断言的是一个**分解关系**（stored ≈ read + assemble）。在这台机器上同时跑浏览器套件时，`assemble` 的那一次采样被抬高了 8%。
+
+根因修法不是放宽断言，是换估计量：三条计时各取 **3 次的最小值**（负载只会加时间，最小值是最少被污染的样本），断言原样保留。修后 `read 163.63 / assemble 1362.1 / stored 1548.44`（1.14×，原先 1.20×），`stored ≥ assemble` 有余量；`slow-read` 故障臂仍能翻过 2.0 的条款。代价是这条普查从 ~10s 变 ~17s，pytest 从 25.5s 变 56s。
+
+`evidence/corpus/read-cost.json` 因此重写：数值变了，`$comment` 里多了一句「每条是 3 次的最快值」。
+
+### 23.9 这轮没做的两件事，连同它们的位置
+
+| # | 发现 | 为什么这轮不做 | 下一轮怎么做 |
+| --- | --- | --- | --- |
+| 1 | `#25`（配对统计移出产品包） | 它要删两个公开 API 名（`welchTTest`、`wilsonScoreInterval`），并改四份按路径导入的测试；`§21.6` 已把规模量出来 | 单独一轮，先决定「记忆层该不该给客户一个 Welch 检验」 |
+| 2 | 向量通道 vs 词法**分歧**语料 | 这一轮问的是「缓存跨重启还对不对」，不是「向量值不值」；`§22.3` 已把这两条轴分开 | 造一段两路排序不一致的语料，读 `distinct` 与选用轮次的差 |
+
+---
+
+## 24 S9 回填（第 116 轮，run `43778036604` / #178）：产品自己建索引，读数没有掉
+
+### 24.1 这是哪一格
+
+`I7` 要一次派发关掉三个 `unrun`，`S9` 是其中之一：**产品为每个问题自己建索引**（treatment），对照是仪器在跑之前替它建好（control，`retrieval-anchored`）。这一格的实质是「排名的归属」——如果产品的排名比仪器的排名差，那 `§13` 以来所有读数都在测一件产品没有的事。
+
+### 24.2 派发与规格
+
+| 项 | 值 |
+| --- | --- |
+| run | `43778036604`（#178），`2026-11-16T00:02:39Z → 02:02:58Z`，**2h00m** |
+| 参数 | 500 题 × 4 重复，`cortex_memory_relevance=self-index`，其余 22 个字段与登记一致 |
+| declared departure | `['cortex_memory_relevance']`，preflight 与读回都判 **match**（1 departed / 0 undeclared） |
+| 预算 / 投影 | 20 CNY / 14.26 CNY |
+| 传输 | 16,166 次调用、**0 次重试、0 个 429**、0 次超时；每一个问题都被回答 |
+
+2 小时而历史中位数 13–28 分钟，原因不是故障：`selfIndex=indexes:2000+turns:742080`，产品为 2,000 个「题×重复」各建一次索引，每次 371 个轮次。`§22` 那一轮把「稠密通道」做成通道之后，这里的成本第一次是真实成本。
+
+### 24.3 读数
+
+| 系统 | min | avg | max | median |
+| --- | --- | --- | --- | --- |
+| `reference-pipeline` | 44.80% | 45.00% | 45.40% | 44.90% |
+| `cortex-memory`（self-index） | 91.00% | **91.40%** | 91.80% | 91.40% |
+
+- Δ 对基线 **+46.40%**，feature 95% Wilson **[88.17–93.21]**，McNemar **2.124e-55**，Welch **4.210e-12**；
+- 分层（首次重复）：IE 91.33 / **MR 83.47** / KU 93.06 / TR 94.49 / ABS 100.00；
+- 弃答率 6.60%，弃答正确率 90.91%；
+- 自建索引的账：`indexes 2000`、`turns 742,080`、`texts 536,099`、`memoHits 205,377`、`reuse true`、`rerank 0/0`；
+  折算每个索引 **371 轮 → 268 次嵌入 → 103 次缓存命中**（命中省下约 28% 的轮次）；
+- 花费：feature 臂 18,148,990 prompt token / 2,246,192 completion，**9,928 prompt token 每个正确答**，前缀缓存命中 **81.01%**；归因闭合。
+
+### 24.4 判据与结论
+
+`I7` 给 `S9` 的判据是配对的：**200 题筛选尺度上 Δ 题 ≥ −15**。已登记的筛选读数（`evidence/longmemeval/self-index.json`，200×2，control 与 treatment 同一输入）是 **−1.5 题**、McNemar **p = 1.0**、discordant 8 / 7 ——**通过**，且落在一个对称的噪声带里而不是「刚好够」。
+
+登记尺度（500×4）这一轮给的是 **91.40% 均值**（首次重复 91.00%），而登记的 `retrieval-anchored` 读数写的是首次重复 **91.40%**、`MR` **83.47%**。两次运行的 `MR` 逐位相同（101/121），总体差 **−0.4 点 = −2 题**。
+
+但这两次是**不同的运行，不是配对**：所以这一格能说的是「**没有可测到的差异**」，不能说「等价」。配对的证据只在 200×2 上（−1.5 题、p = 1.0），这句话不能省。另有一处要留痕：白皮书 `§6.19` 的登记读数写「四次 91.40 / 91.95 / 93.20」而只列了三个，本轮没有去补那个缺失值——它属于口径复验，不属于这一格。
+
+**`S9` 关闭。** `I7` 还剩两格：`S11`（无排名 @48K）与右下格（self-index @24K）——后者是「6,000 token 下能不能守住 91%」的唯一直接证据，而这一轮 91.40 的 48K 读数正是它的对照。
+
+### 24.5 这一格不改变什么
+
+产品的 `cortex-memory/src/retrieval/search-index.ts` 没有被改一行：这一轮只是**测**了它自己建索引的结果。`§21.6` 留下的那条判断（`anchor-recall` 的等价物要不要进产品）仍然取决于 `S11`：若 `S11` < 88%，排名值 > 3 点，那时才需要把等价物写进产品；若 `S11` ≥ 88%，产品的 `SearchIndex` 已经够了，`anchor-recall` 留在仪器里就是它的正确位置。

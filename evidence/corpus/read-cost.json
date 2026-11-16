@@ -1,12 +1,12 @@
 {
-  "$comment": "Written by tools/corpus-read-census.mjs. A corpus of 10^5 turns in a real SQLite file, then three timings: the read (`corpus.sessions()`), the assembly (`answerSessions` over the same array with a stub reader at the registered 48k room), and the two together through `askStored()`. The ratio is the registered falsifiable clause: above 2.0 the read-amplification design does not hold and `askStored` is withdrawn in favour of `remember` alone.",
+  "$comment": "Written by tools/corpus-read-census.mjs. A corpus of 10^5 turns in a real SQLite file, then three timings: the read (`corpus.sessions()`), the assembly (`answerSessions` over the same array with a stub reader at the registered 48k room), and the two together through `askStored()`. Each is the fastest of 3 runs, because load only adds time and the gate compares two of them. The ratio is the registered falsifiable clause: above 2.0 the read-amplification design does not hold and `askStored` is withdrawn in favour of `remember` alone.",
   "dataset": "100000 turns, 500 sessions x 200, one SQLite file",
   "room": 48000,
   "fault": null,
-  "readMs": 196.4,
-  "assembleMs": 1376.4,
-  "storedMs": 1656.33,
-  "writeMs": 3722,
-  "ratio": 0.14,
+  "readMs": 164.63,
+  "assembleMs": 1479.57,
+  "storedMs": 1602.71,
+  "writeMs": 3549,
+  "ratio": 0.11,
   "reading": "read / assemble. One number, because the clause is one comparison: does the transcript scan cost more than twice the work the answer path was already doing over the same turns?"
 }
