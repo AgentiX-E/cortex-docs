@@ -1,0 +1,37 @@
+{
+  "$comment": "S11. The construction a caller gets without choosing one: `relevanceSignal: none`, so the budget spends the arrival-order prefix and nothing ranks. One dispatch, four repetitions, the same reader, judge and prompt as S1. The row asks whether a bare install is shippable at 88.0%, which is S1 minus S9's registered tolerance.",
+  "row": "S11",
+  "run": "43793677739",
+  "declaredDepartures": [
+    "cortex_memory_relevance"
+  ],
+  "arm": {
+    "name": null,
+    "relevanceSignal": "none",
+    "reader": "deepseek-chat",
+    "judge": "deepseek-chat",
+    "maxTurnChars": 400,
+    "turnCutMarker": "none",
+    "promptContract": "evidence-blocks-unsourced"
+  },
+  "dataset": {
+    "name": "longmemeval",
+    "fingerprint": "sha256:d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+    "questions": 500,
+    "repetitions": 4
+  },
+  "overall": {
+    "accuracy": 0.3955000000000001,
+    "accuracyPerRun": [
+      0.392,
+      0.39,
+      0.406,
+      0.394
+    ],
+    "questions": 500,
+    "runs": 4,
+    "accuracySource": "recomputed from ablation.featureCorrectByRun; not questions[].correct"
+  },
+  "configurationFingerprint": "sha256:0ac7ec91e984a2acaca057d9acfc106c9f7ae03e5329d1882c7957fa52e64507",
+  "tier": "declared-departure"
+}

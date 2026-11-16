@@ -1426,3 +1426,125 @@ M1 的一红十三绿是这一轮最该记下来的一行：**在常量向量那
 ### 24.5 这一格不改变什么
 
 产品的 `cortex-memory/src/retrieval/search-index.ts` 没有被改一行：这一轮只是**测**了它自己建索引的结果。`§21.6` 留下的那条判断（`anchor-recall` 的等价物要不要进产品）仍然取决于 `S11`：若 `S11` < 88%，排名值 > 3 点，那时才需要把等价物写进产品；若 `S11` ≥ 88%，产品的 `SearchIndex` 已经够了，`anchor-recall` 留在仪器里就是它的正确位置。
+
+## 25 I14 执行记录（第 117 轮）：`S11` 不是关于排名的证据，而是关于默认值的证据
+
+### 25.1 读数：一次派发，两句话同时成立
+
+run `43793677739`（#179），`2026-11-16T02:41:20Z → 04:27:23Z`（**1h46m**），预算 20 CNY、投影 **14.26**，declared `['cortex_memory_relevance']`；日志第 237 行自己写着 `asked 23 field(s), 22 registered, 1 departed, 1 declared ['cortex_memory_relevance']`。
+
+| 项 | `S11`（`relevanceSignal=none`） | 登记（`self-index`） | 差 |
+| --- | ---: | ---: | ---: |
+| 全轮均值 | **39.55%** | 91.40% | **−51.85 点** |
+| 四轮 | 39.20 / 39.00 / 40.60 / 39.40 | 91.00 / 91.40 / 91.40 / 91.80 | — |
+| `IE` | 6.00% | 91.33% | −85.33 |
+| `MR` | 53.72% | 83.47% | −29.75（McNemar **1.5e-9**） |
+| `KU` | 0.00% | 93.06% | −93.06 |
+| `TR` | 72.44% | 94.49% | −22.05 |
+| `ABS` | 100% | 100% | 0 |
+
+与 `reference-pipeline` 的配对（同一次运行内的对照）：Δ −5.15 点，`McNemar p = 7.8e-3`，不一致对 **66 : 38**（基线对/特征错 66，反过来 38）。
+
+成本这一列比准确率更值得记：
+
+| 项 | `none` | `self-index` |
+| --- | ---: | ---: |
+| 调用 | 6,781 | 5,682 |
+| prompt token | 26,777,458 | 21,204,754 |
+| 每问 prompt token | **11,878** | 9,074 |
+| **每个正确答案的 prompt token** | **30,032** | **9,928** |
+| 前缀缓存占比 | 86.45% | 81.01% |
+
+**不排名不是更便宜，而是每问多花 30.9%、每个正确答案贵 3.03 倍、并且少答对 51.85 点。** 这一行推翻了「最小配置是省钱的配置」这个直觉：房间是固定的，不排名时它被到达序填满，排名时它被更少的、更密的轮次填满。
+
+### 25.2 判据怎么落地，以及它没有说的那一半
+
+`I7` 的否证条款写的是：
+
+> 若 `S11` < 88%：排名值 > 3 点，产品的 `SearchIndex` 必须补齐 `anchor-recall` 的**等价物**（不是原代码），否则不能声称"产品会排名"。
+
+`S11 < 88%` 成立（39.55%）。但这条把**两个问题**混成了一个，而它们的答案方向相反：
+
+| 问题 | 仪器 | 读数 | 结论 |
+| --- | --- | --- | --- |
+| **A：有排名 vs 完全没有排名** | `S11`（本轮） | **+51.85 点**，不一致对 66 : 38 | 排名是交付要求 |
+| **B：产品的排名 vs 仪器的排名** | 配对筛选 `43401057514` 对 `self-index`（200×2）、以及 `S9`（500×4） | **−1.5 题、p = 1.0**；登记尺度 91.40 对 91.40 | 产品会排名，且不比仪器差 |
+
+`anchor-recall` 是问题 B 的一个**成分**：`retrieval-anchored` = hybrid 检索 **∪** 锚点邻域恢复，而 B 已经答过——**不带邻域恢复的产品索引与带它的仪器打平**。所以「必须把等价物搬进产品」这个结论**不成立**，而理由必须是读数而不是偏好：搬进去会得到一个与仪器同构的产品（§349 已写下的原则），而且没有一条读数支持它能加分。要让「搬」成立，需要那 **+21 个金标轮 / +53 个进池**在配对尺度上兑现成分数——它没有兑现。
+
+本条要留痕的方法论：**否证条款里如果把「某机制有没有用」和「机制 A 与机制 B 差多少」写进同一句，那么条款被触发时，两个结论都会被误读。**
+
+### 25.3 真正的后果，是 `acceptance` 早就写好的那一条
+
+`acceptance.ts` 的 `S11` 行在本轮之前就有 `onMiss`，原文：
+
+> Below 88.0% the bare construction is not a shippable configuration, and the consequence is a **delivery change rather than a code change**: the Quick Start has to pass an `index` in its minimal example, which also means the caller owns an embedder before the first answer.
+
+本轮执行它。`assembleMemory` 的默认档从 `minimal` 改成 **`reader`**：
+
+| profile | 加什么 | 登记的仪器上 |
+| --- | --- | ---: |
+| `minimal` | 什么都不加：恒等门 + 无索引 | **39.55%**（`relevanceSignal=none` 臂） |
+| `reader` | 检索索引（词法 + 供给 embedder 时的稠密通道） | **91.40%**（`self-index` 臂；对仪器自己的索引配对 −1.5 题、p=1.0） |
+| `full` | 披露边界（卡片、发布、八个表面的擦除） | 同一个排名；边界不是准确率机制 |
+
+默认档改为「**不需要任何额外输入的最强档**」：`full` 更强但不是默认，因为它要第二个存储——一个「什么都不传就抛」的默认不是默认。
+
+`assemble.test.ts` 用两条**行为**断言钉住它，而不是钉住名字：默认档建索引（`indexCost()` 有值），以及**被到达序裁掉的那一轮在默认档下能到达、在 `minimal` 下不能**（同一份语料、同一个房间、同一个问题）。
+
+### 25.4 第二个缺陷：一句正确的原则 + 一个不存在的入口
+
+模块注释写着 `maxPromptChars` 在这里没有默认值，理由（per-route 房间表是登记臂的配置，第二个默认就是第二条臂）也正确，并且说「**调用方想要上界就声明它**」。而 `AssembleOptions` 里**没有这个字段**。
+
+一句正确的原则加一个不存在的入口，等于把**缺失的能力**读成**纪律**——读者不会去验证一个抽象里的「调用方可以」，只有编译器会。本轮加字段、不加默认值，并让这条自述变成可执行：`manual:check` 编 35 个例子、3 张契约表、**49/49 个选项都有例子**。
+
+### 25.5 第三个缺陷：账本工具拒绝它自己那一行
+
+`S11` 的臂**按定义**就是一次偏离（`relevanceSignal: none` 对登记 `retrieval-anchored`）。声明在派发时被校验、打印进日志、然后**被丢掉**；`registration-attest.attestation()` 只认指纹相等，于是 `no-ranking-ledger.py --write` 对第一份真实产物报：
+
+```
+this artifact is not a measurement of the registered configuration
+  applied    sha256:0ac7ec91…
+  registered sha256:0c6c25e7…  (run 42533236864, adopted by §13.336)
+  cortex_memory_relevance: the baseline records 'retrieval-anchored' and this artifact applied 'none'
+```
+
+**派发花了钱，证据文件永远写不出来**——正是这个工具自己的 docstring 说「比 unrun 更糟」的那种状态，只不过成因在它自己身上。
+
+修法分两层，且严格的那一层**不动**：
+
+1. `attestation()['matched']` 保持指纹权威。放宽它会让每一个严格读者（`readout-arm-run.py --registration`、工作流里那道 gate）一起失去抓漂移的能力，等于用一行的可写性换所有行的可信度。
+2. 另加**第二条读数** `declared_attestation(report, baseline, declared)`，三态：全部差异都已声明且每个声明都真的移动了 → 接受；有未声明的差异 → 拒（并指名）；**声明了却没移动** → 拒（声明是关于一次发生过的运行的断言，产物证明它没发生，就不能让文件带着这句话出去）。
+
+声明由 `--departs` 传入，并且**写进文件**：`declaredDepartures` 恒在（空数组也要写，否则「没有偏离」与「字段早于这次运行」会是同一串字节），`tier` 从 `registered` 变成 `declared-departure`（两个文件被同一条准则读，只有一个是项目发行的配置）。
+
+证据文件：`cortex-docs/evidence/longmemeval/no-ranking.json`，`overall.accuracy = 0.3955`，`accuracyPerRun` 四值，`configurationFingerprint = sha256:0ac7ec91…`，`tier = declared-departure`。
+
+### 25.6 测试、变异与覆盖率
+
+| 层 | 内容 | 结果 |
+| --- | --- | --- |
+| TS 新增 | 默认档建索引；被裁的轮次能到达而 `minimal` 不能（同语料同房间）；`maxPromptChars` 可声明 | 3 条 |
+| TS 改写 | 两条依赖旧默认的测试**显式命名** `minimal`，否则默认值一变，被测的臂会静默改变 | 2 条 |
+| Python 新增 | 未声明偏离被拒并**指名**；已声明偏离可写且文件带 `declaredDepartures`；声明了没移动 → 拒；无偏离时 `tier = registered` | 4 条 |
+| 变异 M1 | 默认改回 `minimal` | **4 红** |
+| 变异 M2 | 不转发 `maxPromptChars` | **1 红**（正是那条对照：`minimal` 也拿到了 Lisbon，说明房间没生效） |
+| 变异 M3 | `accepted` 恒真 | 1 红 |
+| 变异 M4 | 去掉「声明了没移动」的检查 | 1 红 |
+| 覆盖率 | `packages/cortex-memory/src/assemble.ts` | **100 / 100 / 100 / 100**（19 条测试） |
+| 全链 | `pnpm check` | **exit=0** |
+
+一处值得单独记的测试发现：M2 的红只有**一条**，而它红在那条**对照断言**上（`minimal` 的提示词里出现了 Lisbon）。如果当轮只写「默认档能看到 Lisbon」而不写对照，`maxPromptChars` 掉线会让两条都变绿——房间消失意味着语料全部进提示词，被测的那句话照样在里面。
+
+### 25.7 位置与剩余
+
+| 项 | 状态 |
+| --- | --- |
+| 能力账本 | **16 / 26 = 61.5%**，1 blocked（`#25`），0 gap，边界 **60**（本轮不加行：没有新能力，只有一个默认值和一个入口） |
+| `S11` | **关闭**：miss（39.55% vs 88% 地板），读数已落盘，`acceptance` 的 `S11` 行从 `unrun` 变成一条有分母的 miss |
+| `S9` / `S11` / 右下格 | `I7` 三格已完成两格；**右下格（`self-index` @24K，6,000 token 能否守 91%）仍未派发** |
+| 未定价的配置 | `reader` **不带 `embed`** 是词法索引，至今没有读数：`self-index` 臂的 embedding 后端写死为 `embedding-3@1024`，派发脚本没有开关。要么给它读数，要么在手册里写明「未定价」 |
+| 下一步 ① | 建 `CORTEX_MEMORY_EMBEDDING=none` 通道（工作流 env + 臂 + 派发脚本 + 证据工具），然后一次派发读它——这条也回答「用户是否必须拥有一个 embedder」 |
+| 下一步 ② | `#25`：把配对统计移出产品包，代价是**从公开 API 删名**，需要专门一轮 |
+| 下一步 ③ | `I8` 两段（候选集裁决 + 双时态），能力 +1 起 |
+| 距 SOTA | `MR` 83.47% 对 MemCog 92.5% = **−9.03**；端到端 91.40% 对 Mastra OM 94.87% = **−3.47** |
