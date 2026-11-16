@@ -1548,3 +1548,141 @@ this artifact is not a measurement of the registered configuration
 | 下一步 ② | `#25`：把配对统计移出产品包，代价是**从公开 API 删名**，需要专门一轮 |
 | 下一步 ③ | `I8` 两段（候选集裁决 + 双时态），能力 +1 起 |
 | 距 SOTA | `MR` 83.47% 对 MemCog 92.5% = **−9.03**；端到端 91.40% 对 Mastra OM 94.87% = **−3.47** |
+
+## 26 I15 执行记录（第 118 轮）：把「没有 embedder 能不能用」变成一条可派发的通道，并修掉三个「页面上没有东西能反驳它」的缺陷
+
+### 26.1 这一轮回答的问题，以及为什么它比再调一个信号更重要
+
+`SearchIndexOptions.embed` 从索引存在的那天起就是可选的，注释与手册都写着同一句话：**absent 意味着词法索引，而那仍然是一个能工作的索引**。这句话是一个关于**部署**的主张——一个没有 embedding 配额、或不打算买的用户，仍然能得到排名。而仓库里每一个已发表数字都是在 embedder 注入的情况下取的，所以这句话从来没有读数。
+
+手册现在并列着两个数：`reader`（有排名）**91.40%**、`minimal`（无排名）**39.55%**。中间那一格——词法排名、无向量通道、无额外依赖——读者只能猜。`S12` 就是那一格，通道是 `CORTEX_MEMORY_INDEX_EMBEDDING`。
+
+判据写成双向的，因为两个方向都是产品决策：
+
+| 读数落点 | 结论 | 产品动作 |
+|---|---|---|
+| 落在 `S9` 的 91.40 带内（配对不显著） | embedder 是**优化**而不是**必需** | 手册写明「无 embedder 也能用」，默认档保留，向量通道降级为可选项 |
+| 显著低于 91.40 | embedder 是**必需** | 手册必须写明「未定价 → 已定价为负数」，`assembleMemory` 的默认配置要交代这件事 |
+
+两种结论都不是「失败」。这就是这一轮存在的理由：一条分布能力，只有能定位它的代价，才配写在手册里。
+
+### 26.2 通道的四个链接，以及为什么名字是 `injected` / `none` 而不是布尔
+
+一个治疗要走的链：
+
+```
+workflow env → cortex-eval reader → CortexMemoryArmOptions → run-ablation 构造
+             → CortexMemory/SearchIndex → prompt 字节 → artifact
+```
+
+| 层 | 改动 | 会红的检查 |
+|---|---|---|
+| workflow | `CORTEX_MEMORY_INDEX_EMBEDDING: ${{ vars.CORTEX_MEMORY_INDEX_EMBEDDING \|\| 'injected' }}` | 字面量兜底：变量不存在与变量为空在派发记录里可区分 |
+| 派发脚本 | `index_embedding_switch()` 严格解析；**无条件**在 POST 之前写变量 | 导入并**调用**，非法值必须抛 `SystemExit`；写入点必须在 dispatch 之前 |
+| `cortex-eval` | `INDEX_EMBEDDINGS = { injected, none }`、`readIndexEmbedding`、`CortexMemoryArmOptions.indexEmbedding`、三处投影 | 未知名被拒（`lexical`/`off`/`INJECTED`/`true`/`0`/`vector` 六条） |
+| 构造器 | `...(productIndexEmbedded ? { embed: … } : {})` —— 用**缺失**表达，不用 `undefined` | `SearchIndex` 判的是 `!== undefined`，一个 present-but-undefined 的键会被读成「已配置」 |
+
+名字不是布尔，理由和 §18 的 `superseded` 同源但更硬：`injected` 是**每一个已发表数字所来自的那套部署**，`none` 是**一个没有 embedding 供应商的用户**。布尔会逼着点其中一个名，而 artifact 上那句话是「这次运行的排名有没有向量通道」。
+
+### 26.3 产物要能反驳自己：`assertIndexEmbeddingReached`
+
+可派发性只保证「开关能到产品」，不保证「产品真的按开关做了」。这一条正是本项目已经付过三次的那种钱：数字是真的，但挂在了没有产生它的配置名下。
+
+所以这一轮给 `indexEmbedding` 配了**第二个独立读数**：`memoryArmConfig.selfIndex.embedTexts` 是产品自建索引实际嵌了多少文本。守卫：
+
+> `indexEmbedding=none` 而账单单上 `embedTexts > 0` ⇒ **抛错，不写 artifact**。
+
+两个方向只有一个是本项目能产生的：`none` 却嵌了，是接线 bug（`selfIndexOptions` 少写了一个条件，其余字段全都同意标签）；`injected` 却没嵌，不可能——索引是拿到 embedder 才存在的。`bill === undefined`（跑的不是 `self-index` 臂）不算违规：那时没有产品索引，这句话没有主语。
+
+成本上这也是最便宜的一格：`none` 臂的产品侧 **0 次 embedding 调用**，所以「账单为零」本身就是通道被扣住的证据。
+
+### 26.4 顺手抓到并修掉的三个缺陷，方向都一样——**页面上没有东西能反驳它**
+
+#### 26.4.1 `fitToBudget` 让 note 挤掉了最后一条证据
+
+多会话构建器把 `SESSION_NOTE`（148 字符）**排在证据之前**买，规则本身有理由（note 不该被裁半句）。但代价是：note 可以把剩下的房间吃到 0，于是提示词变成
+
+```
+Answer the question using only the evidence above.
+Reply with the answer alone. …
+
+QUESTION: Which city do I live in now?
+```
+
+——**没有证据**，却仍然带着「Some evidence is grouped into sessions」这句话。实测（两轮会话、5 个候选轮）：
+
+| 房间 | 证据 | note | 结果 |
+|---|---|---|---|
+| 350 | 2 轮（134 字符） | 无 | 347 字符，含答案 |
+| 360 | **0 轮** | 有（148） | 201 字符，**无证据** |
+| 430 | **0 轮** | 有 | 201 字符，**无证据** |
+| 440 | 1 轮 | 有 | 432 字符 |
+
+`branch-coverage.test.ts` 的预算扫描**只扫了 flat 构建器**，note 只存在于多会话路由，所以那条「单调性」断言从未跑过它。
+
+修法：note 仍然先买、仍然整块或不要；但**若买完 note 之后连一条轮次都放不下，就退还 note 重算一次**，并且只有当退还后真能买到证据时才采用。更新块（`UPDATES:`）不参与这次退还——它陈述的是世界上的事实（谁取代了谁），note 陈述的是**证据的结构**；没有证据时后者是假的。
+
+#### 26.4.2 门禁是一个写入者
+
+`pnpm check` 里有 `pnpm corpus:census`，而 `tools/corpus-read-census.mjs` 无条件写 `cortex-docs/evidence/corpus/read-cost.json`——**另一个仓库的、被跟踪的文件**，而它的值取决于机器负载。连续三轮的提交里都夹带了没人要求过的重测（0.11 → 0.13）。
+
+修法：工具默认只**打印**（JSON 放在 stdout 最后一行之前的那一段），只有 `--out <path>` 才写；`pnpm corpus:census:write` 是产出者。检查项三条：
+
+| 检查 | 断言 |
+|---|---|
+| 裸跑不改树 | 对 `read-cost.json` 取 sha256，跑完必须逐位相同 |
+| 裸跑仍然测量 | stdout 是可解析的同一个对象，`ratio <= 2.0`、`dataset` 以 `100000 turns` 开头 |
+| 已提交的读数仍在条款内 | 提交的那份是 clean 的、`ratio <= 2.0`、`room == 48000` |
+
+这一轮跑完完整 `pnpm check` 后 `cortex-docs` 的 `git status` **为空**——这就是修复的证据，不是注释。
+
+这一轮还量出第二个缺陷，同一处：**CI 只检出 `cortex` 自己**，`../cortex-docs` 在 runner 上不存在。旧的测试只「写」这个路径（`mkdirSync` 会建树），所以 CI 一直是「给一个没人能读的检出产出证据」——绿得毫无意义（`Verify #806` 红在 `FileNotFoundError`）。新测试分两支：同级仓存在时逐位比对，不存在时断言文件**仍然不存在**（同一条规则的更强表述，旧工具会在这一步失败）；两条「已提交读数」的测试在缺仓时 skip 并写明理由，而不是假装跑过。
+
+#### 26.4.3 配置分类停在了一个月前的产物上
+
+`MemoryArmConfig` 现在有 43 个字段，`arm-config-record.py` 的 `PROJECTED ∪ UNPROJECTED ∪ conditions()` 只覆盖 36 个。缺的七个：
+
+```
+maxPromptChars, turnWindow, semanticCarry,
+voteCounts, queryExpansionCounts, selfIndex, admission
+```
+
+后果不是抽象的一致性：`--record` 会拒绝一个「有字段没有归类」的 artifact，所以**下一次重建 baseline 会在一个已经上线两轮的字段上失败**；而 `registration-attest` 对它们的差异只能说「undecided」，读不出那是偏离还是测量。
+
+修法分两半：
+
+1. 七个字段归类。新增第四种 kind `census`——**跑完之后才计数**的字段（`voteCounts`/`selfIndex`/`admission`/`queryExpansionCounts`）：两次运行同一配置在这里必然不同，所以差异是**测量**而不是**偏离**。`registration-attest` 在值与键集两处都跳过 `census`。
+2. 完整性断言从「已记录的 baseline」搬到「**类型本身**」：`test_every_field_of_the_config_type_is_classified` 按花括号配对解析 `report.ts` 的 `MemoryArmConfig`，要求每个字段都有类；反向也断言（遗留的类目必须在类型里还存在）。`ask` 当年就是这样漏掉的；现在漏掉会在**引入字段的那个改动里**红。
+
+### 26.5 验收
+
+| 项 | 结果 |
+|---|---|
+| TS | `index-embedding-arm.test.ts` **11/11**；`bench-memory-arm.test.ts` 214/214；组装层 20/20（含新增的产品侧通道测试）；`branch-coverage.test.ts` 31/31（含新增扫描） |
+| Python | `test_index_embedding_wiring.py` **5/5**；`test_arm_config_baseline.py` 27（+2）；`test_registration_attest.py` 21（+2）；`test_corpus_read_census.py` **10**（重写，跑在临时目录） |
+| 变异 | workflow 转发删除 → 红；声明改成无条件 → 红；构造器保留 embed → 红；守卫停用 → 红；`semanticCarry` 去分类 → **2 红**；`accepted` 恒真 → 红（上一轮） |
+| 存活变异（如实记录） | 守卫只判 `embedCalls === 0` 时全绿——那个账单（有文本、零调用）是**畸形**而不是便宜；已加一条测试拒绝该形状，随后该变异变红 |
+| 覆盖率 | `report.ts` 99.64 / 96.42 / 100 / 99.62；`prompt.ts` 与 `assemble.ts`、`bench-memory-arm.ts` 均在每维度 ≥95 |
+| 全链 | `pnpm check` **exit=0**；`cortex-docs` 工作树在检查后**为空** |
+
+### 26.6 `S12` 的派发登记
+
+| 项 | 值 |
+|---|---|
+| run | `43829744532` / #180，`head_sha 1a1f520` |
+| 配置 | `relevance=self-index` + `CORTEX_MEMORY_INDEX_EMBEDDING=none` |
+| declared departures | `['cortex_memory_relevance', 'indexEmbedding']` |
+| 预算 | 上限 20 CNY，投影 **14.26 CNY**（500×4，缓存命中 96.0%） |
+| 读数状态 | **待回填**（约 2 小时） |
+
+### 26.7 本轮位置与剩余
+
+| 项 | 状态 |
+|---|---|
+| 能力账本 | 16 / 26 = **61.5%**，1 blocked（`#25`），0 gap，边界 60 |
+| `I7` 三格 | 两格完成（`S9`、`S11`）；**右下格（24K 房间守 91%）未派发** |
+| 新增 | `S12` 在跑；词法索引一旦有读数，手册的 `embed` 行就从「未定价」变成「已定价」 |
+| 可发布信号 | **未到**：`#25` 未决、`I7` 差一格、`S12` 读数未回填 |
+| 距 SOTA | `MR` 83.47% 对 MemCog **92.5%** = −9.03；端到端 91.40% 对 Mastra OM **94.87%** = −3.47 |
+
+下一步的顺序在这一轮之后更清楚了：`S12` 回填 → 手册的 `embed` 行改写成「有读数」→ `#25`（唯一需要删公开 API 的一轮）→ `I7` 右下格。

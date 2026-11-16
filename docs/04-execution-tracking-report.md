@@ -25988,3 +25988,97 @@ M2 只红一条，且红在对照断言上——这条本身是方法教训：�
 | 3 | `#25` 配对统计移出产品包 | 代价是**从公开 API 删名**，需专门一轮 |
 | 4 | `I8` 两段 | 能力 +1 起 |
 | 5 | 距 SOTA | `MR` 83.47% 对 MemCog 92.5%（−9.03）；端到端 91.40% 对 Mastra OM 94.87%（−3.47） |
+
+## 114. 第 118 轮：词法索引终于有了一条派发通道，而三个「页面上没有东西能反驳它」的缺陷被修掉
+
+### 114.1 一句话
+
+上一轮的结论是「`reader` 不带 `embed` 是词法索引，至今无读数」。这一轮把这句话变成了 `CORTEX_MEMORY_INDEX_EMBEDDING`（`injected` / `none`）、一个能反驳自己的守卫、一次派发（`43829744532`），并在沿途修掉了三个同类缺陷：note 挤掉证据、门禁改写另一个仓库、配置分类停在一个月前的产物上。
+
+### 114.2 通道
+
+| 链接 | 落点 | 会红的检查 |
+|---|---|---|
+| workflow | 转发 `CORTEX_MEMORY_INDEX_EMBEDDING`，字面量兜底 `injected` | `test_index_embedding_wiring.py::test_the_workflow_forwards_the_variable_with_a_literal_fallback` |
+| 派发脚本 | `index_embedding_switch()`，严格，**无条件**在 POST 前写变量 | 导入并调用（非法值抛 `SystemExit`）；写入点顺序断言 |
+| `cortex-eval` | `INDEX_EMBEDDINGS`、`readIndexEmbedding`、类型字段、三处投影 | `index-embedding-arm.test.ts` 11 条 |
+| 构造器 | 用**缺失**扣住 `embed`（`...(productIndexEmbedded ? {…} : {})`） | 构造器条件展开的形状断言（第三条 Python 检查） |
+| 产物 | `memoryArmConfig.indexEmbedding` 恒在；打印行 `indexEmbedding=injected\|none` | 打印断言两条（两臂各一条） |
+
+`injected` 而不是布尔，理由是可读的那一句：`injected` 是每个已发表数字所在的部署，`none` 是没有 embedding 供应商的用户。artifact 要回答的是「这次运行的排名有没有向量通道」，不是「某个机制开没开」。
+
+### 114.3 守卫：让产物能反驳自己
+
+```
+indexEmbedding=none  ∧  selfIndex.embedTexts > 0   ⇒  throw，不写 artifact
+```
+
+这是本项目付过三次的那种钱：数字是真的，但挂在没产生它的配置名下。两个方向只有一个能发生——`none` 却嵌了是接线 bug（构造器少写一个条件，其余字段全同意标签）；`injected` 却没嵌不可能（索引由 embedder 才存在）。`selfIndex` 缺席（非 `self-index` 臂）不算违规。
+
+成本上这是最便宜的一格：`none` 臂产品侧 **0 次 embedding 调用**，「账单为零」本身就是通道被扣住的证据。
+
+### 114.4 三个缺陷
+
+#### 114.4.1 `fitToBudget`：note 可以买走最后一条证据
+
+| 房间 | 证据 | note | 提示词 |
+|---|---|---|---|
+| 350 | 2 轮 / 134 字符 | 无 | 347 字符 |
+| 360 | **0 轮** | 有 / 148 字符 | 201 字符，仍写着「Some evidence is grouped into sessions」 |
+| 430 | **0 轮** | 有 | 201 字符 |
+| 440 | 1 轮 | 有 | 432 字符 |
+
+根因不是「note 排在证据前面」（那有理由），而是**没有任何东西保证证据还剩一轮**。`branch-coverage.test.ts` 的预算扫描只扫了 flat 构建器，note 只在多会话路由上，所以那条单调性断言从未跑过它。
+
+修法：note 仍先买、仍整块；但若买完之后一条轮次都放不下，**退还 note 重算**，且只在退还后真能买到证据时采用。更新块不参与退还——它说的是世界上的事实，note 说的是**证据的结构**；没有证据时后者是假的。
+
+新增扫描：`1..full` 每个房间断言 ①长度 ≤ 房间 ②一旦买到证据，更大的房间不许是空证据 ③空证据的提示词不许带 note。修复前在 353 处红（214 已交付证据）。
+
+#### 114.4.2 门禁是写入者
+
+`pnpm check` → `pnpm corpus:census` → `tools/corpus-read-census.mjs` 无条件写 `cortex-docs/evidence/corpus/read-cost.json`。三轮提交夹带了没人要求过的重测（0.11 → 0.13）。
+
+修法：默认只打印，`--out` 才写；`corpus:census:write` 是产出者。三条检查：裸跑改树则红、裸跑仍能测量、已提交的读数仍在条款内。证据：完整 `pnpm check` 之后 `cortex-docs` 的 `git status` **为空**。
+
+**CI 又量出同一处的第二个缺陷**：runner 上只检出 `cortex`，`../cortex-docs` 不存在，而旧测试只写不读（`mkdirSync` 建树），于是 `Verify #806` 红在 `FileNotFoundError`，而在此之前它一直是绿的——「给一个没人能读的检出产出证据」。新测试两支：有同级仓则逐位比对，无则断言文件**仍然不存在**；「已提交读数」两条在缺仓时 skip 并说明。本地验证：把文件移开后 `2 passed, 2 skipped`。
+
+#### 114.4.3 配置分类停在旧产物上
+
+43 个字段里 7 个没有类：`maxPromptChars`、`turnWindow`、`semanticCarry`、`voteCounts`、`queryExpansionCounts`、`selfIndex`、`admission`。后果是延迟的：`--record` 会在下一次重建 baseline 时拒绝，而 `registration-attest` 只能说「undecided」。
+
+修法两半：①七个字段归类，新增第四种 kind `census`（跑完才计数 ⇒ 差异是**测量**不是**偏离**），`registration-attest` 在值与键集两处跳过；②完整性断言搬到**类型**：按花括号配对解析 `report.ts` 的 `MemoryArmConfig`，每个字段必须有类，反向也断言。`ask` 当年就是这样漏掉的，现在漏掉会在引入字段的改动里红。
+
+### 114.5 验收
+
+| 项 | 结果 |
+|---|---|
+| TS | `index-embedding-arm.test.ts` **11/11**；`bench-memory-arm.test.ts` 214/214；`assemble.test.ts` 20/20；`branch-coverage.test.ts` 31/31 |
+| Python | `test_index_embedding_wiring.py` **5/5**；`test_arm_config_baseline.py` 27；`test_registration_attest.py` 21；`test_corpus_read_census.py` 10 |
+| 变异 | workflow 转发删除／声明无条件／构造器保留 embed／守卫停用／`semanticCarry` 去分类 —— 全红 |
+| 存活变异 | 守卫只判 `embedCalls === 0` 全绿：该账单（有文本零调用）是畸形而非便宜；补一条测试后转红 |
+| 覆盖率 | `report.ts` 99.64 / 96.42 / 100 / 99.62；其余改动文件每维度 ≥95 |
+| 全链 | `pnpm check` **exit=0**；两仓 Dependabot **0 告警 0 PR** |
+
+### 114.6 派发
+
+| 项 | 值 |
+|---|---|
+| run | `43829744532` / #180，`head_sha 1a1f520` |
+| 配置 | `relevance=self-index` + `CORTEX_MEMORY_INDEX_EMBEDDING=none` |
+| declared | `['cortex_memory_relevance', 'indexEmbedding']` |
+| 预算 | 上限 20 CNY，投影 **14.26 CNY**（缓存命中 96.0%） |
+| 状态 | **在跑**；读数下一轮回填 |
+
+判据双向：落在 `S9` 带内（配对不显著）⇒ embedder 是优化；显著低于 91.40 ⇒ 是必需，手册必须改写默认档的交代。
+
+### 114.7 位置与剩余
+
+| # | 项 | 状态 |
+|---|---|---|
+| 1 | 能力账本 | 16 / 26 = **61.5%**，1 blocked（`#25`），0 gap，边界 60 |
+| 2 | `S12` 读数回填 → 手册 `embed` 行从「未定价」改成「已定价」 | 在跑 |
+| 3 | `#25` 配对统计移出产品包 | 唯一需要删公开 API 的一轮 |
+| 4 | `I7` 右下格（`self-index` @24K，6,000 token 守 91%） | 未派发 |
+| 5 | `I8` 两段 | 能力 +1 起 |
+| 6 | 距 SOTA | `MR` 83.47% 对 MemCog **92.5%**（−9.03）；端到端 91.40% 对 Mastra OM **94.87%**（−3.47） |
+| 7 | 可发布信号 | **未到**：`#25` 未决、`I7` 差一格、`S12` 未回填 |
