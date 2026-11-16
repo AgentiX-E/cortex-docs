@@ -1555,7 +1555,7 @@ this artifact is not a measurement of the registered configuration
 
 `SearchIndexOptions.embed` 从索引存在的那天起就是可选的，注释与手册都写着同一句话：**absent 意味着词法索引，而那仍然是一个能工作的索引**。这句话是一个关于**部署**的主张——一个没有 embedding 配额、或不打算买的用户，仍然能得到排名。而仓库里每一个已发表数字都是在 embedder 注入的情况下取的，所以这句话从来没有读数。
 
-手册现在并列着两个数：`reader`（有排名）**91.40%**、`minimal`（无排名）**39.55%**。中间那一格——词法排名、无向量通道、无额外依赖——读者只能猜。`S12` 就是那一格，通道是 `CORTEX_MEMORY_INDEX_EMBEDDING`。
+手册现在并列着两个数：`reader`（有排名）**91.40%**、`minimal`（无排名）**39.55%**。中间那一格——词法排名、无向量通道、无额外依赖——读者只能猜。`S14` 就是那一格，通道是 `CORTEX_MEMORY_INDEX_EMBEDDING`。
 
 判据写成双向的，因为两个方向都是产品决策：
 
@@ -1665,7 +1665,7 @@ voteCounts, queryExpansionCounts, selfIndex, admission
 | 覆盖率 | `report.ts` 99.64 / 96.42 / 100 / 99.62；`prompt.ts` 与 `assemble.ts`、`bench-memory-arm.ts` 均在每维度 ≥95 |
 | 全链 | `pnpm check` **exit=0**；`cortex-docs` 工作树在检查后**为空** |
 
-### 26.6 `S12` 的派发登记
+### 26.6 `S14` 的派发登记（本轮发现并修掉的命名冲突）
 
 | 项 | 值 |
 |---|---|
@@ -1681,8 +1681,156 @@ voteCounts, queryExpansionCounts, selfIndex, admission
 |---|---|
 | 能力账本 | 16 / 26 = **61.5%**，1 blocked（`#25`），0 gap，边界 60 |
 | `I7` 三格 | 两格完成（`S9`、`S11`）；**右下格（24K 房间守 91%）未派发** |
-| 新增 | `S12` 在跑；词法索引一旦有读数，手册的 `embed` 行就从「未定价」变成「已定价」 |
-| 可发布信号 | **未到**：`#25` 未决、`I7` 差一格、`S12` 读数未回填 |
+| 新增 | `S14` 在跑；词法索引一旦有读数，手册的 `embed` 行就从「未定价」变成「已定价」 |
+| 可发布信号 | **未到**：`#25` 未决、`I7` 差一格、`S14` 读数未回填 |
 | 距 SOTA | `MR` 83.47% 对 MemCog **92.5%** = −9.03；端到端 91.40% 对 Mastra OM **94.87%** = −3.47 |
 
-下一步的顺序在这一轮之后更清楚了：`S12` 回填 → 手册的 `embed` 行改写成「有读数」→ `#25`（唯一需要删公开 API 的一轮）→ `I7` 右下格。
+下一步的顺序在这一轮之后更清楚了：`S14` 回填 → 手册的 `embed` 行改写成「有读数」→ `#25`（唯一需要删公开 API 的一轮）→ `I7` 右下格。
+
+## 27 I16 执行记录（第 119 轮）：一条被文档宣称「仍然能用」的部署第一次有了价格，与三个「门禁彼此以为对方看过」的缺陷
+
+### 27.1 读数：`S14` = 85.75%，配对 −28 题，p = 2.5e-5
+
+`S14`（run `43829744532` / #180，1h27m）把词法索引放进登记仪器：`relevanceSignal=self-index` + `CORTEX_MEMORY_INDEX_EMBEDDING=none`，500 题 × 4 轮，reader／judge／prompt 与 `S9` 同。
+
+| 读数 | 词法（`S14`） | 有向量（`S9`） | 差 |
+|---|---|---|---|
+| 总体（四次均值） | **85.75%** | **91.40%** | **−5.65 点** |
+| 逐轮 | 85.40 / 85.60 / 86.20 / 85.80 | 91.00 / 91.40 / 91.80 / 91.40 | — |
+| 配对（多数票，同 500 题） | both 419 / 仅本臂 8 / 仅有向量 36 / 都不 37 | | **−28 题，−5.60 点，精确 McNemar p = 2.54e-5** |
+
+判据双向，落在**「显著低于」**那一支：embedder 是**必需**，不是优化。因此手册改写（§27.4）。
+
+**分支拆分才是机制读数**——单一 delta 只说「值 5.6 点」，分支说这条通道**做什么**：
+
+| 能力 | 题数 | 词法 | 有向量 | 差 |
+|---|---|---|---|---|
+| `IE` 证据整合 | 150 | 81.33% | 92.00% | **−10.67** |
+| `KU` 知识更新 | 72 | 81.94% | 93.06% | **−11.11** |
+| `TR` 时序推理 | 127 | 89.76% | 94.49% | −4.72 |
+| `MR` 多会话推理 | 121 | 84.30% | 82.64% | **+1.65** |
+| `ABS` 弃答 | 30 | 100.00% | 100.00% | 0.00 |
+
+损失全部落在「问题的用词不出现在证据里」的两个人群，而 `MR`——在**已经进入窗口**的轮次上推理——**没有移动**（+1.65，噪声内）。这条通道买的是**召回**，不是推理。这是一个可以据以做设计决策的句子，而「−5.6 点」不是。`ABS` 恒等是仪器自检：边界没有被碰过。
+
+**成本侧同时被量出**，且方向与直觉相反：提示词几乎不变（`S9` 18,148,990 → `S14` 18,213,090，+0.35%），变的只是哪几条轮次进了提示词；每次正确答的 prompt token 9,928 → **10,619**（+7.0%），全部来自分母变小。产品侧的对比在这一格最干净：
+
+| 字段 | `S14`（`none`） | `S9`（`injected`） |
+|---|---|---|
+| `selfIndex.indexes` | 2,000 | 2,000 |
+| `selfIndex.turns` | 742,080 | 742,080 |
+| `selfIndex.embedCalls` | **0** | 10,422 |
+| `selfIndex.embedTexts` | **0** | 536,099 |
+| `selfIndex.memoHits` | 0 | 205,377 |
+| transport calls | 5,789（2 次重试，0×429） | 16,166（0 次重试） |
+
+同一个索引、同一批轮次、**零次 embedding 调用**——「词法索引不需要供应商」这句话现在既是产品事实也是一条读数。
+
+### 27.2 三个缺陷，同一个形状：两个门禁彼此以为对方看过
+
+这一轮的价值不只在读数，而在于读数**被拒绝过一次**。
+
+#### 27.2.1 命名冲突：`S12` 早就有主人
+
+上一轮把这条派发登记成 `S12`，而 `acceptance.ts` 里 `S12` 是**语义层配对**那一行（`deltaQuestions >= -5`），`S13` 是它的 reach。于是同一个标识在一个以可追溯为方法论的仓库里指两件不同的事。
+
+修法不是改字，而是**给这一格注册一行**：`S14`，闸值 `0.88`（与 `S11` **同一个**容差，同一推导 `s1.threshold - |s9.threshold| / 500`——一个问题只能有一个容差），source 指向 `cortex-docs/evidence/longmemeval/lexical-index.json`，并带两条 attestation：`row == S14`、`arm.indexEmbedding == none`。矩阵由此从 76 个标记变成 70 个可验证（`docs:crosscheck` 从 69 升到 70）。
+
+attestation 不是装饰：`S11` 与 `S14` 的 artifact **只差一个字段**，一个指向 `injected` 运行的文件会把登记臂的 91.40% 印成「没有 embedder 的部署」的读数。
+
+#### 27.2.2 产物门禁没有 indexEmbedding 的座位
+
+run 的主体全部成功，artifact 完整上传，然后第 18 步红了：
+
+```
+refused: --departs names ['indexEmbedding'], which neither the dispatch table sends nor the
+artifact records as a condition
+```
+
+artifact **确实**记录了它（`memoryArmConfig.indexEmbedding: "none"`）。红的原因是 `readout-arm-run.py` 的 `REGISTERED_CONDITIONS` 只有三项，而派发脚本能声明的名字有五个：`indexEmbedding` 与 `supersededRendering` 都没有座位。
+
+`supersededRendering` 的方向更糟：**没人声明过它，所以没人被拒过**——也就是说，一个用非默认渲染跑出来的 artifact 会对每一个输入都「同意」，而这道门禁会称它「逐字段就是登记配置」。**假通过比拒绝更坏，因为它是静默的。**
+
+修法照 `conflicts` 的先例（同一类：仓库变量承载、无 dispatch input、artifact 恒在）：两条都进 `REGISTERED_CONDITIONS`，登记值取**产品实际写出的值**（`injected`、`off`），并由测试从 `index_embedding_switch({})` 与 `superseded_switch({})` **读出来比对**，而不是让常量与产品各说各话。
+
+事故本身变成了验收断言——拿被拒的那个 artifact 重跑修复后的门禁：
+
+```
+declared    relevanceSignal: "retrieval-anchored" (registered) -> "self-index" (ran)
+declared    indexEmbedding: "injected" (registered) -> "none" (ran)
+verdict: 2 field(s) departed and every one of them is declared
+```
+
+#### 27.2.3 免费的那道门禁说了 `match`，昂贵的那道说了 `refused`
+
+`registration-preflight.py` 在派发时**看见了**这条声明，打印了
+
+```
+declared but unchanged: indexEmbedding -- the declaration names a field this dispatch did not move
+```
+
+然后判 `match`。那句话是**假的**：派发确实移动了它，只是通过这个文件不读的通道。87 分钟后，读 artifact 的那道门禁把同一个名字解析成「什么都不是」并拒绝。
+
+两个门禁，各自确信另一个看过。修法是三分而不是二分：
+
+| 声明的名字 | 免费门禁 | 产物门禁 |
+|---|---|---|
+| 移动了的 dispatch input | 确认偏离 | 与 §10.3 比对 |
+| 登记过的 condition | **原样交出**：说清它由仓库变量承载、由 artifact 判 | 与 §10.3 比对 |
+| 两者都不是 | **当场拒绝** | 会在花钱之后拒绝 |
+
+第三行是这一轮真正买到的东西：拒绝一个没有座位可解析的名字不花钱，而在两小时后发现它要花一次运行。`conditions()` 从 `readout-arm-run.py` **导入**而不是复制——两份「哪些名字可解析」的清单就是下一个会被忘掉的东西。
+
+同时补上让这件事**不可能再发生**的机制：`test_every_declarable_name_is_one_the_registration_gate_can_resolve` 把派发脚本能写进 `CORTEX_DECLARED_DEPARTURES` 的每个名字，与门禁的词表做差集。它在本轮第一次运行就同时抓到 `indexEmbedding` 与 `supersededRendering`——**声明清单和词表是两个文件，一个比另一个长一个名字，就是这一轮付的钱**。
+
+### 27.3 生产者：一个工具写两行，并且配对是它自己算的
+
+`no-ranking-ledger.py` 只有一行时是对的；`S14` 注册的那一刻这个名字变成假话，而一个假名字比一个长名字更坏——它会让下一个读者以为词法索引的读数住在别处。所以文件改名 `arm-reading-ledger.py`，`--row` 变成必需参数，行表 `ROWS` 里每一行用自己的 `signal` / `index_embedding` / `floor` / 文字描述自己的臂。
+
+新增的是**跨 artifact 配对**，因为这一行的诚实句子是配对的：
+
+- `--control-artifact` + `--control-run`：按 `questionId` 配对，四次重复取多数票（首次重复会被 5% 左右的重复间抖动读成治疗效应；平票记为错，保守方向）；
+- 三种拒绝：不同语料指纹、同指纹但 roster 不同、重复次数不同——每一个都会产出一个**关于错误比较的真数字**；
+- `--departs` 与 attestation 原样复用，两行的臂都是**构造上的偏离**，只接受精确匹配的工具一行也写不出来。
+
+**精确 McNemar 在这里实现，并被 cortex-eval 自己的数验证过**：`a3.ts` 的 `exactMcNemar` 是 `min(1, 2 * binomialCdf(min(b,c), n, 0.5))`；这里的整数二项式实现对 run `43829744532` 自身的 13/220 给出 `1.0483893925059404e-49`，而 artifact 里 `cortex-eval` 算出的是 `1.0483893925056894e-49` —— **13 位有效数字一致**，差在浮点求和顺序，不在统计量。这条被写进测试（`test_the_exact_mcnemar_agrees_with_the_one_cortex_eval_wrote`），连同 `a3.test.ts` 已有的三个锚点。
+
+写文件时抓到自己的一处 bug：分支拆分的分母把两侧 roster 相加，于是 30 题的 `ABS` 印成 60 题、150 题的 `IE` 印成 300 题，而**百分比全部正确**——这正是能过评审的形状。修好后补了一条回归测试（`test_the_capability_denominator_is_the_population_not_the_sum_of_two_artifacts`）。
+
+### 27.4 产品侧：手册从「仍然能用」改成「值 5.6 点」
+
+判据落在「必需」那一支，于是要求⑯ 的落地动作是**文档必须交代代价**，而不是改代码：
+
+| 位置 | 改动 |
+|---|---|
+| §3.5 第 5 条 | 从「词法索引依然不花任何模型调用」改成「不花模型调用，代价 5.6 点」，并附五分支对照表与一句可直接据以做决策的话（买召回，不买推理） |
+| §6.6 档位表 `reader` 行 | 91.40%（有向量）/ 85.75%（纯词法），配对数与 p |
+| `AssembleOptions.embed` 行 | 从「缺省即词法检索」改成「缺省即词法检索：同一索引、同一排名、**少 5.6 点**」，指向 §3.5 |
+| §6.6 档位表后新增一段 | 默认档只有这一项输入无法自带，现在它有价格而不是描述 |
+
+`manual:check`：35 个示例编译通过，3 张 contract 表 49/49 选项被示例覆盖。
+
+### 27.5 验收
+
+| 项 | 结果 |
+|---|---|
+| 事故复现 | 被拒的 artifact 在修复后的门禁下判 **2 declared departures, match**（§27.2.2 原文） |
+| Python | `test_arm_reading_ledger.py` **27 条**（S11 原有 14 + S14 与配对 13）；`test_index_embedding_wiring.py` **8 条**（+3）；`test_registration_preflight.py` **11 条**（+2）；`test_registration_diff.py` 计数断言按表长自动解释 |
+| TS | `acceptance.test.ts` **65 条**（+5，S14 五行） |
+| 跨实现 | 精确 McNemar 与 `cortex-eval` 的 13 位有效数字一致（§27.3） |
+| 抓到的自身缺陷 | 分支分母重复计数（30 题印成 60 题）；导入路径上的 `dataclass` 需要注册 `sys.modules` |
+| 矩阵 | `docs:crosscheck` 69 → **70** 个标记可验证；`S14` 行 85.8% ≥ 88.0% `aim` |
+| 全链 | `pnpm check` **exit=0**；`cortex-docs` 工作树检查后为空 |
+| Dependabot | 两仓 **0 告警 0 PR** |
+
+### 27.6 位置与剩余
+
+| 项 | 状态 |
+|---|---|
+| 能力账本 | 16 / 26 = **61.5%**，1 blocked（`#25`），0 gap |
+| `I7` 三格 | 两格完成（`S9`、`S11`）；**右下格（24K 房间守 91%）未派发** |
+| `S14` | **已回填**：85.75%，配对 −28 题 p=2.5e-5，矩阵与手册同步 |
+| 可发布信号 | **未到**：`#25` 未决、`I7` 差一格 |
+| 距 SOTA | `MR` 83.47% 对 MemCog **92.48%** = −9.01；端到端 91.40% 对 Mastra OM **94.87%** = −3.47；成本 9,106 token/问 对 Zep **4,400** = 2.07× |
+
+**下一步的顺序**：`#25`（唯一需要删公开 API 的一轮，也是可发布信号的两个前置之一）→ `I7` 右下格（1 次派发，~14 CNY，决定 24K 房间是否守得住 91%）→ `I8` 候选集裁决与双时态（5 次派发，~75 CNY，能力 +1 起）。`S14` 的读数改变了 `I8` 的排期理由：既然向量通道买的是召回，`I8` 的候选集裁决就落在同一条轴上，而它比再调一个信号更可能移动 `MR`。

@@ -1,0 +1,90 @@
+{
+  "$comment": "S14. The retrieval index with its vector channel withheld: `relevanceSignal: self-index` so the index exists and is used, `indexEmbedding: none` so it is lexical only. This is the deployment of a caller with no embedding provider -- the configuration `index` without `embed` documents. One dispatch, four repetitions, the same reader, judge and prompt as S1 and S9, paired against S9 question by question.",
+  "row": "S14",
+  "run": "43829744532",
+  "declaredDepartures": [
+    "cortex_memory_relevance",
+    "indexEmbedding"
+  ],
+  "arm": {
+    "name": "cortex-memory",
+    "relevanceSignal": "self-index",
+    "indexEmbedding": "none",
+    "reader": "deepseek-chat",
+    "judge": "deepseek-chat",
+    "maxTurnChars": 400,
+    "turnCutMarker": "none",
+    "promptContract": "evidence-blocks-unsourced"
+  },
+  "dataset": {
+    "name": "longmemeval",
+    "fingerprint": "sha256:d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+    "questions": 500,
+    "repetitions": 4
+  },
+  "overall": {
+    "accuracy": 0.8575,
+    "accuracyPerRun": [
+      0.854,
+      0.856,
+      0.862,
+      0.858
+    ],
+    "questions": 500,
+    "runs": 4,
+    "accuracySource": "recomputed from ablation.featureCorrectByRun; not questions[].correct"
+  },
+  "configurationFingerprint": "sha256:8ad847438d71bf5153da3b79ba9261dd8ddfde216e3fa7c371a55b31d9d5d489",
+  "tier": "declared-departure",
+  "paired": {
+    "byCapability": {
+      "ABS": {
+        "questions": 30,
+        "treatment": 1.0,
+        "control": 1.0,
+        "deltaPoints": 0.0
+      },
+      "IE": {
+        "questions": 150,
+        "treatment": 0.8133333333333334,
+        "control": 0.92,
+        "deltaPoints": -10.666666666666668
+      },
+      "KU": {
+        "questions": 72,
+        "treatment": 0.8194444444444444,
+        "control": 0.9305555555555556,
+        "deltaPoints": -11.111111111111116
+      },
+      "MR": {
+        "questions": 121,
+        "treatment": 0.8429752066115702,
+        "control": 0.8264462809917356,
+        "deltaPoints": 1.6528925619834656
+      },
+      "TR": {
+        "questions": 127,
+        "treatment": 0.8976377952755905,
+        "control": 0.9448818897637795,
+        "deltaPoints": -4.7244094488189
+      }
+    },
+    "control": {
+      "run": "43778036604",
+      "accuracy": 0.914,
+      "relevanceSignal": "self-index",
+      "indexEmbedding": "injected"
+    },
+    "cells": {
+      "both": 419,
+      "onlyTreatment": 8,
+      "onlyControl": 36,
+      "neither": 37
+    },
+    "deltaQuestions": -28,
+    "deltaPoints": -5.6000000000000005,
+    "mcnemarP": 2.5448598648836196e-05,
+    "questions": 500,
+    "pairing": "majority verdict per question across the repetitions"
+  }
+}
