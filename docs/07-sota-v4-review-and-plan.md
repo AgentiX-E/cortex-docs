@@ -1119,3 +1119,133 @@ chromium + sqlite-wasm（同一个 profile，关掉浏览器再开，重启后�
 | `#25` | 仍待处理（唯一 blocked 行）；建议与 `I7` 的纯派发轮一起做 |
 | 浏览器轴的下一步 | 语料往返有了，**浏览器里的向量通道还没有**：这轮 `embed` 是常量向量，OPFS 上的向量缓存跨重启的行为没有读数。它是「浏览器里能不能跑满 `full`」的最后一格，下一次浏览器轮做 |
 | 成本口径 | 0 CNY；`B3` 是一条零成本 gate，和 `B1`/`B2` 一样只读提交的读数 |
+
+---
+
+## 20 I10 执行记录（第 115 轮上半）：给标记一条派发通道，因为没人能点名的机制也没人能定价
+
+### 20.1 这不是「再加一个环境变量」
+
+`§18` 把行内 superseded 渲染做进了产品：16 条单元测试、一条 `remember → askStored` 的组合断言、一条写死的验收式（`off` 逐字节相同、`mark` 只差「标记长度 × 命中数」）。全绿，**没有一条能被派发触达**。一个机制要走的链条是
+
+```
+workflow env → cortex-eval reader → CortexMemoryArmOptions → run-ablation 构造
+             → CortexMemory → prompt 字节 → artifact
+```
+
+上一轮造了后三段，前两段一段都没有。所以这个机制的诚实状态不是「未定价」，是**「无法定价」**——没有任何一次运行能施用它。这两句话的区别是 `§18` 那个 −4.75 先验成立与否的前提：先验来自同形态的侧块，而要把 −4.75 用在这个机制上，得先有一次真的把标记推进提示词里的运行。
+
+### 20.2 为什么是仓库变量、为什么是三个名字
+
+通道用仓库变量而不是 workflow input，理由与 `CORTEX_MEMORY_CONFLICTS` 相同：这个 workflow 停在 GitHub 25 个 dispatch input 上限的下一格，而套件禁止停在那一格。值是**名字**而不是开关，因为 `§18` 登记的是两个处置而不是一个：
+
+| 值 | 做了什么 | 记在哪本账上 |
+| --- | --- | --- |
+| `off` | 不渲染，提示词逐字节等于归档 | 证据预算不变 |
+| `mark` | 在**该轮内部**追加 `\n[this states a value a later turn replaces]` | **计入**证据预算（少买一轮） |
+| `collapse` | 把被替换的值换成 `[replaced value] ` | 不计入（绕过 cap） |
+
+一个布尔只能点其中一个名，然后把另一个的读数写在它名下。
+
+### 20.3 四件事，每件都变成一个会红的检查
+
+| # | 缺的是什么 | 缺了会怎样 | 现在的检查 |
+| --- | --- | --- | --- |
+| 1 | workflow 从不转发这个变量 | 臂读到 `off`，每次派发都渲染控制，而 artifact 会诚实地描述一场没人要求的运行 | `test_the_workflow_forwards_the_variable_with_a_literal_fallback`（要求字面量 `'off'` 兜底，而不仅是 `vars.X`：空串与「变量不存在」在派发记录里必须可区分） |
+| 2 | 派发脚本从不写它 | 上一个实验留下的 `mark` 会被下一次派发施用，而 artifact 记的是**产品实际做的**——于是它准确地记录了错误的那次运行 | `test_the_dispatcher_writes_the_variable_before_it_dispatches`（无条件、且在 POST 之前） |
+| 3 | artifact 没有这个字段 | 「跑了控制」与「字段早于这次运行」是同一串字节 | `supersededRendering` **恒在**（`off` 也写），并被打印成 `superseded=off|mark|collapse` |
+| 4 | 臂的语法与产品的联合类型没有任何东西绑在一起 | `cortex-eval` 看不见 `cortex-memory`，两侧各写一份表，任一侧新增一个名字都是一次「点了名、产品忽略」的派发 | `test_the_arms_grammar_is_the_products_union`：同时读 `bench-memory-arm.ts` 的表与 `superseded.ts` 的联合类型，两个方向都比 |
+
+### 20.4 验收：九条变异，每条都真的红过
+
+| 变异 | 红在哪 |
+| --- | --- |
+| 删掉 workflow 的转发 | #1 |
+| 删掉派发脚本的 `write_variable` | #2 |
+| 让 switch 对未知值返回 `off` 而不是抛 | #3 |
+| 把 departure 声明改成无条件 | #4 |
+| 臂的表里加第四个名字 | #5 |
+| 构造器不再把选项传给产品 | #6 |
+| reader 忽略变量、恒返回默认 | TS：`accepts both treatments by name` |
+| 投影写成 `options.supersededRendering`（不兜底） | TS：`defaults an option object built by hand to off` |
+| 打印行删掉 | TS：`prints the value on the line a human reads` |
+
+其中两条**第一次是绿的**，被修的是检查而不是变异：
+
+- 「源码里有 `raise`」这种断言，在一个 `raise` 位于不可达分支上的函数面前照样通过——改成**导入并调用** `superseded_switch`，未知值必须抛 `SystemExit`。
+- 全文搜 `superseded != "off"` 这种断言，在声明被改成无条件之后仍然通过，因为**打印那一行**带着同一个比较——改成作用域限定在 `declared = sorted({...})` 块内。
+
+### 20.5 读数（本机，零派发）
+
+| 项 | 值 |
+| --- | --- |
+| 新增测试 | `superseded-arm.test.ts` 7 条、`test_superseded_wiring.py` 6 条 |
+| 被牵动的既有断言 | `bench-memory-arm.test.ts` 三处精确对象断言（恒在字段） |
+| 全链 | `pnpm check` **exit=0**：TS **6,485**、pytest **2,863 / 19 skipped**、逐文件覆盖 175 文件 4 维 0 违反 |
+| 派发 | **0 次，0 CNY**（本轮的派发在下一节，是另一件事） |
+
+**一处刻意的「不重复」**：`featureConfig` 里**没有**第二个 `supersededRendering`。`memoryArmConfig` 是这条事实的记录处，`conflicts` 当年两处都写，而一个事实写两遍是本仓库产生过两次不可读比较的方式。
+
+### 20.6 这一步对 `I6 ③` 的影响
+
+`I6 ③` 现在**可派发**了，判据仍是「4 个 KU 陈旧孪生题配对修复 ≥ 3」，且仍必须在 ABAB 交错下跑——而仓库变量这个通道**本身就是串行的**（两个并发派发会争同一个变量），所以「交错」不再是一项额外纪律，它是通道的物理性质。这一条写在这里，是因为下一轮若有人想「并行跑治疗臂和控制臂」，通道会静默地让两边读到同一份配置。
+
+---
+
+## 21 I11 执行记录（第 115 轮下半·审计轮）：把探针算成客户，它下面每一个可达性判定都是错的
+
+### 21.1 缺陷的形状
+
+`isTestFile` 认三种测试拼法中的两种：`__tests__/` 与 `.test.ts`/`.spec.ts`。第三种——`packages/<pkg>/test/**`——存在了四个包（`cortex-ai/test/{parity,profile,proposer}`、`cortex-core/test/{card-volume,echo}`、`cortex-storage/test/{browser,pg}`、`cortex-memory/test/browser`），而它**不被识别**。后果不是排版问题：账本的 `product` 判定是从「产品是否调用它」推出来的，所以每一个探针脚本都被算成一个产品调用者。
+
+`§19.6` 已经从另一侧撞见过这个缺陷：一份语料探针 import 了 `SqliteStorage`，账本立刻报「记为 instrument-only 但并非如此」。当时的处置是**换位置**（把控制臂挪进 `src/__tests__/`），并把真发现连同实测数字留给审计轮。这一轮就是那一轮。
+
+### 21.2 三个数字，和一条被纠正的措辞
+
+| 量 | 改前 | 改后 |
+| --- | ---: | ---: |
+| 有非测试调用者 | 726 | **723** |
+| 孤儿 | 489（438 文件内 / 51 无人引用） | **492**（440 / 52） |
+| 账本边界组 | 53 | **60** |
+
+只丢了三格 `withCaller`：`buildProposerPrompt`、`rollingHashes`、`splitSentences`。**窄是这个结论的一部分**——误分类是精确的，不是弥散的；如果这个改动让几百个判定翻转，那说明的是另一件事（判定依赖了普查的噪声），而不是这条定义。
+
+进入边界的七个名字全在 `cortex-ai` 的 profile 接线上：`readApiKey`、`resolveLlmProfile`、`describeProfile`、`createLocalLLM`、`OpenAICompatibleLLM`、`ProfileError`、`PROPOSER_PROMPT_VERSION`。那一组原本的措辞是「只被 `cortex-eval` 的工厂与臂触达」——**错的**。真相是：`CortexMemory` 接受注入的 `llm` 而不是自己造一个，所以**调用者是部署**，而本仓库不发布部署。这条 recipe 已经在它被写下的地方被验证：`docs/USER-MANUAL.md` 用围栏示例给出了同一段构造，`tools/manual-examples.mjs` 每次推送把 35 个示例编译一遍（对已构建声明做严格类型检查），所以一个被改名的导出或一个变形的 profile 形状会在手册自己的行号上失败；这四个文件背后的两个实现文件（`profile.ts`、`local/llm.ts`）四项覆盖各 100%。
+
+处置因此是**改记录**而不是搬代码——并且要写清方向：这次误分类错在**宽松**的一侧，而宽松的那一侧正是「什么都没触达，却看起来被触达」。
+
+### 21.3 第二个缺陷：生成器写不出自己的文件
+
+`rebuild-export-census-baseline.py` 用 `indent=2` 序列化，而仓库里那份账本是 `indent=1` 写成的。于是第一次重建产出了 **3,022 行**的 diff，里面三个新增孤儿完全看不见：整个文件变了，什么都没变。脚本开头的指令是「review the diff」，而这条指令只有在**工具能逐字节重写自己的文件**时才可执行——这与 `§19.3` 里「prettier 会重写探针写出的读数」是同一类缺陷，修法也相同。
+
+两条测试钉住它：一条断言提交的文件等于它自己的 `json.dumps(..., indent=1)`，另一条钉住**写者**——只钉文件的话，一次手工重排就能让第一条通过。
+
+### 21.4 验收：五条变异，每条都真的红过
+
+| 变异 | 红在哪 |
+| --- | --- |
+| 删掉第三种拼法 | `recognises the third convention: a package-root test directory` |
+| 把匹配放宽成任意 `test/` 段 | 同上（`packages/a/src/test/x.ts` 必须是 `false`） |
+| 序列化改回 `indent=2` | `the generator writes that same form` |
+| 账本重排成 `indent=2` | `the serialiser reproduces the committed ledger byte for byte` |
+| 从边界组里删掉一个名字 | `product-capability-ledger.mjs --check` 报「in no boundary group」 |
+
+### 21.5 读数
+
+| 项 | 值 |
+| --- | --- |
+| 全链 | `pnpm check` **exit=0** |
+| 普查 | 1,215 导出 / 723 有调用者 / **492** 孤儿（440 + 52） |
+| 账本 | 26 行：**16 product（5 gated）/ 1 blocked / 9 instrument / 0 gap**；边界 **60** |
+| 覆盖 | cortex-core 41 文件 99.63/98.44/99.79/99.83；cortex-eval 84 文件 99.57/98.64/99.83/99.77；cortex-memory 30 文件 99.88/99.70/100/100；cortex-ai 14 文件 100×4；cortex-storage 6 文件 100×4 |
+| 派发 | **0 次，0 CNY** |
+
+### 21.6 `#25` 比计划写的更大，这是本轮量出来的
+
+计划把 `#25`（配对统计住在 `cortex-core`、产品不调用）写成「移文件，动 6 个导入点与边界组」。实测不是：
+
+- 该文件有**四份测试文件**（`math.test.ts`、`stats.test.ts`、`stats-guard-coverage.test.ts`、`coverage-annotations.test.ts`）直接按路径导入它；
+- `cortex-core` **不能**在测试里 import `cortex-eval`（依赖方向相反），所以这四份测试必须跟着搬；
+- `cortex-core/src/index.ts` 公开导出 `welchTTest` 等名字，`index.test.ts` 断言它们是函数——搬到 `cortex-eval` 就是**从产品公开 API 上删掉它们**。
+
+第三条是判断而不是机械动作：`wilsonScoreInterval` 与 `welchTTest` 对一个要在自己的 A/B 上算显著性的客户是不是应当存在？这正是 `21.2` 里 provider 那组的对立面——那组的调用者是部署，所以留在产品里并写清；这一组的调用者是**仪器**，没有任何部署会从记忆层要一个 Welch 检验。但「应当删除一个公开 API 名字」是一个需要单独一轮决定的动作，不该被塞在审计轮末尾。所以本轮**不改它**，并把实测规模写在这里，让下一轮不必重新数。
