@@ -25818,3 +25818,29 @@ workflow env → cortex-eval reader → CortexMemoryArmOptions → run-ablation 
 ### 111.7 依赖治理
 
 两仓 Dependabot：**0 告警、0 待处理 PR**。本轮未引入新依赖。
+
+### 111.8 本轮追加（第三件）：浏览器里的向量通道
+
+上两件之后又做了一件，零派发，主题仍是「读数是不是关于真东西」：`§19` 的语料套件在 Chromium 里注入的 `embed` 是**常量向量** `[1,0,0]`。它走通了管路，却什么都没量——每个文本同一个向量，余弦恒为 1，稠密通道给出的顺序就是到达序换了个名字。
+
+换成词袋 + FNV-1a（整数、无 `crypto`、L2 归一化、十二位），并加了它的账单：
+
+```
+the vector channel discriminates, and costs the same as it does under node:sqlite
+  5 texts over 2 call(s), 5 distinct vectors, same as node:sqlite
+```
+
+两条断言互不蕴含：`distinct > 1` 排掉常量向量，`texts` 两侧相等排掉「两个运行时喂给索引的工作量不同」。
+
+**提示词没变**——580 字符 / 536714097，与 §19 逐字节相同。诚实的读法是：在这段四轮语料上稠密通道没有改变预算买到哪些轮次（词法通道已把顺序定成同一种）。这不能读成「向量通道没用」，只能读成「在这段语料上两路排序一致」。
+
+**没做的事带一个数字**：`assembleMemory` 自建 `MemoryEmbeddingCacheStore`，那是内存里的，一次页面加载重嵌一遍，read 阶段重启后又付一次。落到 OPFS 需要可注入的缓存存储——一次产品 API 新增 + **第九个擦除表面**，留给下一轮，起点是「**5 文本 / 2 调用 / 每次装配**」。
+
+| 项 | 值 |
+| --- | --- |
+| 检查 | **12 / 12**（原 11 + 1） |
+| 向量账 | 5 文本 / 2 调用 / 5 互异向量，两侧同额 |
+| 读数一致性 | `12 checks, identical in order and string, both on opfs, both digest-matched` |
+| 派发 | **0 次，0 CNY** |
+
+**位置更新**：R1 的五项（I5、I4、I6 产品半、I9、I10）与审计项完成，浏览器轴的**向量通道**这轮补齐；仍未做的是 `I6 ③`、`I7`、`I8`、`#25`，以及上面那条**可注入的嵌入缓存**。
