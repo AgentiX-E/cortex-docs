@@ -489,9 +489,9 @@ IE 1/150、TR 0/127，是一份"产品默认长什么样"的读数，不是治�
 
 | 维度                              | 值                                                                                   | 出处                                |
 | --------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------- |
-| 端到端（LongMemEval-S，四次重复均值） | <!-- reading:S1 -->91.1%（**455.25/500**，`route-room` 出货配置）                    | `evidence/longmemeval/frontier.json` |
-| 已过线的能力                      | KU <!-- reading:S2 -->87.2%、ABS <!-- reading:S5 -->100.0%                            | 同上                                |
-| 未过线的能力                      | MR <!-- reading:S3 -->83.1%                             | 同上                                |
+| 端到端（LongMemEval-S，四次重复均值） | <!-- reading:S1 -->91.3%（**456.25/500**，7,448 token/问，`S16` 出货配置）           | `evidence/longmemeval/route-room.json` |
+| 已过线的能力                      | KU <!-- reading:S2 -->92.4%、ABS <!-- reading:S5 -->100.0%、TR <!-- reading:S4 -->94.7% | `evidence/longmemeval/categories.json` |
+| 未过线的能力                      | MR <!-- reading:S3 -->83.7%（分辨率 9.41 点）            | 同上                                |
 | 验收判据                          | 18 条（13 gate / 5 aim，其中 1 条 accepted）                                         | `cortex/docs/ACCEPTANCE-MATRIX.md`  |
 | 受控集                            | 17 例，8 家族，三臂 + 8 消融                                                         | `tools/assumption-ablation.mjs`     |
 | 测试                              | 全仓 3,932（+ 575 条 tools 测试），四维覆盖率每包 ≥95%（core / ai / memory 全 100%） | `pnpm check`                        |

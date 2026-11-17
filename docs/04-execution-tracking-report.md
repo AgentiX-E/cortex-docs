@@ -26356,3 +26356,36 @@ row 25 names a site that does not exist: packages/cortex-core/src/math/stats.ts
 **下一轮的第一件事**：读 `S16`。通过 → 采纳房间表、重生成 `cost.json`（9,201 → ≈7,500，`C1` 的差距从 1.53× 收到 1.25×），并把 `S15` 的未达改写成一条**边界**（24K 全路由是「便宜但掉 2 点」的档位，不是默认档）。不通过 → 按预登记 §6 第一条写死「`temporal` 也需要宽度」，并把 `I8` 提上来。
 
 **`cortex` 是否 SOTA：否。** 端到端差 4.2 点（Maximem Synap 95.6% @ 7.4K token），`MR` 差 9.01 点（MemCog 92.48%），账单差 2.09×（Zep 4,400）。三项里最钝的一刀是 `MR`：它是唯一一条在准确率、房间敏感性和竞品差距上**同时**排第一的能力。
+
+## 119. 第 123 轮：`S16` 通过——登记臂从 9,074 token 降到 7,448，代价是一题
+
+### 119.1 本轮做了什么
+
+1. **读 `S16`**（run `44017278305`）：91.25%、配对 **−1 题**（p = 1.0）、账单 **7,448**（−19.1%）。两条预登记判据（`−5 题`、`7,821`）都成立，且都不是事后移动的。
+2. **采纳**：`arm-config-baseline.json` 从本 artifact 重录、派发表与 §10.3 同步改两个值、`cost.json` 与 `categories.json` 从同一 artifact 重生成（`capability-ledger.py --arm route-room` 保留 S2–S5 的 arm 子句）、`route-room.json` 以 `tier: registered` 重写。
+3. **`S1` 换源**：从 `frontier.json#shipping.accuracy` 改为 `route-room.json#overall.accuracy`，`CONFIGURATION_ATTESTED` 同步。理由见 §32.3 第 7 条——六臂研究的参照臂被钉在移动登记上，这条子句只能靠重下六个 artifact 满足。
+4. **仪器**：`arm-reading-ledger.py` 的 `Row` 新增 `unit`（`ratio`/`count`）。`S16` 的数字是**差值**不是水平，而 `render()` 原本只比较水平：`0.904 >= -5` 对一个 count 行**永远为真**，一个不可能错的判定不是判定。同时新增拒绝：count 行没有 `--control-artifact` 时不许写文件（判据读 `paired.deltaQuestions`，只写水平的文件会让行读成 `unrun` 而磁盘上躺着付费 artifact）。
+5. **文档自纠**：`PROMPT-ROOM-IS-LOAD-BEARING.md` §5 的「`temporal` 也需要宽度」被两次实验否掉（`I7` −2 p=0.63、`S16` −1 p=1.0），§8 写明并给出两次读数；§7 的「未动路由交付字符完全相同」被本轮证伪（`flat` +2、`knowledge-update` −13、`multi-session` +4，原因是两次派发之间多了一个 `supersededRendering: 'off'` 字段），见证物因此从「交付字符均值」改成「路由上限」，并把 build drift 的上界定为 13/22,680 = 0.06%。
+
+### 119.2 测试与门禁
+
+| 项 | 值 |
+|---|---|
+| TypeScript 测试 | `cortex-eval` 74 条（新增 1 条：`S1` 读登记文件而非六臂研究；改写 1 条：指纹列表按身份断言而不是按键名形状） |
+| Python 工具测试 | **2939 passed, 19 skipped**（新增 6 条：房间行收下/拒绝全砍臂/拒绝登记表/无对照不许写/判定读配对不读水平/无配对渲染 `unread`） |
+| `pnpm check` | 全链路绿（build → test:tools → 六道 guard → lint → typecheck → manual → census → ledger → registration → token → test → coverage → reuse/erasure/corpus → acceptance → docs:crosscheck → format） |
+| 矩阵 | 43 行：**30 pass**、6 aim 未达、7 unrun、0 gate 红 |
+| 指纹闸门 | `route-room.json` 与 `categories.json` 两份都等于 `sha256:69378c9f…` |
+| Dependabot | 两仓 0 告警、0 开 PR |
+
+### 119.3 位置与剩余
+
+| # | 项 | 状态 |
+|---|---|---|
+| 1 | 端到端 | **91.25%**（登记臂），SOTA 差 **−4.35**（Maximem Synap 95.6%） |
+| 2 | `MR` | **83.68%**，差 **−8.80**（MemCog 92.48%） |
+| 3 | 账单 | **7,448**；对 `C1` 的 6,000 是 1.24×，对 Zep 4,400 是 1.69×，对 Mem0 6,800 是 1.10×，对 Maximem 7,400 是 **1.006×** |
+| 4 | 可发布信号 | **仍未发**：`C1`（1.24×）与 `S14`（85.75% 对 88.0%）两条 aim 未达；其余 30 条通过 |
+| 5 | 房间这条轴 | **关闭**：六个宽度逐个定价完毕，`multi-session` 是唯一还值得留宽的 |
+
+**cortex 是否 SOTA：否**（准确率 −4.35、`MR` −8.80）。**下一步**：`I8`（`MR` 的候选集裁决与双时态）——`MR` 是唯一在准确率、房间敏感度和竞品差距上同时排第一的能力，而 §31.8 的零成本分析已证明 48K 下 21 道错题里 17 道金轮不缺，所以它是**数不出来**而不是**找不到**。并行两项零成本项：`I17` 的离线仪器、以及 `assembleMemory()` 不声明房间时默认值仍是全局 48,000（既非登记臂也非任何被定价配置）的产品侧修复。

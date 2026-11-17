@@ -1,0 +1,177 @@
+{
+  "$comment": "S16. The middle of the room curve: `multi-session` back at 48,460, the other five routes at 24,000. `S15` priced the cut and put the whole of it on one route, so this arm is the cheapest table that is expected to keep the registered accuracy -- and its number is the *pair*, because \"same score for 17% fewer tokens\" is a claim about two arms and a level cannot state it. Paired against `S9` question by question.",
+  "row": "S16",
+  "run": "44017278305",
+  "declaredDepartures": [],
+  "arm": {
+    "name": "cortex-memory",
+    "relevanceSignal": "self-index",
+    "indexEmbedding": "injected",
+    "reader": "deepseek-chat",
+    "judge": "deepseek-chat",
+    "maxTurnChars": 400,
+    "maxPromptCharsByRoute": {
+      "multi-session": 48460,
+      "temporal": 24000,
+      "flat": 24000,
+      "knowledge-update": 24000,
+      "abstention": 24000,
+      "assistant": 24000
+    },
+    "turnCutMarker": "none",
+    "promptContract": "evidence-blocks-unsourced"
+  },
+  "dataset": {
+    "name": "longmemeval",
+    "fingerprint": "sha256:d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+    "questions": 500,
+    "repetitions": 4
+  },
+  "overall": {
+    "accuracy": 0.9125000000000001,
+    "accuracyPerRun": [
+      0.912,
+      0.908,
+      0.916,
+      0.914
+    ],
+    "questions": 500,
+    "runs": 4,
+    "accuracySource": "recomputed from ablation.featureCorrectByRun; not questions[].correct"
+  },
+  "configurationFingerprint": "sha256:69378c9f30a498b59684ec5c85a1373d1898fa858fce140d479219269617a45c",
+  "tier": "registered",
+  "paired": {
+    "byCapability": {
+      "ABS": {
+        "questions": 30,
+        "treatment": 1.0,
+        "control": 1.0,
+        "deltaPoints": 0.0,
+        "deliveredCharsPerQuestion": {
+          "treatment": 23053.433333333334,
+          "control": 23053.433333333334
+        }
+      },
+      "IE": {
+        "questions": 150,
+        "treatment": 0.9133333333333333,
+        "control": 0.92,
+        "deltaPoints": -0.666666666666671,
+        "deliveredCharsPerQuestion": {
+          "treatment": 22622.48,
+          "control": 22621.4
+        }
+      },
+      "KU": {
+        "questions": 72,
+        "treatment": 0.9305555555555556,
+        "control": 0.9305555555555556,
+        "deltaPoints": 0.0,
+        "deliveredCharsPerQuestion": {
+          "treatment": 22667.01388888889,
+          "control": 22680.11111111111
+        }
+      },
+      "MR": {
+        "questions": 121,
+        "treatment": 0.8347107438016529,
+        "control": 0.8264462809917356,
+        "deltaPoints": 0.8264462809917328,
+        "deliveredCharsPerQuestion": {
+          "treatment": 48322.074380165286,
+          "control": 48318.1652892562
+        }
+      },
+      "TR": {
+        "questions": 127,
+        "treatment": 0.937007874015748,
+        "control": 0.9448818897637795,
+        "deltaPoints": -0.7874015748031482,
+        "deliveredCharsPerQuestion": {
+          "treatment": 23877.102362204725,
+          "control": 47851.51181102362
+        }
+      }
+    },
+    "byRoute": {
+      "abstention": {
+        "questions": 30,
+        "treatment": 1.0,
+        "control": 1.0,
+        "deltaPoints": 0.0,
+        "deliveredCharsPerQuestion": {
+          "treatment": 23053.433333333334,
+          "control": 23053.433333333334
+        }
+      },
+      "assistant": {
+        "questions": 56,
+        "treatment": 0.9642857142857143,
+        "control": 0.9642857142857143,
+        "deltaPoints": 0.0,
+        "deliveredCharsPerQuestion": {
+          "treatment": 22639.035714285714,
+          "control": 22639.035714285714
+        }
+      },
+      "flat": {
+        "questions": 94,
+        "treatment": 0.8829787234042553,
+        "control": 0.8936170212765957,
+        "deltaPoints": -1.0638297872340385,
+        "deliveredCharsPerQuestion": {
+          "treatment": 22612.617021276597,
+          "control": 22610.893617021276
+        }
+      },
+      "knowledge-update": {
+        "questions": 72,
+        "treatment": 0.9305555555555556,
+        "control": 0.9305555555555556,
+        "deltaPoints": 0.0,
+        "deliveredCharsPerQuestion": {
+          "treatment": 22667.01388888889,
+          "control": 22680.11111111111
+        }
+      },
+      "multi-session": {
+        "questions": 121,
+        "treatment": 0.8347107438016529,
+        "control": 0.8264462809917356,
+        "deltaPoints": 0.8264462809917328,
+        "deliveredCharsPerQuestion": {
+          "treatment": 48322.074380165286,
+          "control": 48318.1652892562
+        }
+      },
+      "temporal": {
+        "questions": 127,
+        "treatment": 0.937007874015748,
+        "control": 0.9448818897637795,
+        "deltaPoints": -0.7874015748031482,
+        "deliveredCharsPerQuestion": {
+          "treatment": 23877.102362204725,
+          "control": 47851.51181102362
+        }
+      }
+    },
+    "control": {
+      "run": "43778036604",
+      "accuracy": 0.914,
+      "relevanceSignal": "self-index",
+      "indexEmbedding": "injected"
+    },
+    "cells": {
+      "both": 448,
+      "onlyTreatment": 6,
+      "onlyControl": 7,
+      "neither": 39
+    },
+    "deltaQuestions": -1,
+    "deltaPoints": -0.2,
+    "mcnemarP": 1.0,
+    "questions": 500,
+    "pairing": "majority verdict per question across the repetitions"
+  }
+}

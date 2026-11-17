@@ -1,18 +1,18 @@
 {
   "primary": "perQuestionPerRun",
   "readings": {
-    "perCall": 8863.699903660887,
-    "perQuestionPerRun": 9200.5205,
-    "perQuestion": 36802.082
+    "perCall": 7168.222329162656,
+    "perQuestionPerRun": 7447.783,
+    "perQuestion": 29791.132
   },
   "inputs": {
-    "promptTokens": 18401041,
-    "calls": 2076,
+    "promptTokens": 14895566,
+    "calls": 2078,
     "questionCount": 500,
     "runs": 4,
-    "cacheHitPromptTokens": 17998245
+    "cacheHitPromptTokens": 14472828
   },
-  "retries": 76,
+  "retries": 78,
   "comparableTo": "prompt tokens delivered for one question, one repetition",
   "cap": {
     "maxPromptChars": 48460,
@@ -20,24 +20,25 @@
     "maxRoom": 48460,
     "rooms": {
       "multi-session": 48460,
-      "temporal": 48000,
+      "temporal": 24000,
       "flat": 24000,
       "knowledge-update": 24000,
       "abstention": 24000,
       "assistant": 24000
     },
     "roomSource": "effectivePromptChars",
-    "impliedCharsPerToken": 2.71,
-    "reading": "below-cap",
+    "impliedCharsPerToken": 3.35,
+    "reading": "indeterminate",
     "band": "3.5-4.7 characters per token, English prose",
-    "status": "inferred"
+    "status": "inferred",
+    "reason": "the rooms span 24,000 to 48,460 (0.495 of the widest), so one room over the mean tokens per call is scaled by the same factor and cannot answer the fill question in either direction: a delivery that filled every route still scores below the band. `tools/evidence-budget.py` measures utilisation per question against the resolved room, which is the instrument that can answer it."
   },
   "efficiency": {
     "state": "measured",
-    "accuracy": 0.9105000000000001,
+    "accuracy": 0.9125000000000001,
     "accuracySource": "all-runs",
     "correct": null,
-    "perCorrectAnswerPromptTokens": 10104.90993959363
+    "perCorrectAnswerPromptTokens": 8161.95397260274
   },
-  "run": "42533236864"
+  "run": "44017278305"
 }
