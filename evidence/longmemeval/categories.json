@@ -2,7 +2,7 @@
   "$comment": "Per-capability accuracy for one dispatch, computed from ablation.featureCorrectByRun by tools/capability-ledger.py. Every number here is a repetition mean over the masks: ablation.featureByCapability carries min/avg/max across repetitions and only `avg` is the repetition mean, while `min` and `max` read 3 to 4 questions apart on the same population. Intervals are Clopper-Pearson rather than Wilson because the denominators are 72 to 127, where a normal approximation under-covers. `resolution` is the smallest true difference the population detects at 80% power and depends on the denominator, not on the repetition count.",
   "run": "44017278305",
   "arm": "route-room",
-  "configurationFingerprint": "sha256:69378c9f30a498b59684ec5c85a1373d1898fa858fce140d479219269617a45c",
+  "configurationFingerprint": "sha256:a49e6f8d47f72d972e644661c10093bfe3ff88e4059a2ff8f0fd6bb424addd55",
   "benchmark": "LongMemEval-S",
   "accuracySource": "repetition-mean",
   "runs": 4,

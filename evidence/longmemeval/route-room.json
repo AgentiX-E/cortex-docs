@@ -39,7 +39,7 @@
     "runs": 4,
     "accuracySource": "recomputed from ablation.featureCorrectByRun; not questions[].correct"
   },
-  "configurationFingerprint": "sha256:69378c9f30a498b59684ec5c85a1373d1898fa858fce140d479219269617a45c",
+  "configurationFingerprint": "sha256:a49e6f8d47f72d972e644661c10093bfe3ff88e4059a2ff8f0fd6bb424addd55",
   "tier": "registered",
   "paired": {
     "byCapability": {

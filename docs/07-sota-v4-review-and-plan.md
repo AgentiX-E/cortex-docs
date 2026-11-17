@@ -2321,3 +2321,21 @@ try {
 所以下一轮回到 `MR`，理由是三项同时排第一：准确率最低（83.68%）、房间最敏感（`S15` −9 题）、竞品差距最大（MemCog 92.48%，−8.80）。而 §31.8 的零成本分析已经把它的形状钉死：**48K 下 21 道错题里 17 道金轮一条不缺**——不是检索不到，是数不出来。因此 `I8`（候选集裁决与双时态）不是候选之一，它是 `MR` 剩下的唯一一条路。
 
 同时并行两项零成本工作：`I17` 的离线仪器（复算 `carried`、与 `S14` artifact 逐题比对文本，0 CNY）与 §32.4 暴露出的产品侧问题——**`assembleMemory()` 不给房间时用的是 `CortexMemory` 的 48,000 全局默认，而这既不是登记臂（91.25% / 7,448）也不是任何被定价的配置**。修法是把登记房间表变成 `assembleMemory` 在调用者不声明房间时的默认，这样「什么都不写的一次调用」拿到的就是手册卖的那一档；它与 `AssembleOptions` 现有 docblock 的「不设默认」纪律并不冲突——那条纪律要防的是**第二个臂**，而登记表就是第一个臂。
+
+### 32.7 自审发现的一处仪器错误：指纹把「运行」当成了「配置」
+
+重录基线之后，指纹从 `sha256:69378c9f…` 变成了 `sha256:a49e6f8d…`。追下去发现这不是采纳造成的，而是一条**一直存在但从未被触发的错误**。
+
+`memoryArmConfig` 从 `S16` 那次构建起携带两个 **census** 块：`selfIndex`（本次运行建了几个索引、调了几次 embedding、命中多少次 memo）与 `admission`（写入门这次收了多少、拒了多少）。`arm-config-record.py` 的分类表把这两个字段明确标成 `census`，理由写在那张表里——「问题答完之后才统计，所以同一配置的两次运行在这里按设计就会不同，差异是一次测量而不是一次偏离」。
+
+而 `canonical()` 把这个对象**整个**哈希了。于是 `fingerprint()` 自己的 docstring 成了假话：
+
+> What this identifies is the **configuration**, not the dispatch. Two runs of the same configuration share a fingerprint and that is the point.
+
+两件事同时成立：这句话在配置纯声明式时是真的，而 `S16` 的构建让配置不再纯声明式。后果不是数字错，是**下一次同配置派发会被要求声明一次从未发生的偏离**——把一个「测量」记成一次「departure」，正是本仓最想避免的那类错误。
+
+修法是把分类表当成唯一事实来源：`canonical()` 丢掉所有 `census` 类的顶层键，`efficiency-frontier.mjs` 丢掉同一组名字（那张表是 Python，Node 侧写出四个名字并指向它）。两处都必须改，因为跨语言一致性测试一直在盯这件事——**但它盯的夹具里没有 census 块**，所以 Python 丢、Node 哈希，两个实现会在每一次绿色通过上一致、在每一个真实 artifact 上不一致。这正是「永远通过的闸门第一次遇上真事就失败」的形状，因此新增了一条带 census 的跨语言测试。
+
+修的过程中还有一处：第一版过滤写成 `dict(config)`，`None` 会抛 `TypeError`，而 `capability-ledger.py` 与 `cost-ledger.py` **都先算指纹再拒绝**没有配置的 artifact——于是拒绝语从「这个 artifact 不能作证」变成了「工具坏了」。四条既有测试当场抓到。
+
+三份证据（`route-room.json`、`categories.json`、`cost.json`）随之用同一 artifact 重生成，指纹一致于 `sha256:a49e6f8d…`。数字一个都没动：准确率 91.25%、账单 7,448、配对 −1 题。
