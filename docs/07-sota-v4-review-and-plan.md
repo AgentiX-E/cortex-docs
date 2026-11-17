@@ -2474,3 +2474,54 @@ try {
 **下一步是唯一还没被否掉的形状**：让读者自己发查询——一次派发，判据先写死（`MR` 净转化 ≥ +5、账单 ≤ 8,600、任何能力不掉出各自 2 题地板）。它的前件（融合在产品里、且与仪器逐项一致）这一轮已经付清；剩下的工作是把 `cortex-eval` 的展开提示词与解析搬进产品的可选路径，并把「展开臂的对照就是同一份语料、同一套读者、没有短语」写进 `arm-config-baseline.json` 的登记。
 
 **cortex 是否 SOTA：否。** 准确率 −4.35（Maximem Synap 95.6%）、`MR` −8.18（MemCog 92.48%）、账单 1.24× 于 `C1` 的 aim。这一轮改变的是**能力清单**而不是**分数**，所以三个数字一个都没动——这正是它 0 CNY 的原因，也是它必须被下一次派发验证的原因。
+
+## 35 展开的短语第一次到达排名：一个已注册四轮的治疗，其实是对照
+
+### 35.1 发现
+
+§13.97 注册 `queryExpansion=llm` 时，臂跑的是 `relevanceSignal=retrieval`，短语经 `RelevanceCase.queries` 进入 `buildRetrievalRelevanceIndex`——那句话在当时是真的。此后 `S9` 起每一个公布读数都是 `self-index`，而这条路把索引建在**产品里**（`SearchIndex`），产品只读问题本身。`RelevanceCase.queries` 照样被填，产品从来不读它。
+
+于是「在登记臂上派发 `llm`」的真实后果是：121 次额外模型调用、`queryExpansionCounts` 记下 `questions=121, phrases≈480`、每一题都用裸问题检索、把对照的成绩发布成处理的成绩。artifact 的每一个字段都自洽，矛盾藏在 artifact 不读的 TypeScript 文件里。**已归档的读数一个都没受影响**——`S9`…`S16` 全部 `queryExpansion=none`，它们不是在这个坏组合下产出的。
+
+### 35.2 修法在接缝处，不在双臂里
+
+| 层 | 改了什么 | 拒绝什么 |
+| --- | --- | --- |
+| 产品（§34 已交付） | `SearchIndexOptions.queryPlan`：每题一组查询，RRF 融合 | 规划只返回一条时走单查询路径（否则词法分数被改写成名次分数） |
+| 仪器 | `expansionQueryPlan(expansion)` 返回**一个** `(question) => Promise<queries>`，内容 `[question, ...phrases]`，空展开返回 `[question]` | 两条路线（cases 与 plan）由**同一个** `QuestionExpansion` 生成，不能各说各话；也不再返回第二个计数器（收据只有一个，见 §35.3） |
+| 入口 | `bench/run-ablation.ts` 只在 `buildsProductIndex` 分支里注入 plan | `retrieval*` 若同收 plan 会每条查询发两次、把一份治疗计成两份 |
+| 守卫 | `assertExpansionReachesRanking`：`llm` + `relevanceSignal=none` 在建索引前抛错 | 短语会被写、被计数、被谁都不读 |
+
+### 35.3 收据是产品写的数字，不是配置的自述
+
+`IndexCost.queries` 从每次检索自己的 census 折叠而来、跨 worker 求和、与 `indexes` 一起进 artifact。一次检索一条查询 = 排名用的就是问题本身；多于一条 = 规划至少在一题上动过。
+
+同一件事在三个距离上被检查，因为各自能看到别人看不到的：
+
+| 位置 | 做什么 | 看不到什么 |
+| --- | --- | --- |
+| `assertQueryExpansionReached`（写入侧） | `phrases > 0` 且 `queries == indexes` 时**拒写** artifact | 全部短语被拒的合法读数 |
+| `readout-arm-run.py --audit`（阅读侧，`plan-reach`） | 打印这对数字，矛盾时点名路线 | 仪器自建索引的 artifact（短语走 cases，此字段不可见） |
+| `tools/__tests__/test_readout_plan_reach.py` | 6 条：通过 / 叛变 / 零短语 / 仪器索引静默 / 自建索引缺账本 | — |
+
+### 35.4 计数
+
+| 项 | 值 |
+| --- | --- |
+| 新增测试 | `query-expansion.test.ts` +3、`query-expansion-arm.test.ts` 7（新，走 `runCortexMemoryArm` 公开路径）、`test_readout_plan_reach.py` 6（新） |
+| 改动测试 | `index-cost.test.ts` 3 处期望、`self-index.test.ts` 2 处夹具 |
+| 验收矩阵 | **43 → 44** 行：新增 `S17`（`unrun`，读数是 §13.377.4 的 E1） |
+| 读数 | **无变化**（0 CNY、0 派发）：91.25% / 7,448 仍是登记臂 |
+| 预注册 | `PREREGISTRATION-CORTEX-MEMORY-ARM.md` §13.377（判据 E1–E5 先写死） |
+
+### 35.5 位置与下一步
+
+| # | 项 | 状态 |
+| --- | --- | --- |
+| 1 | 端到端 | **91.25%**，对 Maximem Synap 95.6% → **−4.35** |
+| 2 | `MR` | **84.30%**（102/121），对 MemCog 92.48% → **−8.18** |
+| 3 | 账单 | **7,448**，对 `C1` 的 6,000 → 1.24× |
+| 4 | 可发布信号 | **未发**（`C1`、`S14` 两条 aim） |
+| 5 | 本轮 | 0 成本；把一个「跑起来必然是对照」的派发变成了可执行且自证的实验 |
+
+**cortex 是否 SOTA：否**（三个数字这一轮都未动）。下一个动作是**一次**派发：登记配置 + 唯一偏离 `query_expansion: none → llm`，判据 E1 `MR ≥ 107/121`、E2 账单 `≤ 8,600`、E3 任何能力不低 2 题、E4 `queries > indexes` 且 `refused ≤ 12`、E5 对照侧 `queries == indexes`。

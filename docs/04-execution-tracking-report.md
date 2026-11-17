@@ -26472,3 +26472,51 @@ row 25 names a site that does not exist: packages/cortex-core/src/math/stats.ts
 | 6 | 下一步 | **让读者自己发查询**：把展开提示词与解析搬进产品可选路径，派发判据先写死——`MR` 净转化 ≥ +5、账单 ≤ 8,600、任何能力不掉出各自 2 题地板 |
 
 **cortex 是否 SOTA：否。** 三个数字这一轮一个都没动，因为交付的是**能力**而不是**分数**：这是 §33.4 缺口的前件，不是它的替代品。判断这一轮是否真的交付了，不能看准确率——要看两条闸门是否都在链上、以及 `census().queries` 在派发 artifact 里是否非 1。
+
+## 122. 第 126 轮：一个「已注册四轮」的治疗其实是控制，修法在产品接缝处
+
+### 122.1 本轮做了什么
+
+1. **找到缺陷**：`queryExpansion=llm` 的短语经 `RelevanceCase.queries` 进入仪器索引；`S9` 起的登记臂是 `self-index`，索引由产品建、只读问题。于是派发 `llm` 等于跑对照，而 artifact 每个字段自洽。
+2. **`expansionQueryPlan(expansion)`**（`cortex-eval/src/query-expansion.ts`）：把同一份 `QuestionExpansion` 变成产品的查询计划，`[question, ...phrases]`；空展开返回 `[question]`（产品走单查询路径，字节相同的提示词）。
+3. **入口只在一个分支注入**：`bench/run-ablation.ts` 把 plan 放进 `selfIndexOptions`，而后者只在 `buildsProductIndex` 为真时存在；`retrieval*` 仍走 cases，两条路线由同一个对象生成，不能各说各话。
+4. **守卫**：`assertExpansionReachesRanking` 拒绝 `llm` + `relevanceSignal=none`（短语会被写、被计数、没人读）。
+5. **收据是产品写的**：`IndexCost.queries`（`SearchIndex` 的 census 折叠 → 跨 worker 求和 → artifact `selfIndex.queries`）。
+6. **写入侧拒写**：`assertQueryExpansionReached`——`phrases > 0` 且 `queries == indexes` 时抛错，报错文案点名 `index.queryPlan`。
+7. **阅读侧打印**：`readout-arm-run.py --audit` 新增 `plan-reach` 检查（只在 `self-index` 上评估，仪器索引静默；自建索引缺账本则 FAIL）。
+8. **预注册**：`PREREGISTRATION-CORTEX-MEMORY-ARM.md` §13.377，判据 E1–E5 先写死，含四种结局的读法与「不授权」清单。
+
+### 122.2 为什么这不是又一次「改配置」
+
+这一轮没有改任何臂参数，改的是**短语到排名的路径**。三处断言把「配置说了什么」与「产品做了什么」分开：
+
+| 断言 | 位置 | 它抓的形状 |
+| --- | --- | --- |
+| `assertExpansionReachesRanking` | 派发前 | 代码里就不可能到达排名的组合 |
+| `assertQueryExpansionReached` | 写 artifact 前 | 跑完了但排名没收到短语（本轮缺陷） |
+| `plan-reach` | 读 artifact 时 | 上面两者的产物之外，别人产出的 artifact |
+
+### 122.3 测试与门禁
+
+| 项 | 值 |
+| --- | --- |
+| 新增 TS 测试 | `query-expansion.test.ts` +3；`query-expansion-arm.test.ts` 新 7 |
+| 新增 Python 测试 | `test_readout_plan_reach.py` 6 |
+| 验收矩阵 | **43 → 44** 行（`S17` = `unrun`），`acceptance-check` 44 criteria、exit 0 |
+| 导出账本 | 1,224 → **1,226** 导出、726 → **728** 有调用者、498 / 445 / 53 不变（`expansionQueryPlan` 与 `assertExpansionReachesRanking` 的调用者在 `bench/run-ablation.ts`；`assertQueryExpansionReached` 取消导出——只被本模块调用，单测改走 `runCortexMemoryArm` 公开路径） |
+| 改动夹具 | `index-cost.test.ts` 3 处（`queries` 进期望）、`self-index.test.ts` 2 处 |
+| memory | **1,556 passed**；`search-index.ts` 四维 100，全包 99.88 / 99.71 / 100 / 100 |
+| eval | 见下方 `pnpm check` 计数 |
+| 读数 | **无变化**：91.25% / 7,448（0 CNY、0 派发） |
+
+### 122.4 位置与剩余
+
+| # | 项 | 状态 |
+| --- | --- | --- |
+| 1 | 端到端 | **91.25%**，对 SOTA（Maximem Synap 95.6%）**−4.35** |
+| 2 | `MR` | **84.30%**（102/121），对 MemCog 92.48% **−8.18** |
+| 3 | 账单 | **7,448**，对 `C1` 的 6,000 是 **1.24×** |
+| 4 | 可发布信号 | **未发**：`C1`、`S14` 两条 aim |
+| 5 | 下一步 | **一次**派发（登记配置 + `query_expansion=llm`），判据 E1–E5 见 §13.377.4 |
+
+**cortex 是否 SOTA：否。** 本轮交付的是「一个本来会白跑的派发现在能跑，而且跑完能自证」，不是分数。
