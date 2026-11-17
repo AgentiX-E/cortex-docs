@@ -26422,3 +26422,53 @@ row 25 names a site that does not exist: packages/cortex-core/src/math/stats.ts
 | 5 | 下一步 | **产品侧多查询**：`cortex-eval` 有 `retrieveTopKByQueries(Hybrid)`，产品的 `SearchIndex` 只有单查询——0 CNY、0 派发，判据是「关掉时提示词逐字节不变」与「打开时产品路径与仪器路径的候选序列逐项相等」 |
 
 **cortex 是否 SOTA：否。** 准确率差 4.35 点（Maximem Synap 95.6%），`MR` 差 8.18 点（MemCog 92.48%），账单是 `C1` aim 的 1.24×。本轮之后，`MR` 的剩余差距**不再是提示词侧**——七种提示词侧机制已逐一测为负或落在噪声内——而是产品缺一个「读者自己决定看什么」的能力。
+
+## 121. 第 125 轮：融合搬进产品，两条闸门（一条字节、一条逐项），四次夹具自打回
+
+### 121.1 本轮做了什么
+
+1. **`SearchIndex.queryPlan`**：每题一组查询由调用者给；去空白、去重（保留首次）、整组**一次**嵌入（`embedCalls +1`、`embedTexts +n`）。规划抛错**不吞**——否则展开臂 401 会把对照的排名发布成处理的成绩。
+2. **一条查询就是单查询路径**：`queries.length === 1` 走 `#searchOne`（与改动前**同一段代码**），因为一元融合会把词法分数改写成名次分数：同序、不同值、并列处换提示词。
+3. **`SearchIndex.channels`**：默认 `['lexical','vector']`；`['vector']` 不建 postings（`census().terms === 0`），`['lexical']` 一次也不嵌入。拒绝 `[]`（什么都不排）与 `['vector']` 而无 `embed`（点名跑不了的通道）；但 `['lexical','vector']` 无嵌入器仍合法——那是普通的词法索引，census 会说向量通道没跑。
+4. **`census().queries`**：最近一次检索发出的查询数（首次前 0），不是累计值。
+5. **两条闸门**：`query-plan-reach.test.ts` 断言「规划只给一条时提示词逐字节相同」（在 320 字符的房间，语料真的被裁）；`tools/multi-query-parity.mjs` 断言产品向量通道与 `retrieveTopKByQueries` 的候选序列**逐项相等**，并在 `pin check` 里以 `parity:multi-query` 常驻。
+6. **前提写成对照**：产品排除零相似度 turn、仪器保留，而**被保留的仍投票**（占据名次、累计 `1/(60+rank+1)`）。所以「逐项相等」的边界是「每条查询至少 `TOP_K` 个正相似度 turn」，`FIXTURE=thin` 跑一份够不到的语料并报告 `unmet`——Python 测试断言它必须 `unmet`。
+7. **三种故障各红一次**：`plan-ignored`（没传 `queryPlan`）、`query-dropped`（短语拿到了、只传问题给仪器）、`score-merge`（按相似度相加）。分叉位分别第 2、2、0 位。
+8. **能力账本第 11 行扩写**：`SearchIndex` 现在覆盖「一条或多条查询上的 RRF + 调用者点名的通道」；第 23 行（LLM 查询扩展）**仍是 `instrument`**——短语仍然是一次 LLM 调用，产品不持有供应商。这是这一轮有意留下的那半个缺口，也是下一次派发的前件。
+9. **手册新增 §6.9**：`queryPlan` 的四条性质（问题不会替你加、去重与计数、整组一次请求、抛错不是回退）与 `channels` 的两条成本方向，示例经 `manual-examples.mjs` 编译。
+
+### 121.2 被自己的夹具打回四次（全部记录在案）
+
+| # | 第一版 | 为什么什么都没测 | 修法 |
+| --- | --- | --- | --- |
+| 1 | 薄语料放 `the weather was cold in the morning` 作为「零相似度」对照 | 它与每条查询共享 `the`，`HashEmbedding` 下相似度为正，过滤器根本没触发 | 换词元完全不相交的句子，并把维度从 64 提到 **4096** |
+| 2 | 密语料只有 8 条里 3/3/2 条正相似度 | `TOP_K=4` 的前提不成立，闸门**拒绝比较**（这是它该做的），但夹具本身没用 | 把语料写成同一项目的八条互有重叠的 turn，正相似度 4/7/6 |
+| 3 | 提示词断言写成「铁路那句排到前面」 | `selectByRelevance` 是「按信号**选**、按时序**印**」——机制在产品层的效果是**同一房间换掉一份证据**，不是重排 | 房间定在 320：单查询扛 `{automobile cost, was red, train fare}`，多查询扛 `{automobile cost, railway repairs, was red}` |
+| 4 | `search-index.ts` 覆盖率停在 98.01 分支 | 少了三处真实状态：部分回包（多查询被静默降权）、空语料上的多查询、显式 `channels: ['lexical']` 的多查询 | 补三条测试，四维归 **100 / 100 / 100 / 100** |
+
+### 121.3 测试与门禁
+
+| 项 | 值 |
+| --- | --- |
+| 新增测试 | `search-index.test.ts` +18；`query-plan-reach.test.ts` 3；`test_multi_query_parity.py` 7 |
+| TypeScript | memory **1,556 passed**（原 1,536 + 20）；core 963、eval 3,601、ai 336、storage 125 |
+| Python | **2,950 passed** / 19 skipped（原 2,943 + 7） |
+| 覆盖率 | 179 文件四维受闸、**0 ratcheted**：memory 31 文件 99.88 / 99.71 / 100 / 100，`search-index.ts` 四维 **100 / 100 / 100 / 100** |
+| 导出账本 | 1,222 → **1,224** 导出、726 有调用者不变、496 → **498** 孤儿（`QueryPlan`、`SearchChannel`，理由段写进 `core-llm-node-surface`） |
+| 能力账本 | 26 行不变、第 11 行扩写、boundary 54 不变 |
+| 手册 | **38** 个示例编译、3 张契约表 50/50 |
+| `pnpm check` | 全链路绿（`parity:multi-query` 已在链上） |
+| 矩阵 | 43 行不变：30 pass、6 aim 未达、7 unrun、0 gate 红（本轮无读数变化） |
+
+### 121.4 位置与剩余
+
+| # | 项 | 状态 |
+| --- | --- | --- |
+| 1 | 端到端 | **91.25%**，对 SOTA（Maximem Synap 95.6%）**−4.35** |
+| 2 | `MR` | **84.30%**（多数票 102/121），对 MemCog 92.48% **−8.18** |
+| 3 | 账单 | **7,448**，对 `C1` 的 6,000 是 **1.24×** |
+| 4 | 可发布信号 | **仍未发**：`C1`、`S14` 两条 aim |
+| 5 | 本次成本 | **0 CNY、0 派发**（本轮无 LLM/embedding 调用，闸门只用确定性 `HashEmbedding`） |
+| 6 | 下一步 | **让读者自己发查询**：把展开提示词与解析搬进产品可选路径，派发判据先写死——`MR` 净转化 ≥ +5、账单 ≤ 8,600、任何能力不掉出各自 2 题地板 |
+
+**cortex 是否 SOTA：否。** 三个数字这一轮一个都没动，因为交付的是**能力**而不是**分数**：这是 §33.4 缺口的前件，不是它的替代品。判断这一轮是否真的交付了，不能看准确率——要看两条闸门是否都在链上、以及 `census().queries` 在派发 artifact 里是否非 1。
