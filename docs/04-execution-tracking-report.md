@@ -26520,3 +26520,102 @@ row 25 names a site that does not exist: packages/cortex-core/src/math/stats.ts
 | 5 | 下一步 | **一次**派发（登记配置 + `query_expansion=llm`），判据 E1–E5 见 §13.377.4 |
 
 **cortex 是否 SOTA：否。** 本轮交付的是「一个本来会白跑的派发现在能跑，而且跑完能自证」，不是分数。
+
+## 123. 第 127 轮：provider 账单空了，于是把「不需要模型」的那条线做成仪器
+
+### 123.1 先说那次派发的结局：不是证据
+
+Run `44159514514`（budget 20、投影 14.26 CNY）在 `reference-pipeline run=3 q=166/500` 处死掉，日志原文：
+
+```
+Embedding provider has no quota left: 429 Too Many Requests —
+{"error":{"code":"1113","message":"余额不足或无可用资源包,请充值。"}}
+```
+
+三条读法，都必须写下来：
+
+| 事实 | 证据 | 含义 |
+| --- | --- | --- |
+| 这次的 429 是**余额**，不是并发 | 错误码 **1113**（`AUDIT-ZHIPU-429-ROOT-CAUSE.md` 记录的是 **1305** = 并发） | 该审计的结论没有被推翻，它说的是一种 429；这次是另一种 |
+| 分类器认对了 | `isQuotaExhausted` 的 `/1113/` 分支命中 → `EmbeddingQuotaExhaustedError`，阶梯不重试 | `transportRetry.refusedCalls: 1`，`retried: 0` |
+| 这次派发**没有产生任何治疗读数** | 产物是 `benchmark-cortex-memory-partial.json`（`reached: 162/500`，无 delta），job 红灯 | §13.377.4 的 **E4 失败**：该次派发不构成证据，`query_expansion` 那一行继续保持 `unrun` |
+
+**没有据此改任何登记行。** 一次死在 provider 上的派发既不能采纳也不能否证一个机制——它只能说「这次没测到」。
+
+### 123.2 于是转向唯一一条不需要 provider 的线
+
+向量通道现在不可测：任何 `indexEmbedding: injected` 的派发都会在语料嵌入阶段撞 1113。而 `S14` 是**词法**行（`indexEmbedding: none`，`selfIndex.embedCalls: 0`），它的 aim 是 **88.0%**、当前 **85.75%**，且它的失分位置在 `ANALYSIS-LEXICAL-ZERO-RECALL.md` 里已经定量：**21 题一条金轮都没送到**，向量臂 0 题。
+
+那条分析给出的修复方向是「改词法打分」，而词法打分是确定性代码。**所以这一轮把「不需要模型的读数」做成了仪器**，而不是再等一次充值。
+
+### 123.3 仪器为什么是「产品 + 常量」，不是另写一个检索器
+
+另写一个「索引 → 融合 → 房间 → 渲染」的脚本是更省事的做法，也是错的：产品交付的证据是它**交给读者**的那一份（`lastRetrievedContext()`），平行实现测到的第一件东西是「我和 `CortexMemory` 差多少」，之后每个数字都继承这个误差。
+
+| 组件 | 仪器里的形态 | 理由 |
+| --- | --- | --- |
+| 检索 / 融合 / 房间 / 截断 / 渲染 | **出厂代码** | 被测对象 |
+| 读者 | 常量 `"offline instrument"` | 花钱，且对检索无贡献 |
+| 判官 | 常量 `incorrect` | 同上；常量 `correct` 会把每份准确率抬到 100% |
+
+配置不是「复刻」，是**同一份**：`cortexMemoryArmOptions`、房间表、轮次上限、角色过滤、路由派发全部原样。这就是读数能与归档 artifact 相比的原因。
+
+`CORTEX_ARM_OFFLINE=1` 在 `createReadersFromEnv` / `createJudgeFromEnv` 的**取钥匙之前**分支，所以仪器连 `DEEPSEEK_API_KEY` 都不需要——这是它能在一个空账期的账号上跑起来的原因。
+
+### 123.4 三道门，抓三种不同的错
+
+| 门 | 位置 | 它抓的形状 |
+| --- | --- | --- |
+| `assertOfflineInstrumentConfiguration` | 解析完选项、读语料之前 | `relevanceSignal` 不是 `self-index`（排名在仪器那边），或 `indexEmbedding` 不是 `none`（会为一个动不了的通道付钱） |
+| `assertOfflineInstrumentReached` | 写 artifact 之后 | `selfIndex.indexes != 题数 × 轮数`：常量回复触发了二次检索，交付的证据是那个机制的 |
+| `lexical-recall-calibrate.py` | 读完 artifact | 逐题 `carried` / `total` / `deliveredDigest` 与 `S14` 不一致 —— **仪器不是那条路径** |
+
+产品侧还有三条性质测试（`offline-instrument-neutrality.test.ts`），把「回复与证据无关」变成断言而不是假设：
+
+1. 同一语料、两种截然不同的回复 → `lastRetrievedContext()` **逐字节相同**；
+2. 仪器的回复**解析成答案**（不是弃答），所以 `reviewBareDecline` 与 `reviewPass: recover` 都不会在 500 题上各多花一次调用；
+3. 每问恰好一次索引（`indexCost().indexes === 2`，两问）。
+
+### 123.5 基准摘要在写代码之前就先自证了一次
+
+`tools/lexical-recall-calibrate.py --write-reference` 从 `S14` 的 68 MB artifact 里折出逐题摘要（`tools/lexical-recall-reference.json`，75 KB），桶分布是：
+
+```
+zero-recall: 21  buckets: {'0%': 21, '1-33%': 129, '34-66%': 114, '67-100%': 236}
+```
+
+与 `ANALYSIS-LEXICAL-ZERO-RECALL.md` §2.1 的表格**逐格相同**（21 / 129 / 114 / 236，合计 500）。这条自证在仪器还没跑之前就说明了摘要取的是同一批题、同一个口径。
+
+### 123.6 成本结构变了
+
+| 项 | 旧（真实基准） | 新（仪器） |
+| --- | --- | --- |
+| 读者调用 | 500 × 4 × ~3.4k prompt token | **0** |
+| 判官调用 | 1,118/3,000 走判官 | **0** |
+| 嵌入调用 | `injected` 时语料全量 | **0**（`indexEmbedding: none`） |
+| CNY | ≈14.26 | **0** |
+| 能读的数 | 准确率、配对 Δ | `goldOverlap`、`turns`、两个字符数、`selfIndex` |
+
+一次候选比较的价格从 14.26 CNY 变成 0，这是本轮唯一一个「便宜且更严谨」的改动：它把 I17 的六个候选从「一次只能试一个」变成「一次离线跑完再选一个进确认性派发」。
+
+### 123.7 测试与门禁
+
+| 项 | 值 |
+| --- | --- |
+| 新增 TS 测试 | `offline-instrument.test.ts` **19**；`offline-instrument-neutrality.test.ts` **6** |
+| 新增 Python 测试 | `test_lexical_recall_calibrate.py` **11** |
+| 导出账本 | 1,226 → **1,233** 导出、728 → **735** 有调用者、498 / 445 / 53 不变（仪器门抓了两个自造孤儿：`OfflineInstrument` 取消导出，`OFFLINE_INSTRUMENT_VARIABLE` 接进 banner 而不是豁免） |
+| 新工作流 | `.github/workflows/lexical-recall.yml`，**仅 `workflow_dispatch`**，0 密钥（除数据集下载的 `HF_TOKEN`） |
+| 新文档 | `cortex/docs/INSTRUMENT-RETRIEVAL.md`（英文，仪器契约与三道门） |
+| 读数 | **无变化**：91.25% / 7,448。本轮没有跑任何带读者的派发 |
+
+### 123.8 位置与剩余
+
+| # | 项 | 状态 |
+| --- | --- | --- |
+| 1 | 端到端 | **91.25%**，对 SOTA（Maximem Synap 95.6%）**−4.35** |
+| 2 | `MR` | **84.30%**（102/121），对 MemCog 92.48% **−8.18** |
+| 3 | `S14` 词法 | **85.75%**，aim 88.0%，**−2.25**；修复目标已量化为「零召回 21 → ≤14」 |
+| 4 | 账单 | **7,448**，对 `C1` 的 6,000 是 **1.24×** |
+| 5 | 可发布信号 | **未发**（`C1`、`S14` 两条 aim） |
+| 6 | 下一步 | 派发 `lexical-recall` **一次**（0 CNY）；校准通过后按 §4 的六个候选逐个离线比较 |
