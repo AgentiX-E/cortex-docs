@@ -26750,6 +26750,15 @@ reference 现在记录整份 `memoryArmConfig`（去掉 census 字段），所�
 
 第三行是第一行同一份代码被另一个账本读出的结果：`b86304ba` 交付字符 **0 → 23,503**，整轮账本仍是 0，零召回仍是 21。差的就是那一列。
 
+声明写入基准后复跑（`44242613675`，0 CNY）**通过**，且日志把盲区原样打了出来：
+
+```
+MOVED (declared) : b86304ba carried 0->0, digest same, promptChars 0->23503 -- the room's floor (section 13.379.3) ...
+VERDICT: the instrument IS the path -- carried, total and delivered texts agree on every question, apart from the delivery the reference declares as moved.
+```
+
+`carried 0->0, digest same` 就是过去那份「完整」交付账本的全部内容——它说「什么都没动」，而第三列说动了 23,503 个字符。
+
 两次各 **0 CNY**，同 `datasetFingerprint`、同 500 题名单。判据读数：①零召回 21 → 11（走 10、进 0）**通过**；②`1–33%` 129 → 119、其余三桶 114 → 123 / 236 → 247 **通过**；③`ABS` 30/30 **不可测**。
 
 17 题倒退是 §10.4 噪声风险的部分兑现，且**落在判据 2 的射程之外**：倒退集中在高位桶，两题是 `_abs`（`gpt4_372c3eed_abs` 5 → 3、`gpt4_c27434e8_abs` 13 → 10），最重的 `0862e8bf` 12 → 5。所以判据 2 需要一条补充判据，而补充必须在下次派发**之前**登记。
