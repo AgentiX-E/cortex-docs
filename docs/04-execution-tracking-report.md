@@ -27195,7 +27195,8 @@ run **`44317789307`**，commit `f3753b3e`，`Check the dispatch against the regi
 | # | 动作 | 成本 | 前提 |
 | --- | --- | --- | --- |
 | 1 | 读 `44317789307`，按 A1–A5 判读（预注册在 `PREREGISTRATION-ANCHOR-WINDOW.md`） | 已付 14.26 | 127 分钟 |
-| 2 | **实现 `C7` 分辨率分层**（`raw → excerpt → record`），判据已登记 | 0（代码） | 与 1 并行 |
+| 2 | **实现 `C7` 分辨率分层**（`raw → excerpt → record`），判据已登记，设计已写 | 0（代码） | 与 1 并行 |
+| 2a | 设计文档 `DESIGN-C7-RESOLUTION-LAYERING.md`：只改 `render` 一处、前缀搜索不动（密度而非换选择器）、三种形态全确定性、`eventsFitted` 为唯一密度证据、18+6+8 条测试与三处变异、先 2.85 后 14.26 | 0 | 待实现 |
 | 3 | 同 job 双格仪器 | 0（代码） | 仍是 <0.7 点效应的唯一判决设计，`idf` 与边界时钟都在等它 |
 
 ### 128.8 门禁
