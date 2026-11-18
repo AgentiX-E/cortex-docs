@@ -33,6 +33,10 @@
 > **反例（不要这样做）**：装不下就跳过、继续装更小的 turn。那是 `session-fill` 的二阶版本，会把交付集合
 > 从「前缀」改成「子集」，于是读数无法区分「密度」与「换了选择器」。
 
+**「只动渲染器」的边界要划清楚**：每条轮次多长（`maxTurnChars` 的 400）**属于渲染器**，所以分层模式可以
+替代它（§3.1）；**房间**（48,460 / 24,000）与**前缀搜索**不属于渲染器，一行不动。这条边界是
+§14.133.2 第 1 条可判的原因——同一个 room、同一个前缀规则，只有「一条轮次变成什么文本」不同。
+
 宽度的可比性因此是**构造保证**的：两条臂用同一个 room、同一个前缀搜索，只有 `render` 不同。
 第 2 条「每题 `promptChars` 相差 ≤2%」不是靠测量对齐，而是靠「两边都填到同一个 room」成立——
 读数只需验证它，不需要修它。
@@ -43,8 +47,8 @@
 
 | 形态 | 何时 | 文本 | 上限 |
 | --- | --- | --- | --- |
-| `raw` | 轮次字符 ≤ `rawCap` | 原文（现状路径） | `maxTurnChars`（400，已注册） |
-| `excerpt` | 长轮且与问题**有**词汇重叠 | 以匹配句为中心的句子窗口 | `excerptChars`（600） |
+| `raw` | 轮次字符 ≤ `rawCap` | 原文（现状路径） | `rawCap` = 已注册的 `maxTurnChars`（400） |
+| `excerpt` | 长轮且与问题**有**词汇重叠 | `excerptAround` 的匹配窗口（词边界 + `…` 标记） | `excerptChars`（600） |
 | `record` | 长轮且与问题**无**词汇重叠 | 首句 + 含数字的句子拼接，单行 | `recordChars`（240） |
 
 三个决定与三条理由：
@@ -56,8 +60,41 @@
 3. **`record` 不调模型**。一个会调 LLM 的 `record` 会把成本轴变成成本上升轴，且引入逐题非确定性。
    它只做一件事：**把一轮压成一行事实**（首句 + 数值句），代价是丢失语境——这正是要测的东西。
 
-**句子边界永不切断**（`excerptAround` 已保证，`a4996e51` 的教训）。`record` 的「首句 + 数值句」
+**切点永不落在词中间**（`excerptAround` 已保证，`a4996e51` 的教训）。`record` 的「首句 + 数值句」
 按句读符切分，切不出句子时退化为 `excerpt`。
+
+### 3.1 这一节有一个必须先说的矛盾：`excerptChars` 比 `rawCap` 大
+
+`600 > 400` 看起来自相矛盾——摘录怎么会比原文上限还长？答案是**分层模式替代 `maxTurnChars`，不是叠加**：
+
+- 现状（`raw`）：注册臂在 `multi-session` / `temporal` 上把每一轮截到 **400**，不论长短。
+- 分层（`layered`）：`maxTurnChars` **不生效**，由形态决定长度——短轮 `raw`（≤400）、
+  有匹配的长轮 `excerpt`（≤600）、无匹配的长轮 `record`（≤240）。
+
+密度不是「每条都更短」，而是**平均长度下降**：绝大多数长轮走 `record`（240），省下的字符让前缀
+多装若干轮；少数真正匹配的轮次反而**多拿 200**（600 对 400）。这是一次**重新分配**，不是一次压缩。
+
+> **这条如果写反了，整个读数作废**：把 layered 叠在 `maxTurnChars=400` 之上，`excerpt` 的空间是 0，
+> 机制退化成「把 400 变成 240」，读数会显示准确率下降而原因是「宽度缩了」——正是 §14.133.2 第 2 条
+> 要防的那件事。
+
+### 3.2 实现难点：形态决策必须只做一次，且预算与渲染共享它
+
+`selectByRelevance` 用**渲染后的长度**做二分搜索（`render` 单调），而 `MAX_TURN_CHARS` 的长度估计走
+另一条路（`#renderedChars`，喂给 `planEvidenceRoom`）。两条路若各算一次形态，就会出现
+「预算以为是 240、渲染出 600」的分歧——那正是 `43259468403` 被取消的那一类缺陷（计划按原始长度
+算预算，而渲染按 400 截断）。
+
+所以实现的第一步不是写 `resolveTurn`，而是把形态决策**提升到 `buildPrompt` 里做一次**：
+
+```ts
+const forms = turns.map((turn) => resolveTurn(question, turn.content, options)); // 一次
+const render = (picked: readonly AdmittedTurn[]) => picked.map((t) => forms[indexOf(t)].text).join(...);
+// #renderedChars 用同一份 forms：forms.map((f) => f.chars)
+```
+
+不变量：**同一题、同一 run 内，`forms[i].chars` 与 `render([turns[i]]).length` 必须相等**（一条断言，
+不是一条约定）。
 
 ---
 
@@ -119,7 +156,8 @@ export function resolveTurn(
 | I2 | `chars >= 1`（非空输入时） | 一条轮次不能渲染成空串——那会让前缀无界增长而 room 不动 |
 | I3 | `mode === 'raw'` 时 `text === content`（截断后） | 关闭时必须**逐字节**等于现状 |
 | I4 | `content.length <= rawCap` → `form === 'raw'` | 短轮不摘 |
-| I5 | 句子边界：`text` 是 `content` 的**连续子串组成的、句子对齐的**拼接 | 切断句子是 `a4996e51` 的失败 |
+| I5 | 词边界：`excerpt` 的切点落在词边界上并带 `…` 标记（`excerptAround` 的合同），`record` 的切点落在句读符上 | 切断词是 `a4996e51` 的失败；静默切是 `excerpt.ts` 整个文件存在的理由 |
+| I6 | `forms[i].chars === render([turns[i]]).length`（§3.2） | 预算与渲染各算一次形态，就是 `43259468403` 被取消的那类缺陷 |
 
 ---
 
@@ -157,7 +195,7 @@ export function resolveTurn(
 
 | 文件 | 条数（目标） | 覆盖的维度 |
 | --- | ---: | --- |
-| `resolution.test.ts` | 18 | I1–I5 各 ≥2；形态三岔的边界（`rawCap`、`rawCap+1`）；无句读符；纯 Unicode；空问题；幂等 |
+| `resolution.test.ts` | 20 | I1–I6 各 ≥2；形态三岔的边界（`rawCap`、`rawCap+1`）；无句读符；纯 Unicode；空问题；幂等 |
 | `resolution-reach.test.ts` | 6 | 开关 off 时提示**逐字节**等于 `raw`；on 时 `promptChars` 与 off 相差 ≤2% 且 `turnsKept` 上升；六条路由里只有被命中的路由字节变化 |
 | `test_resolution_wiring.py` | 8 | 五环节 + 半径式的「无新 input」断言 |
 
