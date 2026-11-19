@@ -27585,3 +27585,26 @@ progress: this entry point does not track it, so the question in flight is unkno
 本轮的价值不是分数，是**把 `F3` 的分母与 `F4` 失败时的归因前提补齐**：`evidenceForms` 三形态分布
 逐题进产物，且 `MR`/`TR` 第一次有了 `cut`/`marked`/`whole`。下一次 `layered` 派发（2.85 CNY）
 读到的 `F3` 会是一个有分母的比值，而不是一个只能看总字符数的猜测。
+
+### 132.10 余额恢复了，`layered` 已派发
+
+写 `132` 时余额仍未确认，所以整轮没有派发。收尾前用派发脚本做了一次确认——`44468090152`
+在 step 13 跑了四分钟仍未失败，而任何需要实时向量化的运行在余额耗尽时会在**第一题**的
+embedding 上拿到 429 并关闭闩锁。它没有，所以账户是可付的。
+
+| 项 | 值 |
+| --- | --- |
+| run | `44468090152`（`benchmark-cortex-memory.yml` @ `26c2a25e`） |
+| 实验臂 | `resolution=layered` + 注册臂的 `max_turn_chars=400`（routes `multi-session,temporal`） |
+| 对照臂 | 同 job 内的注册配置（`resolution=raw`） |
+| 样本 | 200 题 × 2 重复（`--screening`） |
+| 投影 | **2.85 CNY**（缓存命中 96.0%；输入 1.48 / 输出 1.37） |
+| declared departures | `ablation_runs`、`limit`、`resolution` |
+| 判据 | `PREREGISTRATION-RESOLUTION-LAYERING.md` 的 `F1`–`F5`，**先判 `F3`** |
+
+`F3` 的读法这一轮变了：它不再是「`roleCensus.total` 中位数 vs `promptChars` 中位数」这一对，
+而是**三形态分布**给出的直接分母——每种形态交付了多少轮、花了多少字符。若 `F3` 通过而 `F4` 失败，
+归因所需的形态分布在产物里，不必再派一轮去补（`DESIGN-C7` §12.7）。
+
+`F4` 仍需要同 job 配对（跨派发地板 0.70 点），而「同 job 双格仪器」（`#5`）还没实现——
+这是 `layered` 的 `F4` 唯一的判决设计，也是下一轮的第二个零成本项。
