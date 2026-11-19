@@ -72,3 +72,25 @@
 `thinking=multi-session+temporal`、`limit=0`、`ablation_runs=4`）。派发时申报的 departures 是
 `['capability', 'model']`；`--budget 30`。派发脚本按 `deepseek-chat` 的价目投影 3.45 CNY 并标注这是**下界**
 （推理读者的输出 token 不在历史价目里），所以 30 CNY 是这一次的上界口径而不是估计值。
+
+---
+
+## 7. 读数（`R1` 已回，判据已判）
+
+读数工具：`python3 tools/reader-rung.py --treatment <R1> --control <S16> --capability MR --require-identity`
+（`exit 3` = 作废）。原始证据：`evidence/longmemeval/reader-rung.json`。
+
+| 行 | 阈值 | 实测 | 结论 |
+| --- | --- | --- | --- |
+| `R1.1` | ≥ +5 题 | **−3** 题（97 / 4 / 1 / 19） | 失败 |
+| `R1.2` | p < 0.05 | **0.375** | 失败 |
+| `R1.3` | 121/121 | **119/121** | 失败 → 作废 |
+
+按 §5 的后果表，`R1.3` 不成立即**作废**，而不是「失败但可读」。作废的原因不是读者身份污染了装配器：
+两处不一致的 `evidenceChars` 与对照逐字节相同、池深相同、交付轮数相同、对称差恰为一轮，交付长度差 38–68
+字符等于被交换两轮的长度差。**排序边界由浮点噪声决定**，已修（`relevance-order.ts`）。
+
+第二处仪器缺陷是**判官没有钉住**（§2 末段已写）：`R1` 的判官跟着读者变成 `v4-pro`，所以 −3 题不能单独
+归因于读者。因此本轮不采纳，且**不**以「读者轴关闭」结案——它降级为「读者没有买到 +5 题」，而把这条轴钉死
+需要下一轮的同 job 双格（两臂同判官）。后者需要先给 `benchmark-cortex-memory.yml` 一个
+`CORTEX_JUDGE_MODEL` 入口，那是下一轮的第一项，成本为零。

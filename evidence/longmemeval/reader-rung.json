@@ -1,0 +1,130 @@
+{
+  "registeredIn": "docs/PREREGISTRATION-READER-RUNG.md",
+  "criteria": {
+    "R1.1": "paired net correct >= +5 questions (majority of four repetitions)",
+    "R1.2": "exact McNemar p < 0.05",
+    "R1.3": "prompt identity identical = 121, differ = 0"
+  },
+  "treatment": {
+    "run": 44507560716,
+    "commit": "cf9a9d5e",
+    "reader": "deepseek:deepseek-v4-pro, thinking enabled on multi-session+temporal",
+    "judge": "deepseek:deepseek-v4-pro (source: reader)",
+    "questions": 121,
+    "capability": "MR",
+    "repetitions": 4,
+    "perRunAccuracy": [
+      82.64,
+      77.69,
+      80.99,
+      80.17
+    ],
+    "meanOfRuns": 80.37,
+    "majorityCorrect": 98,
+    "majorityAccuracy": 80.99,
+    "promptTokens": 7145443,
+    "promptTokensServedFromCache": 4731008,
+    "cacheShare": 0.662,
+    "completionTokens": 1778734,
+    "promptTokensPerCall": 14763,
+    "completionTokensPerCall": 3675,
+    "declines": {
+      "llm": 27,
+      "answered": 457,
+      "rate": 0.0558
+    },
+    "budgetCeilingCny": 30,
+    "budgetFloorCny": 11.8
+  },
+  "control": {
+    "run": 44017278305,
+    "reader": "deepseek:deepseek-chat",
+    "judge": "deepseek:deepseek-chat",
+    "questions": 121,
+    "capability": "MR",
+    "repetitions": 4,
+    "perRunAccuracy": [
+      84.3,
+      83.47,
+      82.64,
+      84.3
+    ],
+    "meanOfRuns": 83.68,
+    "majorityCorrect": 101,
+    "majorityAccuracy": 83.47,
+    "promptTokensForAll500Questions": 17855078,
+    "completionTokensForAll500Questions": 2294133,
+    "declines": {
+      "llm": 131,
+      "answered": 1869,
+      "rate": 0.0655
+    },
+    "promptTokensPerCallAllRoutes": 8928,
+    "completionTokensPerCallAllRoutes": 1147,
+    "note": "per-call figures are over all six routes, so they are a floor for this arm's MR calls and not a like-for-like comparison"
+  },
+  "paired": {
+    "both": 97,
+    "onlyControl": 4,
+    "onlyTreatment": 1,
+    "neither": 19,
+    "net": -3,
+    "deltaPointsMajority": -2.48,
+    "deltaPointsMeanOfRuns": -3.31,
+    "mcnemarExactP": 0.3754
+  },
+  "promptIdentity": {
+    "identical": 119,
+    "differ": 2,
+    "questions": [
+      {
+        "questionId": "f35224e0",
+        "deliveredChars": {
+          "treatment": 48423,
+          "control": 48355
+        },
+        "evidenceChars": {
+          "treatment": 59836,
+          "control": 59836
+        },
+        "poolTurns": {
+          "treatment": 255,
+          "control": 255
+        },
+        "symmetricDifference": 1,
+        "charDelta": 68
+      },
+      {
+        "questionId": "ef66a6e5",
+        "deliveredChars": {
+          "treatment": 48219,
+          "control": 48179
+        },
+        "evidenceChars": {
+          "treatment": 62465,
+          "control": 62465
+        },
+        "poolTurns": {
+          "treatment": 221,
+          "control": 221
+        },
+        "symmetricDifference": 1,
+        "charDelta": 40
+      }
+    ],
+    "diagnosis": "one turn on the budget boundary; the offered evidence is identical to the character, so the ranking moved and not the retrieval. Two candidate turns whose relevance differs by less than the provider's noise were ordered by the noise.",
+    "fix": "packages/cortex-memory/src/relevance-order.ts: comparators order by the score rounded to 1e-4, ties by arrival"
+  },
+  "verdict": {
+    "R1.1": "fail: net -3 against a required +5",
+    "R1.2": "fail: p = 0.375 against 0.05",
+    "R1.3": "fail: 119 of 121, so the artifact is void as a single-variable swap",
+    "adopted": false,
+    "guard": "the decline guard (>2x control) did not trigger: 5.58% against 6.55%"
+  },
+  "cost": {
+    "treatmentMeasured": "7,145,443 prompt tokens (66.2% served from the prefix cache) and 1,778,734 completion tokens for 484 reader calls",
+    "budget": "floor 11.8 CNY (484 runs at the ledger rate of 0.0243 CNY per MR question-run), ceiling 30 CNY as declared before the dispatch",
+    "note": "the two arms bill the same prompt bytes for the same questions; what the reasoning reader adds is output, and the run did not adopt it, so the extra output bought nothing"
+  }
+}
