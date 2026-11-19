@@ -1,0 +1,42 @@
+{
+  "source": "maximem-ai/eval_benchmark_runs_output @ main, RESULTS.md and results/longmemeval/manifest_gemini-3.8-flash.json, read 2026-11-19",
+  "system": "Maximem Synap (hosted)",
+  "protocol": {
+    "benchmark": "LongMemEval_S",
+    "questions": 500,
+    "answerModel": "gemini-3.8-flash",
+    "judgeModel": "gpt-4o",
+    "judgePrompt": "LongMemEval evaluate_qa.py, per question type",
+    "answeringPrompt": "chunks with metadata, current-date section on",
+    "dateRun": "2026-10"
+  },
+  "overall": {"all500": {"correct": 478, "n": 500, "accuracy": 95.6}, "answerable470": {"correct": 450, "n": 470, "accuracy": 95.7}},
+  "retrieval": {"metric": "Recall@20, gpt-4o relevance judge", "hits": 461, "n": 470, "recall": 98.1},
+  "byCategoryAll500": {
+    "temporal-reasoning": {"correct": 130, "n": 133, "accuracy": 97.7},
+    "knowledge-update": {"correct": 76, "n": 78, "accuracy": 97.4},
+    "single-session-preference": {"correct": 29, "n": 30, "accuracy": 96.7},
+    "single-session-assistant": {"correct": 54, "n": 56, "accuracy": 96.4},
+    "single-session-user": {"correct": 67, "n": 70, "accuracy": 95.7},
+    "multi-session": {"correct": 122, "n": 133, "accuracy": 91.7}
+  },
+  "ourComparison": {
+    "arm": "run 44017278305 (S16), majority of four repetitions, deepseek-chat reader and judge",
+    "byCapability": {
+      "ABS": {"correct": 30, "n": 30, "accuracy": 100.0},
+      "IE": {"correct": 137, "n": 150, "accuracy": 91.33},
+      "KU": {"correct": 67, "n": 72, "accuracy": 93.06},
+      "MR": {"correct": 101, "n": 121, "accuracy": 83.47},
+      "TR": {"correct": 119, "n": 127, "accuracy": 93.70}
+    },
+    "all500": {"correct": 454, "n": 500, "accuracy": 90.8},
+    "answerable470": {"correct": 424, "n": 470, "accuracy": 90.21}
+  },
+  "reading": {
+    "theGapIsNotProtocol": "our 30 abstention questions are 30/30, so excluding them LOWERS our score (90.80 -> 90.21) while it raises theirs (95.6 -> 95.7). The 5.4-point gap on the all-500 basis is not an artefact of where the denominator starts.",
+    "theGapIsUniform": "measured on the categories that map one-to-one: multi-session 91.7 against our 83.47 (-8.2), temporal-reasoning 97.7 against 93.70 (-4.0), knowledge-update 97.4 against 93.06 (-4.3), single-session 95.7-96.7 against our 91.33 (-4.4 to -5.4).",
+    "whatThatImplies": "a deficit that is present on every capability and largest on the one with the longest contexts is what a weaker reader predicts, not what a missing per-capability mechanism predicts. Our reader is deepseek-chat; theirs is gemini-3.8-flash with a gpt-4o judge. Mastra's own paired ablation prices the reader at +10.64 points, which is larger than the whole gap.",
+    "categoryCountsDiffer": "their multi-session is 133 and ours is 121 because LongMemEval's abstention questions carry the type of the question they were derived from; ours are collected into a separate ABS capability. The comparison above is therefore between 121 non-abstention multi-session questions and 133 that mix in 12 abstention ones, which if anything flatters them.",
+    "notMeasuredHere": "their run and ours do not share an answer model or a judge, so no column of this table is a mechanism comparison. That requires running their harness with our models, which is the next dispatch's purpose."
+  }
+}
