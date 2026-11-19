@@ -1,0 +1,99 @@
+{
+  "$comment": "The room curve, as three measured points rather than a slope. `C1` asks for 6,000 prompt tokens per question at no more than 1.5 points of accuracy; this file is what the two levers that could have paid for it actually charged. Point 2 was read this round (44482224999) and it closes the lever: the exchange rate is ~1.0 point per 1,000 tokens and the *shape* of the table is not a lever at all.",
+  "unit": "prompt tokens per question per repetition",
+  "accuracyBasis": "all-runs: the mean of the per-repetition accuracies, recomputed from ablation.featureCorrectByRun where the artifact is on disk",
+  "points": [
+    {
+      "name": "registered",
+      "run": "44017278305",
+      "rooms": {
+        "multi-session": 48460,
+        "temporal": 24000,
+        "flat": 24000,
+        "knowledge-update": 24000,
+        "abstention": 24000,
+        "assistant": 24000
+      },
+      "promptTokensPerQuestion": 7447.783,
+      "accuracy": 0.9125,
+      "accuracyPerRun": [0.912, 0.908, 0.916, 0.914],
+      "mr": {"majorityCorrect": 101, "questions": 121, "accuracy": 0.8347},
+      "tier": "registered",
+      "source": "cortex-docs/evidence/longmemeval/cost.json + route-room.json"
+    },
+    {
+      "name": "uniform-24k",
+      "run": "43967433821",
+      "rooms": {
+        "multi-session": 24000,
+        "temporal": 24000,
+        "flat": 24000,
+        "knowledge-update": 24000,
+        "abstention": 24000,
+        "assistant": 24000
+      },
+      "promptTokensPerQuestion": 5861,
+      "accuracy": 0.894,
+      "accuracyBasis": "first repetition: the artifact has not been re-read on the all-runs basis, and the point is quoted here only for the shape comparison",
+      "mr": {"firstRepetitionCorrect": 93, "questions": 121},
+      "tier": "measured",
+      "source": "cortex-docs/docs/PREREGISTRATION-ROUTE-ROOM.md §1 and §4 (the I7 cell)"
+    },
+    {
+      "name": "36k-18k",
+      "run": "44482224999",
+      "rooms": {
+        "multi-session": 36000,
+        "temporal": 18000,
+        "flat": 18000,
+        "knowledge-update": 18000,
+        "abstention": 18000,
+        "assistant": 18000
+      },
+      "promptTokensPerQuestion": 5559.193,
+      "accuracy": 0.894,
+      "accuracyPerRun": [0.888, 0.896, 0.898, 0.894],
+      "mr": {"majorityCorrect": 96, "questions": 121, "accuracy": 0.7934},
+      "tier": "measured",
+      "source": "artifact 44482224999, feature arm prompt tokens / 500 / 4"
+    }
+  ],
+  "paired": {
+    "control": "44017278305",
+    "treatment": "44482224999",
+    "questions": 500,
+    "both": 438,
+    "onlyControl": 16,
+    "onlyTreatment": 5,
+    "neither": 41,
+    "deltaQuestions": -11,
+    "deltaPoints": -2.2,
+    "mcnemarExactP": 0.026604,
+    "byCapability": {
+      "ABS": {"questions": 30, "control": 1.0, "treatment": 1.0, "deltaPoints": 0.0, "sold": 0, "bought": 0},
+      "IE": {"questions": 150, "control": 0.9133, "treatment": 0.9067, "deltaPoints": -0.67, "sold": 3, "bought": 2},
+      "KU": {"questions": 72, "control": 0.9306, "treatment": 0.9167, "deltaPoints": -1.39, "sold": 2, "bought": 1},
+      "MR": {"questions": 121, "control": 0.8347, "treatment": 0.7934, "deltaPoints": -4.13, "sold": 6, "bought": 1},
+      "TR": {"questions": 127, "control": 0.937, "treatment": 0.9055, "deltaPoints": -3.15, "sold": 5, "bought": 1}
+    }
+  },
+  "exchangeRate": {
+    "pointsPerThousandTokens": 0.98,
+    "tokensPerQuestionBought": 1888.59,
+    "reading": "one accuracy point costs about 1,000 prompt tokens per question in both directions; the 6,000-token target sits 1,889 tokens below the registered arm, which the measured rate prices at 1.85 points against a 1.5-point tolerance"
+  },
+  "shape": {
+    "comparison": "36k-18k against uniform-24k",
+    "tokensDifference": -301.807,
+    "tokenPercent": -5.15,
+    "firstRepetitionCorrect": {"36k-18k": 444, "uniform-24k": 447},
+    "perRunSpread": 1.0,
+    "reading": "the table's shape moves the bill 5.2% and the count by 3 questions (0.6 points, inside the 1.0-point spread of one run's four repetitions); the shape is not a second lever, the total is the only one"
+  },
+  "fill": {
+    "instrument": "tools/readout-arm-run.py --audit, check `budget`",
+    "registered": {"multi-session": "48457/48460", "temporal": "24000/24000", "flat": "23972/24000", "knowledge-update": "23983/24000", "abstention": "23954/24000", "assistant": "23990/24000"},
+    "36k-18k": {"multi-session": "35998/36000", "temporal": "18000/18000", "flat": "17999/18000", "knowledge-update": "17990/18000", "abstention": "17998/18000", "assistant": "17941/18000"},
+    "reading": "every route delivers its room to within 0.3% on both points; a character of room bought is a character of bill, which is why this lever has one price and no shape"
+  }
+}
