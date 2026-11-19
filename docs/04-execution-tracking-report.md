@@ -27311,3 +27311,77 @@ run **`44317789307`**，commit `f3753b3e`，`Check the dispatch against the regi
 
 `pnpm check` 全绿；两仓 Dependabot 0 alert / 0 PR。本轮**没有代码改动**——三份文档、
 一条撤回、两节计划，全部由一次已付的读数与两份产物复核得出。
+
+## 130. 第 134 轮：`C7` 三形态落地全链路，并用覆盖率抓出一条从未触发的分支
+
+上一轮登记的 `C7`（分辨率分层）本轮实现完毕。同时派发了一次（`44354315890`），死在 embedding
+余额上——那次失败与它暴露的两条缺陷写在 `PREREGISTRATION-TURN-WINDOW-MATCH.md` §6，本节只记代码。
+
+### 130.1 机制：一个函数，两个调用者
+
+| 环节 | 文件 | 事实 |
+| --- | --- | --- |
+| 形态决策 | `packages/cortex-memory/src/resolution.ts`（新） | 三个导出：`resolveCappedTurn`、`DATELINE`、`ResolutionMode`；其余四个符号（`EvidenceForm`、`ResolutionPlan`、`resolveTurn`、`ResolutionOptions`）在写出的同一轮里被导出普查判成孤儿，撤回 |
+| 渲染 | `prompt.ts` 的 `cappedContent` | `layered` 分支在窗口分支**之前**，`chargeTurn` 记的是同一个 `plan.text` |
+| 预算 | `memory.ts` 的 `#renderedChars` | **调用同一个函数**。这是 `43259468403`（拿原始长度对 400 字符渲染做预算）的修复，也是「一个函数两个调用者」的全部理由 |
+| 组合根 | `assemble.ts` | 转发 `maxTurnChars` / `turnCutMarker` / `turnWindow` / `resolution` 四个字段——**此前四个都不在根上**，任何用公开入口的部署都装不出注册臂的渲染 |
+| 臂 / 墙 / 派发器 / 门禁座位 | `bench-memory-arm.ts`、`run-ablation.ts`、`workflow`、`dispatch-cortex-memory-ab.py`、`readout-arm-run.py` | 五环节接线，`tools/__tests__/test_resolution_wiring.py` 12 条测试，两条变异检验各只红一条 |
+
+拒绝在构造期而不是派发期：`resolution: 'layered'` 缺 `maxTurnChars`、或与 `turnWindow: 'match'` 同时
+出现，都在 `CortexMemory` 构造函数里抛——因为索引每题构建一次，拼错的选项会晚一步才暴露。
+
+### 130.2 一条不可达分支，和它藏起来的算术
+
+`recordOf` 第一版拼好一行之后还跑 `truncateCodePointSafe(line, room)` 兜底裁切并回退到词边界。
+`recordOf` 在两份测试文件里被调用 **93 次**，这条分支**一次都没触发**。
+
+原因不是运气：预留操作数时每条操作数各自付了自己的分隔符，首句前那个空格从首句配额里扣掉，所以
+`首句 + 分隔符 + 操作数 ≤ room` 是**恒等式**。不可达修复的代价不是多一行代码，而是那段算术
+**永远不会被测到**——它把越界吸收掉，将来真越界也是静默的。
+
+裁切删除，界限改在能失败的地方断言。`I1` 从「400 一档 × 3 条轮次」变成
+「7 / 12 / 25 / 60 / 137 / 400 × 5 条轮次 × 2 个问题」。60 那档是新增的关键档位：记录上限 36 字符，
+第一个操作数占 34，首句配额归零——**删掉裁切之后这一档的行为才第一次可测**（只剩
+`The fence quote came to 380 pounds.…`）。
+
+四维覆盖率，同一台仪器、同一轮：
+
+| 文件 | 语句 | 分支 | 函数 | 行 |
+| --- | ---: | ---: | ---: | ---: |
+| `resolution.ts`（改前） | 95.94 | **85.71** | 100 | 100 |
+| `resolution.ts`（改后） | **100** | **100** | **100** | **100** |
+| `turn-clock.ts`（同线基准） | 100 | 100 | 100 | 100 |
+
+`resolution.test.ts` 25 条 + `resolution-reach.test.ts` 9 条 = **34 条**。新增四条的靶子分别是：
+多操作数预留（`MULTI_DIGIT`，三条数字句全部存活）、首句配额为零（60 字符档）、整条都是空白的轮次
+（只印省略号，因为「印空」会让前缀搜索无限装下什么也不说的轮次）、`3.5` 与 `e.g.` 的点后跟字母
+（拆句器若在每个点上断开，操作数过滤器会拿到 `The courier weighed it at 3` 而丢掉数值）。
+
+### 130.3 台账与基线归位
+
+两个门禁因为本轮的导出增减而红，都是「记录跟不上代码」而不是代码有问题：
+
+| 门禁 | 红的原因 | 处置 |
+| --- | --- | --- |
+| `ledger:check` | 「turn window, truncation made visible」行的调用点数从 1 变成 2（`resolution.ts` 也调它） | `pnpm ledger:write`，一行 |
+| `export-census-gate` | 基线总量 1236 对实测 1239 | 重建基线：**1236 → 1239 导出、738 → 741 有调用者、498 / 445 / 53 逐行不变**，并在 `note` 里追加本轮段落（+3 有调用者，4 个新符号在写出的同一轮被撤回——这是普查第 8 次抓到「作者刚声明的符号」） |
+
+### 130.4 位置
+
+| # | 项 | 值 |
+| --- | --- | --- |
+| 1 | 端到端 | **91.15%**（`44317789307`，4×500）；对 Maximem Synap 95.6% 差 **−4.45** |
+| 2 | `MR` | **84.30%**（408/484 格）/ 均值 102.00；对 MemCog 92.48% 差 **−8.18** |
+| 3 | 成本 | **7,416** token/题（对 `C1` 6,000 是 1.24×）；`C7` 尚未有读数 |
+| 4 | 结构 | **31 道题承载 70.1% 的错误**；`MR` 差距集中在 102 道聚合题 |
+| 5 | 产品完成度 | **17/27 = 63.0%**（6 gated / 10 instrument / 0 blocked / 0 gap） |
+| 6 | 可发布信号 | **未发**（`C1` 与 `S14` 两条 aim 未达） |
+| 7 | cortex 是否 SOTA | **否**：端到端 Maximem Synap 95.6%；`MR` MemCog 92.48% |
+| 8 | 本轮派发 | **1 次，失败**（余额），0 条判据可读 |
+
+### 130.5 门禁
+
+`pnpm check` 全绿（`build → test:tools → guard:* → lint → typecheck → manual:check → census:check →
+ledger:check → registration:check → token:check → test → coverage:gate → *:census → acceptance:check →
+docs:crosscheck → format`）。`manual:check` 57/57 选项示例通过；`USER-MANUAL.md` §6.12 新增
+「When one turn is too long to print whole」并带一个编译过的例子。

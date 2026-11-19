@@ -91,3 +91,89 @@
 - **不声称 `S10` 的 −4.75（标记）与 +7.25（窗口）可加。** 那三个点是三点，交互项未测；
   本文件只跑 C 格，不跑被语法禁止的第四格。
 - **不声称能把 `MR` 拉到 MemCog 的 92.48%。** 105.25 是 +4 题，对 `MR` 是 +3.3 点，仍差 4.9 点。
+
+---
+
+## 6. 派发失败：运行在 28 分钟后死于 embedding 余额，不是死于机制
+
+run **`44354315890`**，commit `eb7fedec`，2026-11-18 17:03Z 起，17:34Z 结束，
+`conclusion = failure`。门禁三步全绿：
+
+```
+Check the dispatch against the registration  →  success
+cortex-memory gate: ... turnWindow=match, maxTurnChars=400, turnCutMarker=ellipsis ...
+DECLARED_DEPARTURES: cortex_memory_max_turn_chars
+```
+
+`turnWindow=match` 确实被配置进了产品（配置行是产品自己打印的），`departures` 也声明了。
+死在第九步 `Run cortex-memory A/B`：
+
+```
+progress: died on reference-pipeline run=1 q=57/500 id=29f2956b at +14.2s
+Embedding provider has no quota left: 429 Too Many Requests —
+  {"error":{"code":1113","message":"余额不足或无可用资源包,请充值。"}}
+EmbeddingQuotaExhaustedError at OpenAIEmbedding.embed (cortex-ai/src/embedding/openai.ts:90)
+  → embedManyCached (cortex-eval/src/retrieval.ts:257) → retrieveTopKByQueries → NaturalLanguageMemorySystem.retrieveTurns
+Exit status 1
+```
+
+### 6.1 这不是判据的结果
+
+- **`run 0` 两侧都跑完了 500 题**（对照 337s、实验 992s），读数没有产出是因为第 1 次重复在
+  `q=57` 上需要一次**实时**向量化，而账户余额为 0。**没有任何一条判据被读过**，所以 §3 的后果表不触发。
+- 传输层台账：`attempts 3129 / refusedCalls 431 / retried 0`。431 次被拒的调用花掉的是**墙钟**，
+  不是钱（拒绝不成功即不计费），但它把一次本可在 30 秒内结束的运行拖成了 28 分钟。
+
+### 6.2 由此暴露的两个真实缺陷（下一轮修）
+
+| # | 缺陷 | 为什么它是缺陷 | 修法 |
+| --- | --- | --- | --- |
+| 1 | **`NaturalLanguageMemorySystem` 没有 `onEmbedFailure` 策略** | 产品的 `SearchIndex` 有（`memory.ts` 与 `run-ablation.ts` 都给 `'lexical'`），所以**产品**在余额耗尽时降级继续；**参考流水线**没有，于是整轮死掉。一个能在产品侧降级的故障，在评估侧是致命的 | 给参考侧同一个策略，但**默认仍是 `fail`**：基线中途降级会污染配对读数，比崩溃更糟。要的是「快停 + 写部分报告」，不是「静默降级」 |
+| 2 | **没有配额闩锁** | 第一次 `429` 已经说明账户不能付钱；之后每一次尝试都注定失败。431 次被拒的调用是 431 次本可避免的往返 | 首次配额拒绝后进程级闩住，后续请求立刻抛同一个类型化错误；台账记 `latchedAt` |
+
+> 顺带一条**不是**缺陷的事实：`cortex-ai` 的注释说「retriever 的 `onEmbedFailure` 策略读这个类型」，
+> 而 `cortex-eval` 里没有这个策略——注释是错的（`grep onEmbedFailure` 在 `cortex-eval` 零命中）。
+> 注释指向的能力只在 `cortex-memory` 存在。下一轮把注释改对，或把策略补上，二者取一。
+
+### 6.3 所以本文件仍然是「未读」，不是「已读为负」
+
+判据不动、预测不动、后果表不动。下一个可执行的动作是：**先解决余额**（充值或切到一个不需要
+实时向量化的后端），再重派同一张配置表。重派的成本仍是 14.26 CNY，缓存比上次多 946 个向量，
+所以实时调用会略少，但**不会归零**——这就是缺陷 2 存在的原因。
+
+### 6.4 读产物之后，缺陷 2 比登记时更硬
+
+本节写于派发失败之后、重派之前，内容是**已付过钱的那次运行留下的产物**（`benchmark-cortex-memory-partial.json`
+与 `benchmark-error.log`，artifact `14453864700`）。它不改变任何判据，只把 §6.2 的两条缺陷从「推断」
+升到「读数」。
+
+```
+transportRetry: attempts 3129 / calls 3129 / cleanCalls 2698 / refusedCalls 431 / retriedCalls 0
+llmUsage:       calls 2021 / unpricedCalls 0
+partial:        baselineAnswers 53（run=1 期间已答出的题数）
+progress:       died on reference-pipeline run=1 q=57/500 at +14.2s
+```
+
+三点，按可推论的强度排：
+
+1. **431 次拒绝里只有 1 次是致命的。** `retryFetch` 的调用次数等于尝试次数（`retriedCalls = 0`），
+   所以 431 次拒绝就是 431 次**独立的**调用被拒。其中只有 `q=57` 那一次把异常抛穿到了
+   `NaturalLanguageMemorySystem.retrieveTurns` 之外——其余 430 次必然被某个上层 `catch` 吸收，
+   否则运行会更早结束。**也就是说：参考侧在余额耗尽之后继续跑了，而且它没有停。**
+   这正是缺陷 1（没有策略）与缺陷 2（没有闩锁）共同造成的状态。
+2. **那 53 道题是不是「降级读数」，这份产物判不了。** 向量缓存里有 run=0 付过的向量，所以 53 道题
+   可能完全由缓存供给、是干净的测量；也可能有一部分在丢掉向量通道后退化成词法检索。断言前者是
+   乐观，断言后者是没有证据的悲观。**能判它的计数器目前不存在**——这正是闩锁要顺手加的那一个。
+3. **所以「431 次可避免的往返」是这次失败里最便宜的那部分损失。** 贵的那部分是：一次运行在
+   「不知道自己在测什么」的状态下继续产出了 53 个答案，而产物里没有任何字段能说它们是不是同一条臂。
+
+于是两条缺陷的修法各加一句可检验的验收条件：
+
+| # | 修法 | 本条新增的验收条件 |
+| --- | --- | --- |
+| 1 | 参考侧 `onEmbedFailure`，默认 `fail` | 一次拒绝必须让**该 pass 立刻结束**，且 `benchmark-cortex-memory-partial.json` 写明 `embedFailure: {atQuestion, refusedCalls, latchedAfter}` |
+| 2 | 进程级配额闩锁 | 闩住之后的每次调用**不得产生网络往返**：`attempts` 在闩住后不再增长，只增长 `refusedAfterLatch` |
+
+> 这一节是「先读产物再修」的第 N 次实践：登记时写的「431 次往返是浪费」是对的，但它把这次失败说
+> 得太轻。产物里真正刺眼的是 `baselineAnswers 53`——一个不知道自己测的是哪条臂的运行，比一个当场
+> 死掉的运行危险得多。
