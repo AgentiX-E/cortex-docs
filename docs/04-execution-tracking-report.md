@@ -27738,3 +27738,14 @@ questions: 200 (300 of the control's 500 dropped, 0 of the treated's 200)
 **下一轮**：房间 / 密度 / 近重复三条成本路全部按判据关闭；`MR` 的七个 ask 措辞全部否证；金标轮次已在窗口内
 （`MEASURE-MR-CEILING`）。剩下唯一未测的杠杆是**读者强度**：`M1` 只测了 `thinking` 开关（+4.35 点），
 `v4-pro` 只测了它最不擅长的 non-thinking（−5.55）。
+
+**这一轮已经把那一级派出去了，判据在派发前写死。** `PREREGISTRATION-READER-RUNG.md` 的 `R1`：121 道 `MR` 题 ×
+4 轮，`model=deepseek:deepseek-v4-pro`、`thinking=multi-session+temporal`，三条判据是**配对净 +5 题**、
+**p < 0.05**、**121/121 提示词逐字节相同**，后果表覆盖四种读数。run `44507560716`（commit `cf9a9d5e`，
+19:38 起跑，step 13 已跑满一小时未失败）。读数在下一轮：`tools/reader-rung.py` 就是为读它写的
+（本轮新增，8 条测试，已在房间那一对上交叉核对到逐格一致）。
+
+**一个已知混杂，写在派发里而不是发现后。** A/B 臂没有钉判官的入口（`CORTEX_JUDGE_MODEL` 只接在
+`judge-audit.yml`），所以 `R1` 的判官会跟着读者走。预注册里为此写了处置：结论处用
+`regrade-cortex-memory.yml` 以 `deepseek-chat` 复判一次，两次一致才进采纳分支。修这个缺口需要同时改
+`arm-config-baseline.json`（它记着 `judge.source: reader`），是下一轮的独立一项。
