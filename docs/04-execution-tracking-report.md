@@ -27385,3 +27385,82 @@ run **`44317789307`**，commit `f3753b3e`，`Check the dispatch against the regi
 ledger:check → registration:check → token:check → test → coverage:gate → *:census → acceptance:check →
 docs:crosscheck → format`）。`manual:check` 57/57 选项示例通过；`USER-MANUAL.md` §6.12 新增
 「When one turn is too long to print whole」并带一个编译过的例子。
+
+## 131. 第 135 轮：配额闩锁，以及三个构造上不可达的兜底
+
+本轮无派发（嵌入余额未恢复），全部改动是零成本代码。目标只有一个：让下一次死在余额上的运行
+**只付一次**。顺带撤回上一轮一条写错的推论。
+
+### 131.1 机制
+
+| 环节 | 文件 | 事实 |
+| --- | --- | --- |
+| 闩锁 | `packages/cortex-eval/src/embedding-latch.ts`（新） | `latchQuota(inner)` 返回装饰器；`quotaLatchReading()` 发布最近一次的读数（失败路径在 `main` 作用域之外，读数是状态，不能像 provenance 那样重新求值） |
+| 安装点 | `embedding-factory.ts` | **两个分支都装**，含离线 hash 回退。装在入口会被第三个入口忘记 |
+| 失败记录 | `bench-failure.ts` | `describeFailure` 增加可选 `latch`，三种状态三行，未关闭那行带调用数（只在事故时出现的行，让读者无法区分「账户没问题」和「记录早于计数器」） |
+| 入口 | `packages/cortex-memory/bench/run-ablation.ts` | 失败路径传 `latch: quotaLatchReading()` |
+| 包导出 | `src/index.ts` | `quotaLatchReading` + `type EmbeddingLatchReading` |
+
+装饰器转发 `dimension()` 与 `identity()`。后者是承重的而不是整洁的：`EmbeddingSpace` 拒绝查询
+**非空**且空间未声明的索引，所以一个丢掉 `identity` 的装饰器会让进程里每个向量索引不可检索。
+`identity` 只在内部模型有时才挂，让包装器的「没有」与模型的「没有」一致。
+
+### 131.2 撤回 §6.4 第 1 条
+
+上一轮从「431 次拒绝、1 次致命、`retriedCalls = 0`」推出「其余 430 次被上层 `catch` 吸收，
+参考侧在余额耗尽后继续跑」。栈推翻了它：
+
+```
+at async runWorker (benchmark.ts:1031:18)
+at async Promise.all (index 1)
+at async runBenchmark (benchmark.ts:1178:3)
+```
+
+`runWorker` 的 `catch` 只决定 `ProviderContentRefusal` 与 deadline/限流 `RetryExhaustion`，
+其余一律 `throw`。配额错误从未被吸收。430 次是**并发**：余额耗尽时每个在途 worker 的请求同时收到
+同一个 429。这也顺带把「那 53 个答案是降级读数」的担忧降级为「大概率干净」——它们在耗尽之前产出。
+
+**教训写进了登记文档而不是注脚：并发与吞错在计数上完全同形，只有栈能把它们分开。**
+
+### 131.3 三个不可达兜底，全部删除
+
+| # | 位置 | 写法 | 为什么右臂不可达 |
+| --- | --- | --- | --- |
+| 1 | 抛错处 | `latchedAtCall ?? 429` | 非空 `latchedAtCall` 与 `latchedStatus` 在同一块写入 |
+| 2 | 抛错处 | `detail ?? ''` | 同上 |
+| 3 | 记录闭包 | `error.detail === '' ? error.message : error.detail` | `isQuotaExhausted` 要求响应体非空才认这个错误 |
+
+修法是让状态不可分裂：读数类型从 `latched: boolean` + 三个 `| null` 字段改为
+`closure: { atCall, status, detail } | null`。「闩上了但没有状态码」不再可表达，三处兜底一并消失。
+这是连续第二天在同一类缺陷上删代码（昨天是 `resolution.ts` 的 `truncateCodePointSafe`）——它在本仓
+是一种系统性写法。
+
+### 131.4 两处错误注释
+
+`cortex-ai` 的 `openai.ts` 与 `quota-error.ts` 都写着「检索器的 `onEmbedFailure` 策略读取这个类型，
+基准测试也读取它来记录多少检索降级到词法评分」。后半句是假的：`cortex-eval` 从来没有那个计数器。
+现在点名真实读者（`SearchIndex` 的 `onEmbedFailure`、`latchQuota`），并写明上一版错在哪。
+
+### 131.5 覆盖率
+
+| 文件 | 语句 | 分支 | 函数 | 行 | 测试数 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `embedding-latch.ts` | 100 | 100 | 100 | 100 | 12 |
+| `bench-failure.ts` | 100 | 100 | 100 | 100 | 20 |
+| `embedding-factory.ts` | 100 | 100 | 100 | 100 | 15 |
+
+新增 `embedding-latch.test.ts` 12 条：关闭后不触达内部模型（假客户端计数）、同类型同 status、
+非配额错误不关闩、在途第二拒计为供应商拒绝且不移动边界、`dimension`/`identity` 转发、读数发布
+（用 `vi.resetModules()` 测 `null` 态）。`bench-failure.test.ts` +4 条覆盖四种状态。
+
+### 131.6 位置
+
+| # | 项 | 值 |
+| --- | --- | --- |
+| 1 | 端到端 | **91.15%**（`44317789307`，4×500）；对 Maximem Synap 95.6% 差 **−4.45** |
+| 2 | `MR` | **84.30%**（408/484）；对 MemCog 92.48% 差 **−8.18** |
+| 3 | 成本 | **7,416** token/题（`C1` 6,000 的 1.24×）；`C7` 仍无读数 |
+| 4 | 结构 | 31 道题承载 70.1% 的错误 |
+| 5 | 产品完成度 | **17/27 = 63.0%** |
+| 6 | 可发布信号 | **未发**（`C1`、`S14` 两条 aim 未达） |
+| 7 | 本轮派发 | **0 次**（余额），0 条判据可读 |

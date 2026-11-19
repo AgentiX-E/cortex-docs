@@ -177,3 +177,46 @@ progress:       died on reference-pipeline run=1 q=57/500 at +14.2s
 > 这一节是「先读产物再修」的第 N 次实践：登记时写的「431 次往返是浪费」是对的，但它把这次失败说
 > 得太轻。产物里真正刺眼的是 `baselineAnswers 53`——一个不知道自己测的是哪条臂的运行，比一个当场
 > 死掉的运行危险得多。
+
+### 6.5 §6.4 的第 1 条推论是错的，本轮撤回
+
+§6.4 写完之后的第二次阅读（同一份 `benchmark-error.log`，看的是栈而不是计数）推翻了它自己的
+第 1 条。撤回路程比结论重要，所以两段都留着。
+
+**被撤回的句子**：「参考侧在余额耗尽之后继续跑了，而且它没有停」——依据是「431 次拒绝里只有 1 次
+是致命的，其余 430 次必然被某个上层 `catch` 吸收」。
+
+**栈显示的是另一件事**：
+
+```
+at async runWorker (packages/cortex-eval/src/benchmark.ts:1031:18)
+at async Promise.all (index 1)
+at async runBenchmark (packages/cortex-eval/src/benchmark.ts:1178:3)
+```
+
+`runWorker` 的 `catch` 只决定两个类：`ProviderContentRefusal`（记为无输出、留在分母）和
+deadline / rate-limit 的 `RetryExhaustion`（记一次损失，有上限）；**其余一切 `throw err`**。
+`EmbeddingQuotaExhaustedError` 不是这两类，所以它一次都没有被吸收过。那 430 次拒绝不是「被吞掉后
+继续跑」，而是**同一个瞬间在途的请求各自被拒**：pass 是并发的（`Promise.all`），余额耗尽时每个
+worker 手里的请求同时收到了同一个 429。`Promise.all` 在第一个 rejection 处展开并让进程退出，剩下
+的请求已经付过了。
+
+同一个事实也重写了 §6.4 的第 2 条：那 53 个答案是在余额耗尽**之前**产出的，所以它们是干净测量的
+概率远高于降级测量的概率。我上一节写的结论——「一个不知道自己测哪条臂的运行比当场死掉的运行危险」
+——方向是对的，但它描述的不是这次失败。这次失败是一次干净的死亡，代价是 431 次本可以只花 1 次的
+往返。
+
+**剩下的缺陷因此只有一条，而且它可以被一个数字判决**：
+
+| # | 缺陷 | 修法 | 可检验的验收条件 |
+| --- | --- | --- | --- |
+| 1 | 余额耗尽之后仍然每次调用都发一次网络往返，直到 `Promise.all` 展开 | `latchQuota`：第一次 `EmbeddingQuotaExhaustedError` 关闭进程内闩锁，此后每次调用**在本地**抛同类错误 | `refusedByProvider == 1` 且 `refusedAfterLatch > 0`，`retryStats().attempts` 在闩锁关闭后不再增长 |
+| 2 | 失败记录里没有任何字段说明账户已空、空在哪一次调用 | 闩锁的读数进 `describeFailure`，每个失败都打印（空账户打印 3129 次无拒绝） | `benchmark-error.log` 出现 `embedding: LATCHED at call N (status 429) — 1 provider refusal(s), K refused without a request` |
+
+**为什么没有给参考侧加 `onEmbedFailure: 'lexical'`。** 产品有这条策略，是因为部署可以在余额耗尽后
+继续服务——检索退化成词法仍然是一个答案。参考侧不行：一次 pass 中途降级会让「配方 A」和「配方 B」
+混在同一个准确率里，而那个数字看起来会像一个结果。所以参考侧的策略就是 `fail`，缺的从来不是策略
+而是**代价**：`fail` 要贵 431 倍才停得下来。
+
+> 这一节记的是本轮唯一一次「先写下的推断被自己的产物推翻」。§6.4 的数字一个都没错，错的是从数字到
+> 机制的那一步——**并发**和**吞错**在计数上完全同形，只有栈能把它们分开。
