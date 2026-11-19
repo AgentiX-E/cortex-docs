@@ -2955,3 +2955,47 @@ deadline/限流耗尽），**其余一律 `throw`**，配额错误一次都没�
 撤回了上一轮一条被栈推翻的推论，删掉三个构造上不可达的兜底，并修掉两处声称了不存在读者的注释
 ——下一轮派发的成本下限和可读性都由这一轮决定。**
 完成度仍 **17/27 = 63.0%**；可发布信号仍未发；端到端 **91.15%**；`MR` **84.30%**。
+
+### 37.15 第 136 轮：让 census 描述**交付的那一次**渲染，并补齐 `F3` 的分母
+
+**这一轮为什么零派发。** embedding 余额仍然耗尽（`131`/`37.14`），任何需要 embedding 的实验都会
+在第 1 题就撞上闩锁。所以这一轮只做不需要余额的三件事：`evidenceForms` 投影（`#4`）、
+`bench/run.ts` 失败路径（`#6`）、以及被 `#4` 顺带抓出来的三个 census 缺陷。
+
+**写判据先于写代码。** 新测试的第一条不变量是 `raw.turns + excerpt.turns + record.turns === cut + whole`。
+它在 11 个外来轮次、1400 字符房间下读出 `cut 11` 对 `carried 10`——交付 10 轮、census 说 11 轮。
+根因是 `wholeTurnsIn` 的二分搜索用 `plan.render` 测前缀，而 `render` 每次都重置并记账，于是
+census 停在最后一次探测上；`fitToBudget` 交付的是 clip 字符串，没有任何一次交付渲染可以继承读数。
+
+| # | 缺陷 | 影响 | 修法 |
+| --- | --- | --- | --- |
+| 1 | 平铺路由 budget 路径的 census 描述探测渲染 | `cut`/`marked` 与交付集合不符 | `turnCensus()` 分出 `render`（交付）与 `recount`（记账后丢文本），`fitToBudget` 返回前对 `ordered` 调用 |
+| 2 | `renderSessionBlocks` 未传 tally | `MR`/`TR` **完全没有** `cut`/`marked`/密度读数，`P1` 与 `F3` 在最需要的地方不可读 | 传可选 tally 并跨块累计；两个 session 构建器接线；fits 路径也发布 |
+| 3 | `buildSecondPassPrompt` 空窗口的分支未覆盖 | 覆盖率 99.74 的红点，且兜底语义未测 | 补一条 `buildTallyPrompt(q, [], ...)` 断言不发布 census |
+
+**为什么 `recount` 要多渲染一次而不是从 clip 里数。** 从文本里数形态就是**重新解析形态边界**，
+正是 `TurnWindowCensus` 被引入时删掉的那件事，而且 clip 可以结束在轮次内部。
+
+**投影的形状。** `TurnWindowCensus.forms = { raw, excerpt, record }`，每项 `{ turns, chars }`。
+三条约束：由 `plan.form` 产生（不由 `elided` 推断——一个窗口可能恰好覆盖整段）、`chars` 是交付长度
+（不是 ceiling）、缺席即无形态选择（无 cap / head cut / collapse 都不出现）。`cortex-eval` 侧只镜像
+字段，不镜像名字导出：两个子类型在同轮被普查门禁报成孤儿，随即改回 module-private。
+
+**`bench/run.ts` 的失败路径。** 它原本只写 `message + stack`，且 `describeFailure` 的 `progress`
+只有两态。它依次跑十个 ablation、不追踪任何进度事件，所以「没有题目开始」是一句它没资格说的话——
+参数改为三态，`null` 打印 `this entry point does not track it`。两个入口现在由同一个函数生成
+`progress:` / `embedding:` / `retry:` 三行加空行加错误。
+
+**覆盖率。** `prompt.ts` 100/100/100/100（分支从 99.74 到 100），`resolution.ts` 与 `bench-failure.ts`
+同为四维 100；`cortex-memory` 115 文件 1,641 条、`cortex-eval` 161 文件 3,671 条全绿。
+
+**位置（未变）。** 端到端 91.15%（对 Maximem Synap 95.6% 差 −4.45）、`MR` 84.30%（对 MemCog 92.48%
+差 −8.18）、成本 7,416 token/题、产品完成度 17/27 = 63.0%、可发布信号未发、`C7` 仍无读数。
+
+**下一轮的最优路径。** `layered` 派发（200 题 × 2 假证，2.85 CNY）一旦余额恢复就能读 `F3`，而且现在
+读到的会是一个有分母的比值——若 `F3` 过而 `F4` 挂，归因所需的形态分布已在产物里，不必再派一轮补。
+同 job 双格仪器（`#5`）仍是 <0.7 点效应的唯一判决设计，零成本，可与 `layered` 并行实现。
+
+> **一句话结论：这一轮没有分数变化、没有派发；它把 census 从「最近一次渲染的读数」改成
+> 「交付那一次渲染的读数」，让 `MR`/`TR` 第一次有 `cut`/`marked`，并把 `F3` 的分母写进逐题产物。
+> 这仍是同一件事的第三次出现：产物必须携带**这一次**机制的证据。**

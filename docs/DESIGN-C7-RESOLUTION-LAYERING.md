@@ -307,3 +307,98 @@ discussion"。于是「与问题无重叠」的夹具连续两次被判成 `exce
 
 覆盖率：`resolution.ts` 本轮结束时是 **100 / 100 / 100 / 100**（语句 / 分支 / 函数 / 行），与
 `turn-clock.ts` 同一条线；改这一处之前是 **95.94 / 85.71 / 100 / 100**，那 4 个百分点的一半就是这条死分支。
+
+---
+
+## 12. 补上 `evidenceForms`，并因此抓到三个 census 缺陷
+
+### 12.0 与 §11.3 的关系
+
+§11.3 把 `evidenceForms` 的缺席写成**顺序**决定：没有判据读形态分布，所以它缺席不会让读数更好或更差，
+「下一轮补它——在重新登记形态选择的第二个轴之前」。这一轮是那一轮。写下来之后，判据 `V1`
+（三形态计数之和 = 交付轮次数）先红的是三个既有缺陷，而不是新字段。
+
+### 12.1 缺陷一：平铺路由的 census 描述了一次没人读过的渲染
+
+11 个外来轮次、`maxChars 1400`、`maxTurnChars 200` 下，探针读出：
+
+```
+carried 10 census {"cut":11,"marked":11,"whole":0,"forms":{... "record":{"turns":11,"chars":1243}}}
+```
+
+`wholeTurnsIn` 用 `plan.render` 做二分搜索以找「最长能装下的前缀」，而 `render` 每次都会重置并记账。
+`fitToBudget` 交付的是 clip 后的字符串，不是任何一次 `render` 的结果，所以 census 停在最后一次探测上。
+
+修法：把「记账」从 `render` 的副作用变成一个有对象的动作。
+
+| 名字 | 语义 | 谁调用 |
+| --- | --- | --- |
+| `turnCensus().render` | 重置后渲染并记账，返回交付文本 | 各构建器的交付渲染 |
+| `turnCensus().recount` | 重置后渲染并记账，**丢弃文本** | `fitToBudget` 在返回前对 `ordered` 调用 |
+| `plan.tally` | 读数本体 | 由 `{...tally}` 快照发布 |
+
+为什么不从 clip 的字符里数：那是**从文本里重新解析形态边界**，正是 `TurnWindowCensus` 被引入时
+删掉的那件事，而且 clip 可能结束在轮次内部。
+
+### 12.2 缺陷二：`MR` 与 `TR` 从来没有 census
+
+`renderSessionBlocks` 渲染每个 session 块时调用 `formatEvidence`，但**没有把 tally 传下去**，
+于是 `plan.tally === undefined`，`fitToBudget` 不发布 `turnWindow`。后果是：`multi-session` 与
+`temporal` 两条路由 —— `C7` 存在的两条、`F3` 要读的两条 —— 既没有 `cut`/`marked`（`P1` 的分母），
+也没有任何密度读数。
+
+现在 `renderSessionBlocks` 接受可选 tally 并跨块累计，两个 session 构建器都接线，且 **fits 路径也发布**
+（多 session prompt 通常低于房间上限，只在超预算分支发布会让这条路由大半没有读数）。
+
+### 12.3 缺陷三：一个未覆盖的兜底
+
+`buildSecondPassPrompt` 的 fits 路径发布 `turnWindow` 时带 `flat.length === 0 ? {} : {...}`，
+覆盖率报出 `prompt.ts:4453` 未覆盖。按 §11.5 与上一轮的规矩，未覆盖的兜底要么删要么测——这里测，
+因为它是真语义：空窗口不发布 census（三个零会读作「切了 0 个」而不是「没有窗口」）。
+
+### 12.4 三形态投影的形状
+
+```ts
+type EvidenceForms = {
+  readonly raw: { turns: number; chars: number };
+  readonly excerpt: { turns: number; chars: number };
+  readonly record: { turns: number; chars: number };
+};
+```
+
+三条约束：
+
+1. 形态由 `plan.form` 产生，不由 `elided` 推断：一个 `excerpt` 的窗口可能恰好覆盖整段文本，
+   按「字节变没变」分类会记成 `raw`，而 `raw` 的 ceiling 对它不适用。
+2. `chars` 是**交付长度**：`record` 装得下时短于 ceiling，`excerpt` 可以在文本末尾结束。
+3. **缺席即无形态选择**：无 cap、head cut、superseded `collapse` 三种情形都不出现。
+
+`cortex-eval` 侧只镜像字段（`DeliveredTurnWindowCensus.forms`），不镜像名字导出——两个子类型是
+module-private，因为普查门禁在同一轮里把它们报成了孤儿。
+
+### 12.5 判据
+
+| # | 判据 | 检验 |
+| --- | --- | --- |
+| V1 | `raw + excerpt + record` 的 `turns` 之和 `=== cut + whole` | `resolution-forms.test.ts`（单题 + 11 题 × 4 个宽度） |
+| V2 | 无 cap / head cut 时 `forms` 缺席 | 同上 |
+| V3 | `collapse` 不计入任何形态 | 同上 |
+| V4 | dateine 轮次记为 `record`，且 `chars` 含 head | 同上 |
+| V5 | 空 session 列表不发布 census | 同上（`buildTallyPrompt`） |
+| V6 | `forms` 穿过 capture 并写进 JSON | `benchmark-turn-window-capture.test.ts` |
+| V7 | `bench/run.ts` 的失败日志含 `progress:` / `embedding:` / `retry:` | `bench-failure.test.ts`（`progress: null`） |
+
+### 12.6 覆盖率
+
+| 文件 | 语句 | 分支 | 函数 | 行 |
+| --- | ---: | ---: | ---: | ---: |
+| `prompt.ts` | 100 | **100**（原 99.74） | 100 | 100 |
+| `resolution.ts` | 100 | 100 | 100 | 100 |
+| `bench-failure.ts` | 100 | 100 | 100 | 100 |
+
+### 12.7 下一轮读 `F3` 时，分母已经存在
+
+`layered` 派发（200 题 × 2 假证，2.85 CNY）仍未发——embedding 余额仍然耗尽。但它现在会读到一个
+**有分母**的比值：`forms` 逐题给出每种形态交付了多少轮、花了多少字符，`eventsFitted` 仍是
+`roleCensus.total`，而 `cut`/`marked` 第一次在这两条路由上存在。如果 `F3` 通过而 `F4` 失败，
+归因所需的形态分布已经在产物里，不必再派发一轮去补。

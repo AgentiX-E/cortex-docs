@@ -27464,3 +27464,124 @@ at async runBenchmark (benchmark.ts:1178:3)
 | 5 | 产品完成度 | **17/27 = 63.0%** |
 | 6 | 可发布信号 | **未发**（`C1`、`S14` 两条 aim 未达） |
 | 7 | 本轮派发 | **0 次**（余额），0 条判据可读 |
+
+---
+
+## 132. 第 136 轮：让 census 描述**交付的那一次**渲染
+
+### 132.1 这一轮从哪里来
+
+上一轮登记了三条零成本待办（`#4` `evidenceForms` 逐题投影、`#5` 同 job 双格仪器、
+`#6` `bench/run.ts` 失败路径的闩锁行）。`#4` 与 `#6` 属同一件事：**产物必须携带机制的证据**，
+而且必须是**这一次**的证据。先做 `#4`，因为它有一个立刻能写出来的判据：三种形态的计数之和
+必须等于交付轮次数。写下来之后，测试先红的三条不是缺字段，而是三个既有缺陷。
+
+### 132.2 缺陷一：budget 路径的 census 描述了一次没人读过的渲染
+
+`resolution-forms.test.ts` 的第一版断言 `forms` 之和 `=== census.cut + census.whole`，
+在 11 个外来轮次、1400 字符房间下读出：
+
+```
+carried 10 census {"cut":11,"marked":11,"whole":0,"forms":{"raw":0,"excerpt":0,"record":{"turns":11,"chars":1243}}}
+```
+
+**交付 10 轮，census 说 11 轮。** 原因是 `wholeTurnsIn` 的二分搜索：它用 `plan.render` 测
+「最长能装下的前缀」，而 `render` 每次都会**重置并记账**，于是 census 停在最后一次探测上。
+`fitToBudget` 交付的文本是裁剪后的字符串（clip），不是任何一次 `render` 的结果，所以没有一个
+「交付渲染」可以继承读数。
+
+这是同一族缺陷的第三例（`131.3` 的三处兜底是第二例）：**测量与副作用耦合**。修法不是把计数改对，
+而是让「记账」这个动作有了明确的对象——`turnCensus()` 返回 `{ tally, render, recount }`，
+`render` 用于交付（重置后记账），`recount` 用于**按最终交付集合重新记账并丢弃文本**。
+`fitToBudget` 在返回前调用 `plan.recount?.(ordered)`，于是 census 的对象**由构造决定**为交付集合。
+
+为什么要多渲染一次而不是从 clip 的字符里数形态：那是**从文本里重新解析形态边界**，
+正是 `TurnWindowCensus` 被引入时删掉的那件事（`132.4` 的第二个来源）。
+
+### 132.3 缺陷二：`MR` 与 `TR` 从来没有 census
+
+`renderSessionBlocks` 渲染每个 session 块时调用 `formatEvidence`，但**没有传 tally**，
+`fitToBudget` 的 `plan.tally === undefined` 分支于是不发布 `turnWindow`。
+后果：`multi-session` 与 `temporal` —— `C7` 存在的两条路由、`F3` 要读的两条路由 ——
+既没有 `cut`/`marked`，也就没有 `P1`，更没有 `eventsFitted` 的比值。
+
+这是 `DESIGN-C7` §6 要求的三样东西里**两样**的缺席，而且是「在需要它的地方缺席」。
+修法：`renderSessionBlocks` 接受可选 tally 并传给 `formatEvidence`，两个 session 构建器
+（`buildSessionPrompt`、`buildSecondPassPrompt`）都用 `turnCensus()` 接线，且**fits 路径也发布**
+（多 session prompt 通常低于房间上限，只在超预算分支发布会让这条路由大半没有读数）。
+
+### 132.4 缺陷三：`buildSecondPassPrompt` 的空窗口读数不可判读
+
+它的 fits 路径原本无条件返回无 census。加上发布之后，覆盖率报出 `prompt.ts:4453` 的分支未覆盖：
+`flat.length === 0 ? {} : {...}` 的右臂（空 session 列表）。按 `131.3` 的规矩，未覆盖的兜底要么删掉
+要么补测试——这里补测试，因为它是**真语义**：空窗口不发布 census（`{0,0,0}` 会读作「切了 0 个」
+而不是「没有窗口」）。一条 `buildTallyPrompt(q, [], ...)` 断言 `turnWindow === undefined` 就够。
+
+### 132.5 三形态投影（`evidenceForms`）
+
+| 字段 | 位置 | 语义 |
+| --- | --- | --- |
+| `turnWindow.forms.raw` | 逐题记录 | `{ turns, chars }`：整段交付的轮次与其字符数 |
+| `turnWindow.forms.excerpt` | 同上 | 主题窗（1.5×cap）交付的轮次与字符数 |
+| `turnWindow.forms.record` | 同上 | 一行记录（0.6×cap）交付的轮次与字符数 |
+
+三条设计约束：
+
+1. **由 `plan.form` 产生，不由 `elided` 推断**。一个 `excerpt` 的窗口可能恰好覆盖整段文本，
+   此时 `elided === false`；按「字节变了没变」分类会把它记成 `raw`，而 `raw` 的 ceiling 对它不适用。
+2. **`chars` 是交付长度，不是 ceiling**。`record` 装得下时短于 ceiling，`excerpt` 的窗口可能在文本末尾
+   结束；计 ceiling 会报一个读者没付的钱。
+3. **缺席即无形态选择**。无 cap、head cut、superseded `collapse` 三种情形下 `forms` 都不出现。
+   `{0,0,0}` 会读作「形态什么都没选」，是另一种陈述。
+
+### 132.6 判据（写在读数之前）
+
+| # | 判据 | 检验方式 |
+| --- | --- | --- |
+| V1 | `raw.turns + excerpt.turns + record.turns === cut + whole`（无 collapse） | `resolution-forms.test.ts` 两条（单题、11 题的 4 个房间宽度） |
+| V2 | 无 cap / head cut 时 `forms` 缺席，而非三个零 | 同上两条 |
+| V3 | `collapse` 的轮次不被记进任何形态 | 同上一条 |
+| V4 | session 路由（含 dateline）发布 census，且记为 `record` | 同上一条 |
+| V5 | 空 session 列表不发布 census | 同上一条 |
+| V6 | `forms` 穿过 capture 与原样写进 JSON | `benchmark-turn-window-capture.test.ts` 两条 |
+| V7 | `bench/run.ts` 失败日志含 `progress:`、`embedding:`、`retry:` 三类行 | `bench-failure.test.ts`（`progress: null` 一条）+ 入口共用 `describeFailure` |
+
+### 132.7 `bench/run.ts` 的失败路径与 `progress: null`
+
+`describeFailure` 的 `progress` 原本是两态：`undefined` = 「没有题目开始」。但 `bench/run.ts` 依次跑
+十个 ablation，**不追踪任何进度事件**，对它而言「没有题目开始」是一句它没有资格说的话。
+所以参数改为三态，`null` 打印：
+
+```
+progress: this entry point does not track it, so the question in flight is unknown
+```
+
+两个入口现在由同一个函数生成日志：`progress:` 行、`embedding:` 闩锁行、`retry:` 行、空行、错误。
+`44354315890` 那种「28 分钟、四条判据全不可读、只留下一段栈」的记录，在任何入口都不会再出现。
+
+### 132.8 覆盖率
+
+| 文件 | 语句 | 分支 | 函数 | 行 | 测试数 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `prompt.ts` | 100 | **100** | 100 | 100 | （包内 115 文件 / 1,641 条） |
+| `resolution.ts` | 100 | 100 | 100 | 100 | 25 |
+| `bench-failure.ts` | 100 | 100 | 100 | 100 | 21 |
+
+`cortex-memory` 包 115 文件 1,641 条全绿，`All files` 四维 99.88/99.73/100/100；
+`cortex-eval` 包 161 文件 3,671 条全绿，四维 99.58/98.68/99.84/99.77。
+`prompt.ts` 的分支从 99.74 → **100**：`132.4` 补的那一条测试。
+
+### 132.9 位置（未变，且本轮不产生读数）
+
+| # | 项 | 值 |
+| --- | --- | --- |
+| 1 | 端到端 | **91.15%**（`44317789307`，4×500）；对 Maximem Synap 95.6% 差 **−4.45** |
+| 2 | `MR` | **84.30%**（408/484）；对 MemCog 92.48% 差 **−8.18** |
+| 3 | 成本 | **7,416** token/题 |
+| 4 | 产品完成度 | **17/27 = 63.0%** |
+| 5 | 可发布信号 | **未发**（`C1`、`S14` 未达） |
+| 6 | 本轮派发 | **0 次**（embedding 余额仍然耗尽，`latchQuota` 现在会让它只花 1 次往返） |
+
+本轮的价值不是分数，是**把 `F3` 的分母与 `F4` 失败时的归因前提补齐**：`evidenceForms` 三形态分布
+逐题进产物，且 `MR`/`TR` 第一次有了 `cut`/`marked`/`whole`。下一次 `layered` 派发（2.85 CNY）
+读到的 `F3` 会是一个有分母的比值，而不是一个只能看总字符数的猜测。
