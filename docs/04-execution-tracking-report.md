@@ -28938,3 +28938,18 @@ instrument reach: 2 every-question, 6 never, 1 conditional (0 active in the regi
 | 4 | `FactConsolidation` 接入（`KU` 第二仪器） | 2–3 天 | ≈ 10 CNY | 产品成熟度优先项 |
 | 5 | 竞品 harness 入站 smoke | 1 轮 | ≈ 14 CNY，需外网 | 排队 |
 | 6 | `R2` 重派（读者家族） | 阻塞 | — | 等 Zhipu 额度 |
+
+### 141.11 `S18` 已按 §13.377.9 派发（同一个 sha，两条臂）
+
+本轮把 §13.377.9 的登记直接执行掉，而不是留成一条待办：
+
+| 项 | 值 |
+| --- | --- |
+| 参考点 | `master` @ `69967dcc`（本轮推送后的头）——**两条臂同一个 sha，同一个 tree** |
+| 控制 | run `44711009470`（`capability=MR`、`limit=0`、`ablation_runs=4`、`query_expansion=none`） |
+| 处理 | run `44711018477`（同上，`query_expansion=llm`） |
+| 成本 | ≈ 6 CNY（121 × 4 × 2 侧） |
+| 判据 | `E0` 同 tree 前置 + `E1'`≥对照 +5、`E2'` ≤ 8,600、`E4'` 收据、`E5'` 对照 `queries == indexes` |
+
+**哪个 id 是哪条臂不必猜**：`expansion-reading.py` 对 `queryExpansion != 'llm'` 的处理臂直接抛 `Unreadable`，
+所以读的时候认 artifact 的字段而不是认 id。这也是 §13.377.9 里 `E0` 的形态——它查的是配置面，不是意图。
