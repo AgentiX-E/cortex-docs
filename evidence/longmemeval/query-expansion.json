@@ -1,0 +1,192 @@
+{
+  "$comment": "S17. Query expansion reaching the product's own ranking, §13.377.4's pre-registered dispatch. The one departure from the registered flag table is `queryExpansion: llm`. Read against `S16` (run 44017278305) question by question on the majority verdict, which is the field the published 84.30% was counted from. E1 missed and E3 fired: the pair is three days and four merged features apart, so the delta is a reading of two code versions rather than of one flag.",
+  "row": "S17",
+  "run": "44689033513",
+  "declaredDepartures": [
+    "cortex_memory_query_expansion",
+    "queryExpansion"
+  ],
+  "arm": {
+    "name": "cortex-memory",
+    "relevanceSignal": "self-index",
+    "indexEmbedding": "injected",
+    "queryExpansion": "llm",
+    "reader": "deepseek-chat",
+    "judge": "deepseek-chat",
+    "maxTurnChars": 400,
+    "maxPromptCharsByRoute": {
+      "multi-session": 48460,
+      "temporal": 24000,
+      "flat": 24000,
+      "knowledge-update": 24000,
+      "abstention": 24000,
+      "assistant": 24000
+    },
+    "promptContract": "evidence-blocks-unsourced"
+  },
+  "dataset": {
+    "name": "longmemeval",
+    "fingerprint": "sha256:d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+    "questions": 500,
+    "repetitions": 4
+  },
+  "overall": {
+    "accuracy": 0.911,
+    "accuracyPerRun": [
+      0.914,
+      0.914,
+      0.908,
+      0.908
+    ],
+    "questions": 500,
+    "runs": 4,
+    "accuracySource": "costEfficiency.promptTokensPerQuestion's denominator; per-run from ablation.featureCorrectByRun"
+  },
+  "paired": {
+    "control": {
+      "run": "44017278305",
+      "generatedAt": "2026-11-17T06:23:25.818Z",
+      "mrMajority": 102,
+      "mrPopulation": 121,
+      "perRunAccuracy": [
+        0.912,
+        0.908,
+        0.916,
+        0.914
+      ],
+      "perCapabilityMajority": {
+        "IE": 137,
+        "MR": 102,
+        "KU": 67,
+        "TR": 120,
+        "ABS": 30
+      }
+    },
+    "treatment": {
+      "run": "44689033513",
+      "generatedAt": "2026-11-20T08:39:00.018Z",
+      "perRunAccuracy": [
+        0.914,
+        0.914,
+        0.908,
+        0.908
+      ],
+      "perCapabilityMajority": {
+        "IE": 138,
+        "MR": 102,
+        "KU": 66,
+        "TR": 121,
+        "ABS": 30
+      }
+    },
+    "basis": "MR majority verdicts, `questions[].correct` (>= 3 of 4 repetitions)",
+    "deltaQuestions": 0,
+    "deltaPointsOverall": -0.15,
+    "discordant": {
+      "fixed": 3,
+      "broken": 3,
+      "population": "MR, the cell E1 is written over"
+    },
+    "discordantAll": {
+      "fixed": 6,
+      "broken": 5,
+      "population": "all 500 questions — the five flips outside `MR` are E3's observation"
+    },
+    "mcnemarP": 1.0,
+    "mcnemarAllP": 1.0,
+    "floor": {
+      "ABS": 0,
+      "IE": 1,
+      "KU": -1,
+      "MR": 0,
+      "TR": 1
+    }
+  },
+  "bill": {
+    "controlPromptTokensPerQuestion": 7447.783,
+    "treatmentPromptTokensPerQuestion": 7422.945,
+    "ceiling": 8600,
+    "verdict": "pass",
+    "notCounted": "the four extra query embeddings per expanded question are not in the artifact; the provider's own usage block does not separate them, so this bill is a floor"
+  },
+  "receipt": {
+    "expandedQuestions": 121,
+    "phrases": 356,
+    "refused": 0,
+    "queries": 3424,
+    "indexes": 2000,
+    "verdict": "pass",
+    "note": "queries > indexes is the product's own counter, not the arm's claim: the phrases reached the ranking. This is the one thing the dispatch proved."
+  },
+  "promptIdentity": {
+    "checked": 379,
+    "moved": 50,
+    "byRoute": {
+      "temporal": 48,
+      "abstention": 1,
+      "assistant": 1
+    },
+    "evidenceIdentical": 50,
+    "note": "every one of the fifty moved with its delivered evidence bytes unchanged (`evidenceChars` and `evidenceTurns` equal), and forty-eight of them are the temporal route. Same evidence under a different prompt is a renderer change, not a retrieval change: the expansion is confined to `MR` by `expandMultiSessionQueries`'s routing rule and `queryExpansionCounts.questions` is 121, the `MR` population exactly. So something other than the declared flag moved them."
+  },
+  "configuration": {
+    "surfacesAbsentOnControl": [
+      "factTimeline",
+      "lexicalWeighting",
+      "resolution",
+      "sessionClock"
+    ],
+    "censusFieldsOnOneSide": [
+      "queries"
+    ],
+    "landed": {
+      "lexicalWeighting": "2026-11-18",
+      "sessionClock": "2026-11-18",
+      "factTimeline": "2026-11-20"
+    },
+    "note": "`memoryArmConfig` is projected from the code that produced the artifact, so a key on one side only is a merged feature. The control was written on 2026-11-17 and carries none of the four; its `selfIndex` has no `queries` field at all, which is why E5 is unread rather than failed."
+  },
+  "criteria": {
+    "E1": {
+      "threshold": 107,
+      "measured": 102,
+      "verdict": "fail"
+    },
+    "E2": {
+      "threshold": 8600,
+      "measured": 7422.945,
+      "verdict": "pass"
+    },
+    "E3": {
+      "floor": "pass (all five within +-1)",
+      "identity": "fail (50 of 379 moved, evidence identical on all 50)",
+      "verdict": "fail"
+    },
+    "E4": {
+      "threshold": "queries > indexes, refused <= 12",
+      "measured": "3424 > 2000, refused 0",
+      "verdict": "pass"
+    },
+    "E5": {
+      "threshold": "control queries == indexes",
+      "measured": "the control's census has no `queries` field — the counter was merged between the two dispatches",
+      "verdict": "unread"
+    }
+  },
+  "spend": {
+    "projectedCny": 14.26,
+    "actualCny": 14.68,
+    "cachedPromptTokens": 15575770,
+    "uncachedPromptTokens": 2337286,
+    "completionTokens": 2297972,
+    "cacheShare": 0.8695
+  },
+  "disposition": {
+    "reading": "E1 fail by five questions, E2 pass, E4 pass, E5 unread, E3 fail",
+    "rule": "§13.377.5's gate on E3 — an unreadable delta is not evidence about the mechanism",
+    "row3": "not licensed: row 3 requires an attributable delta, and this pair's non-target prompts moved",
+    "adoption": "none",
+    "family": "stays open; `S18` re-runs the pair at one tree before anything is closed",
+    "ledgerRow23": "stays `instrument`; its reason changes from 'a candidate awaiting a dispatch' to a dispatch made and not yet attributable"
+  }
+}

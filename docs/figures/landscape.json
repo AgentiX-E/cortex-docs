@@ -106,11 +106,11 @@
     {
       "system": "cortex",
       "reader": "DeepSeek (deepseek-chat)",
-      "accuracy": 91.15,
+      "accuracy": 91.25,
       "type": "open-source",
       "tokensPerQuery": 7448,
-      "source": "run 44017278305, 500 questions x 4 passes, official judge prompts, registered configuration",
-      "costNote": "prompt chars / 4"
+      "source": "run 44017278305 (`S16`), 500 questions x 4 passes, official judge prompts, registered configuration; accuracy is `costEfficiency.accuracy` 0.9125 and the cost is `costEfficiency.promptTokensPerQuestion` 7447.783 -- one run, one pair",
+      "costNote": "prompt tokens per question, from the same artifact as the accuracy"
     },
     {
       "system": "Honcho",

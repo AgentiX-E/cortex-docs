@@ -55,6 +55,13 @@ document that discusses it says so in words.
    across another's. The second repair alternates sides within a crowded cluster, so each label leaves its own
    marker visible.
 
+6. **One row is one run.** The cortex row carried `91.15` from run `44317789307` and `7,448` tokens from run
+   `44017278305`: two runs, one row, and no reader could tell from the picture. That is the same defect class as
+   `S17`'s pair -- a number beside a label that names a different provenance -- and it is why the row now carries
+   `91.25` and `7,448`, both read out of `costEfficiency` in the same artifact (`S16`, run `44017278305`), with
+   the two field names written into the row's `source`. A figure whose two coordinates come from two experiments
+   is a position that no system ever occupied.
+
 ## What the figures do not show
 
 - **Recall versus accuracy.** No figure mixes them.
