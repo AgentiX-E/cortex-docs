@@ -32,6 +32,7 @@ document that discusses it says so in words.
 | `fig-longmemeval-accuracy-vs-cost.png` | left: tokens per query (log) × accuracy; right: systems that publish no cost, on the same accuracy axis | where cortex sits when both numbers exist — the only combined view |
 | `fig-longmemeval-accuracy-ranking.png` | accuracy, grouped by answering reader | the same memory system spans 90.2 to 98.4 as the reader changes |
 | `fig-longmemeval-cost-per-query.png` | tokens per query | "most accurate" and "cheapest" are different winners, and cortex is neither |
+| `fig-longmemeval-room-axis.png` | room (characters) × `MR` accuracy, and room × prompt tokens per question | the room axis of the registered arm: 16 short questions become 1, accuracy moves 0.4 points, tokens move 21% |
 
 ## Three rules the renderer follows, and the defects behind them
 
