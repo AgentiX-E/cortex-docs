@@ -1,0 +1,39 @@
+{
+  "ok": true,
+  "runs": 4,
+  "questions": 121,
+  "delivered": {
+    "chars": 62075,
+    "counted": 121,
+    "missing": 0
+  },
+  "charsPerToken": 3.5,
+  "feature": {
+    "side": "feature",
+    "calls": 495,
+    "promptTokens": 6351698,
+    "completionTokens": 1454369,
+    "cacheHitPromptTokens": 4795362,
+    "promptTokensPerCall": 12831.71,
+    "completionTokensPerCall": 2938.12,
+    "cacheHitShare": 0.755,
+    "deliveredCharsPerCall": 513.02,
+    "deliveredTokensPerCall": 146.58,
+    "undeliveredTokensPerCall": 2791.54,
+    "undeliveredShare": 0.9501
+  },
+  "baseline": {
+    "side": "baseline",
+    "calls": 706,
+    "promptTokens": 1175998,
+    "completionTokens": 58186,
+    "cacheHitPromptTokens": 1034476,
+    "promptTokensPerCall": 1665.72,
+    "completionTokensPerCall": 82.42,
+    "cacheHitShare": 0.8797,
+    "deliveredCharsPerCall": null,
+    "deliveredTokensPerCall": null,
+    "undeliveredTokensPerCall": null,
+    "undeliveredShare": null
+  }
+}

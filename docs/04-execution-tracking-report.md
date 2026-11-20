@@ -28514,7 +28514,33 @@ recordUsage(usage === undefined ? undefined : { ...usage, answerChars: answer.le
 | 覆盖率 | `cortex-ai` **100/100/100/100**（含 `usage.ts` 100）；`cortex-eval` 99.58/98.68/99.84/99.77；`cortex-memory` 99.88/99.73/100/100 |
 | 变异检验 | 臂侧 6 处、插桩 2 处、census 工具 2 处，**全部转红** |
 | 台账 | 27 行不变：18 product（7 gated）/ 9 instrument；第 19 行仍 `gated`（未测量） |
-| 目录 | `docs/figures/` 新建：3 张 PNG + `landscape.json` |
+| 目录 | `docs/figures/` 新建：3 张 PNG + `landscape.json` + `README.md` |
+| 逐提交门禁 | `743e4a32` / `2e71ed06` / `548facd9` 各自 `pnpm check` = 0；HEAD CI `44672908216` **success** |
+
+### 139.8.1 一次提交切分错误，以及它为什么只能靠门禁抓出来
+
+第一次推送的三个提交里，**中间那个编译不过**：
+
+```text
+packages/cortex-eval build: src/report.ts(3224,13): error TS2339:
+  Property 'answerChars' does not exist on type 'UsageSnapshot'.
+```
+
+三个 job 全红（`44670734909` 的 library / browser suites / PostgreSQL）。原因不是代码错了，是**边界错了**：
+`report.ts` 在这一轮有两处互不相干的改动——`MemoryArmConfig.factTimeline`（属于"五环"那件事）与
+`deliveryRatio` 的渲染（属于"`answerChars` 插桩"那件事）——而文件级 `git add` 把它们绑进了同一个提交。
+后者依赖前一个提交里还不存在的 `UsageSnapshot.answerChars`。
+
+修法不是 amend 提交信息，而是**重排历史**：远程回退到 `e23ff5b8`，按
+`743e4a32`（五环）/ `2e71ed06`（插桩）/ `548facd9`（普查工具）重推，每个中间提交本地 `pnpm check` 都为 0
+（各约 11 分钟），HEAD 的 CI `44672908216` success。
+
+**为什么本地一开始没看见**：`tsc --noEmit` 读的是 workspace 里的 `dist`，而 `dist` 是我在改动**之后**构建的。
+把源码 stash 回基线后，`tsc` 仍然报"`answerChars` 必填"——那是旧 `dist` 的声音，不是源码的声音。**只有
+`pnpm check`（先 build 再验）能给出真话**，这也是 §139.3 那条"机制抓住我"的第二次出现。
+
+一句话记住：**同一个文件里放两件不同的事，是提交切分唯一的陷阱；文件级 add 看不出来，只有逐提交的
+全量门禁能。**
 
 ### 139.9 位置
 
