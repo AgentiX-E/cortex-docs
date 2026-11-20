@@ -29298,29 +29298,104 @@ delta 量的是两个代码版本；让一条"关于一个 flag"的判据继续�
 字符里，哪一部分是 reference pipeline 有而我们没有的"。**
 
 
-### 142.15 把读数接回产品侧：一条判据指向了错的 artifact
-
-`acceptance.ts` 的 `S17` 行原本读 `cortex-docs/evidence/longmemeval/query-expansion.json`，取
-`paired.deltaQuestions` —— 也就是 §142.3 里那份**不可归因**的 `S17` 配对。这不是笔误，是当时唯一存在的
-读数：本轮之前没有第二个 artifact 可读。
-
-`S18` 落盘后这一行必须改指向，理由不是整洁而是它自己的 `attest` 语义：那条配对的对照比处理早三天，
-delta 量的是两个代码版本；让一条"关于一个 flag"的判据继续读它，等于在判据层把不可归因的差当成结论。
-新指向 `query-expansion-s18.json#mr.deltaQuestions`，`attest` 换成 `pair.treatment.run = 44723845151`
-—— 那正是"这一读数是同 commit 派发"的断言。
-
-改完之后有两处数字仍在原地，两处都不是手改能发现的：
-
-| 缺陷 | 谁抓到 | 症状 |
-| --- | --- | --- |
-| `docs/ACCEPTANCE-MATRIX.md` 的 `reading:S17` 仍是 `0` | `node tools/docs-crosscheck.mjs` | `document: 0 / code: 4 — document and code disagree`（79 个 marker 里 1 个） |
-| 台账第 23 行的 `reason` 仍写"dispatched but unattributed candidate" | 人工，但被 §142.13 的处置表点名 | 结论已关闭、台账还说未定 |
-
-第一条是**机制起作用**的样例：判据的数字只有一个来源（代码），文档里的数字是 marker，两者不一致就红。
-第二条是机制缺口的样例：`reason` 不进 `PRODUCT-CAPABILITY-LEDGER.md` 的表格（表格只渲染 `d3`），所以
-没有任何门会读到它——一份只给人看的字段，改不改都不会红，这正是它会漂移的原因。本轮记在这里，
-而不是现在加门：那条门需要先决定"关闭"在台账里是哪个状态字段，而 §142.13 刚刚才第一次产生"已关闭"。
-
 **给读 `git log` 的人：** 本仓 `be4e2a9` 的提交信息写着"the mechanism works by four questions"，它被
 `720e3fc` 撤回——四个是第 0 次重复的数。历史不改写（已推送），改的是读数与机制；两行 log 连起来读才是
 完整的一句。
+
+---
+
+## 143 第 146 轮：`MR` 的差距既不是检索、也不是算术，而仪器说不出这句话
+
+上一轮 §142.17 留的作业是"拆记忆臂交给读者的那 48,460 字符里，哪一部分是 reference pipeline 有而我们
+没有的"。这一轮先做了那次拆分，结论是：**拆不动，因为 artifact 里没有可拆的那一半**。这不是态度问题，
+是字段问题——而字段问题可以修。
+
+### 143.1 拆分本身：按交付完整性分开，两半都低于 reference pipeline
+
+同一对 artifact（`44717750493` / `44723845151`，`a7eafcced3f3`），121 题 × 4 遍，逐题取四次重复均值：
+
+| 子集 | 题数 | 对照（`none`）feature / baseline | 处理（`llm`）feature / baseline |
+| --- | ---: | --- | --- |
+| 金标轮次**全部交付** | 105 | **84.52%** / 88.33%（−3.81pp） | **85.71%** / 88.10%（−2.38pp） |
+| 金标轮次**未全部交付** | 16 | 65.62% / 75.00%（−9.38pp） | 68.75% / 71.88%（−3.12pp） |
+| 全体 | 121 | 82.02% / 86.57% | 83.47% / 85.95% |
+
+两句话，缺一不可：
+
+1. **金标全部在房间里时，记忆臂仍然低 2.4–3.8 个百分点。** 这一半的差距不可能是检索——读者手里有全部
+   金标轮次，题还答错，那是契约或算术。
+2. **金标缺的时候差距更大（−9.4pp），但只有 16 题。** 把它当成主战场就会去调 `relevanceTopK`，而它的
+   分量不足总差距的四分之一。
+
+顺带得到一条此前没人写下来的噪声读数：**reference pipeline 自己**（两臂完全相同的系统）在这两次派发里
+读 **86.57% / 85.95%**，差 **0.62pp = 0.75 题**。这就是这个人群上 run-to-run 的零点宽度，比任何"−2.5pp
+是显著减益"的说法都重要。
+
+### 143.2 算术外移已经失败三次，第四次不该还是同一个形状
+
+| 变体 | 读数（`MR`） | 失败方式（已记录） |
+| --- | ---: | --- |
+| `reviewPass: tally` | **−9.5** | `tallyInstruction` 让读者为每条产"single bare number"，读者产错 |
+| `reviewPass: spec` | **−7.8** | 计划式聚合，同一个能力、同一个方向 |
+| `ask: verbatim-acts` | 残差 −3.8pp（本轮实测） | 去掉动词同一性判定后偏向已修正，但对"金标齐全"这一半仍是净负 |
+
+三次、三种设计、同一个能力、同一个方向。**再写第四种聚合提示词不是假设，是重复。** 本轮因此不动聚合，
+转而修仪器——因为上面那张表的分母之所以一直读不准，正是因为仪器缺了两个字段。
+
+### 143.3 仪器缺陷一：`goldAccount`——`carried < total` 不是"检索"结论
+
+`goldOverlap` 现有字段是 `carried` / `total` / `goldTurns` / `goldDelivered` / `totalAll`。**没有 `pool`，
+没有 `goldRanks`，也没有 `windowComposition`**——三个都缺席，而这不是 bug，是接线：`bench/run-ablation.ts`
+在 `relevanceSignal: self-index` 时把 `relevance` 置为 `null`（"the product builds and owns the ranking,
+so nothing is built here"），于是 `relevancePoolFor` 从不传递，`goldOverlapOf` 的 `poolGold` 参数是
+`undefined`，`pool` 那一支被**按设计**省略。
+
+后果是一句话：**在注册臂（`self-index`，自 `S9` 起）上，"金标没交付"这件事分不清是"排名从没捞到"还是
+"捞到了被 48,460 字符的预算切掉"。** 这两种读法指向相反的下一个增量（换排名 vs 加房间），而 §13.62 那次
+"1026 从未浮出 / 903 被切掉"的著名分解，是在 `retrieval`（harness 自建池）上做的——那个信号不是注册臂。
+
+修法不是让 harness 再建一个池（那是第二个排名定义），而是**让 artifact 说出自己的能力边界**：
+
+- `MemoryArmConfig.goldAccount`，三值、恒写：`ranked`（池在 harness，`pool`/`goldRanks` 存在）、
+  `product-unreported`（池在产品内，交付之外的轮次不可见）、`none`（没有排名）。
+- 由 `goldAccountOf(relevanceSignal)` 派生，而它调用既有的 `buildsProductIndex`——**一个接线决策，一个派生**，
+  所以 artifact 不可能自称 `ranked` 而实际跑 `self-index`。
+- 渲染层把 `goldAccount=` 印在配置行上；`product-unreported` 时再印一句"`carried < total` 不是检索结论"。
+- `tools/expansion-reading.py` 同步：优先读字段，缺字段时**从 `relevanceSignal` 反推**（`source: 'derived'`），
+  因为整个战役的历史 artifact 都写在字段出现之前——`S18` 那一对就在里面。
+
+于是本轮结束时，同一份 `S18` 读数自己会说：
+
+> Gold account: **product-unreported** (control product-unreported) -- … `goldOverlap.carried / total`
+> in these artifacts is a delivery count and not a retrieval verdict, and the classification is derived
+> from `relevanceSignal` because these artifacts predate the field that states it.
+
+### 143.4 仪器缺陷二：`accuracyEstimator`——一份 artifact 里两个准确率，只有一个有名字
+
+`S18` 的对照臂：`feature.metrics.accuracy` = **81.82%**，`costEfficiency.accuracy` = **82.02%**。同一个
+JSON，同一批题，差 0.2 个点，而**前者没说是第几遍，后者自带 `accuracySource: 'all-runs'`**。
+`questions[].correct` 跟的是前者（第 0 遍）。上一轮就是按前者发布 +4、再按后者撤回成 +1.75。
+
+修法：`AblationReport.accuracyEstimator = 'first-repetition'`，恒写、常量（`buildAblationReport` 只有一条
+计算路径，调用方给的标签可能和计算矛盾，所以不接受参数）；渲染层在准确率行下面印一句"这几行和
+`questions[].correct` 是同一次；四次均值是下面那行"。
+
+### 143.5 两个已测到、本轮只登记不修的现象
+
+| 现象 | 读数 | 为什么不在本轮修 |
+| --- | --- | --- |
+| 同一道题在四次重复里收到**不同的提示词** | `promptVariants: 2` 在对照 8 题、处理 10 题；处理还有 1 题是 3 | `§13.176` 的 witness 机制存在，但 witness 文本不在这一版 artifact 里；先要把 witness 写进报告才可能定位到是哪一段字节动了 |
+| 读者用**散文**弃答，不是令牌 | 对照 3 题、处理 2 题写 "Cannot be determined…"；`abstentionReasons` 只数到 6 / 484 次答题 | 这不是正确率问题（两种都判错），是**弃答率被低估**；修它要先决定散文弃答算不算 `abstain`，而那会动 `abstentionAwareAccuracy` 的定义 |
+
+两条都写进下一轮待办，代价都是 0——不需要派发，只需要一个字段。
+
+### 143.6 门禁与位置
+
+| 项 | 读数 |
+| --- | --- |
+| `packages/cortex-eval` 单测 | **3,713 passed / 165 files**（新增 `gold-account.test.ts` 8 条） |
+| `tools/` 单测 | 见 §143.7（本轮全量） |
+| `tools/__tests__/test_expansion_reading.py` | **42 passed**（37 → 42，5 条新读数断言） |
+| 本轮派发 | **0 次，0 CNY**（全部改动是仪器，不是机制；不需要新数字） |
+| 产品完成度 | 18/27 product，7 gated（不变——本轮没有新能力，只有让已有读数可信） |
+| 是否 SOTA | **否**。`MR` 82.0–83.5%，reference pipeline 86.0–86.6%，MemCog 92.48%，Maximem Synap 95.60% |
