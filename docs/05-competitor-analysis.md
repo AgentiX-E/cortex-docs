@@ -1497,6 +1497,20 @@ Step 1 — Enumerate every item matching the question's EXACT action, one per li
 
 ### 1.22 2026-11-05 复扫：榜首换成了"读者更强"这一类，而我们终于可以按读者分档对表
 
+#### 1.22.0 三张图：位置、排行、成本
+
+本节的三张图由 `tools/render-landscape.py` 从 `docs/figures/landscape.json` 渲染，每一行数据带自己的来源
+与口径（见 `docs/figures/README.md`）。它们回答三个不同的问题，因此是三张而不是一张：
+
+| 图 | 轴 | 它回答什么 |
+| --- | --- | --- |
+| `fig-longmemeval-accuracy-vs-cost.png` | 左：token/查询（log）× 准确率；右：未公布成本的系统（共享准确率轴） | 两个数都在时 cortex 在哪 |
+| `fig-longmemeval-accuracy-ranking.png` | 准确率排行，按作答读者分组 | 同一个记忆系统换读者跨 90.2–98.4 |
+| `fig-longmemeval-cost-per-query.png` | token/查询 | "最准"与"最便宜"是两个赢家，cortex 两个都不是 |
+
+**未公布成本的七个系统在右面板画点，不插补到某个 x 上。** 插补会为一个没有账单的系统发明一个位置，并把它
+摆在有账单的系统旁边供人比较——那比不画更糟。
+
 #### 1.22.1 一张按"读者"分组的表，而不是按分数排序的表
 
 同一个 LongMemEval-S，读者不同，分数差 8 点以上。把公开数字按读者分组，才有一张能对表的表：
