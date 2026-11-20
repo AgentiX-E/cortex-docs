@@ -29136,38 +29136,43 @@ registration preflight: dispatch-cortex-memory-ab.py INPUTS
 而这条差别现在同时出现在三处：派发日志的 `*` 标记、`CORTEX_DECLARED_DEPARTURES`、以及 artifact 的
 `memoryArmConfig.queryExpansion`。
 
-### 142.10 `S18` 读数：机制成立，差一题不成立，该族关闭（这次是**有资格**关闭）
+### 142.10 `S18` 读数：+1.75 题，p = 0.39，该族关闭（这次是**有资格**关闭）
 
-两条臂，同一个 sha `a7eafcce`，121 题 × 4 次，各 ≈ 3.45 CNY：
+两条臂，同一个 sha `a7eafcce`，121 题 × 4 次，各 ≈ 3.45 CNY。**估计量是四次重复的均值 + 逐题计数的
+exact sign-flip**，即本项目的 `accuracySource: 'repetition-mean'`（§142.16 记录了第一版为什么错了）。
 
 | 判据 | 阈值 | 实测 | 结论 |
 | --- | --- | --- | --- |
 | `E0` 同 commit | 两臂 `revision.sha` 相同 | **`a7eafcce`** 两侧相同 | **pass** |
-| `E1` 绝对 | `MR` ≥ 107 | **103** / 121 | fail |
-| `E1'` 相对 | ≥ 本次对照 + 5 = 104 | **103** | **fail（差 1 题）** |
-| `E2` 绝对值 | ≤ 8,600 token/题 | **12,914.9** | fail（阈值错配，见 §142.11） |
+| `E1` 绝对 | `MR` ≥ 107 | **101.00** / 121（均值） | fail |
+| `E1'` 相对 | ≥ 本次对照 + 5 = 104.25 | **101.00** vs 对照 99.25 | **fail（差 3.25 题）** |
+| `E2` 绝对值 | ≤ 8,600 token/题 | **12,914.9** | fail（阈值错配，见 §142.12） |
 | `E2'` 相对 | ≤ 1.15× 对照 | **0.992×** | **pass** |
 | `E3` | 非 `MR` 0 条移动 + 地板 | 0 / 0（空真） | pass（并注明空真） |
 | `E4` 收据 | `queries > indexes`、`refused ≤ 12` | **1,932 vs 484**，refused 0 | **pass** |
 | `E5` 对照 | 对照 `queries == indexes` | **484 == 484** | **pass** |
 
-`MR` 上 **修好 6 题、弄坏 2 题**，exact McNemar `p = 0.2891`，净 **+4 题 = +3.31pp**。
+`MR` 上 **8 题赢、5 题输、108 题平**，exact sign-flip `p = 0.3901`，净 **+1.75 题 = +1.45pp**。
 
-### 142.11 这一对里最强的噪声对照，不是我们设计的
+被撤回的那个数：同一对在**第 0 次重复**上是 +4（6 赢 2 输，McNemar `p = 0.2891`）。它在文件里仍然
+可查（`mr.firstRepetition`），但不再是这一行的读数——原因见 §142.16。
 
-两条臂的**基线侧**（确定性检索）都是 **105 / 121 = 86.78%**，一字不差。这不是巧合，是这一对最好的
-证据：非 LLM 的那一侧在两次独立派发里逐题复现，说明 harness、数据集、排名路径完全一致，**所以那 4 题
-只能是 feature 臂的**。它比 `E0` 更强，因为 `E0` 证明的是"代码同一个 commit"，而它证明的是"行为可复现"。
+### 142.11 噪声地板：这一对**有**，但它不是我以为的那一个
 
-同时它也给出了这一对最不舒服的数字：
+第一版写的是"两条臂的基线侧都是 105/121，逐题复现，所以 4 题只能是 feature 臂的"。**这句话是错的**，
+而错它的正是同一份 artifact：基线侧（reference pipeline，用的是同一个 LLM 读者，不是确定性检索）在
+四次重复里分别是 **105 / 107 / 102 / 105**（对照）和 **105 / 105 / 103 / 103**（处理），逐题位串也不相同。
+两边 `baseline.metrics.correct` 都写着 105，那是**两边第 0 次重复**，不是复现。
 
-| 臂 | 基线侧 | feature 侧 | 差 |
-| --- | ---: | ---: | ---: |
-| 对照（`query_expansion: none`） | 105（86.78%） | **99（81.82%）** | **−4.96pp** |
-| 处理（`query_expansion: llm`） | 105（86.78%） | **103（85.12%）** | −1.66pp |
+真正的地板是跨两臂的同一个配置：
 
-**在 `MR` 上，cortex 的记忆臂打不过它自己的确定性基线。** 扩展把缺口补上了三分之二，但它补的是一个
-我们本来就欠的账——这才是与 `MemCog 92.48%` 之间 8 个点差距的所在，不是扩展不够强。
+| 读数 | 对照 | 处理 | 差 | 赢/输 | p |
+| --- | ---: | ---: | ---: | --- | ---: |
+| 基线侧（reference pipeline），四次均值 | **104.75** | **104.00** | **−0.75** | 6 / 7 | 0.809 |
+| feature 侧（记忆臂），四次均值 | 99.25 | 101.00 | +1.75 | 8 / 5 | 0.390 |
+
+**同一份配置派发两次，自己就动了 0.75 题。** 处理侧的 +1.75 与它是同一量级——这才是 `p = 0.39` 该被
+当成头条、`+1.75` 该被当成点估计而不是收益的原因。
 
 ### 142.12 判据错配：`E2` 的 8,600 是文件级数字，被套在单能力上
 
@@ -29186,25 +29191,112 @@ registration preflight: dispatch-cortex-memory-ab.py INPUTS
 
 登记里写得很清楚：`E1'` fail 且 `E0`/`E2'`/`E4'` pass ⇒ **第 3 行成立，该族关闭，含 `window` 重排的前提**。
 这次与 `S17` 那次的区别是**资格**：那一次闸门（`E3`）说 delta 不可归因，所以不许关闭；这一次
-`E0` pass、收据 1,932 vs 484、对照侧 `484 == 484`、基线侧两次复现 105，四条都在，**delta 可以归因**，
+`E0` pass、收据 1,932 vs 484、对照侧 `484 == 484`、估计量与登记口径一致，四条都在，**delta 可以归因**，
 于是关闭是一个结论而不是一次放弃。
 
 | 项 | 判定 |
 | --- | --- |
-| 采纳 `queryExpansion: llm` | **否**（+4 < +5） |
+| 采纳 `queryExpansion: llm` | **否**（+1.75 < +5，且落在跨臂噪声 0.75 的同一量级） |
 | 该族 | **关闭**，含 `window` 重排的前提 |
-| 台账第 23 行 | `instrument` → 理由改为"已读、已关闭（+4 < +5，收据成立）" |
-| 下一个假设 | **不是**更强的扩展，而是"为什么记忆臂在 `MR` 上低于自己的基线 4.96pp" |
+| 台账第 23 行 | `instrument` → 理由改为"已读、已关闭（+1.75 < +5，收据成立）" |
+| 下一个假设 | **不是**更强的扩展，而是"为什么记忆臂在 `MR` 上低于 reference pipeline 4.55pp" |
 
 ### 142.14 这一轮的位置
 
 | 项 | 状态 |
 | --- | --- |
 | `S17` | 已读、不可归因（保留为记录） |
-| `S18` | **已读、可归因、已关闭该族** |
+| `S18` | **已读、可归因、已关闭该族**；读数 +1.75 题 / p = 0.39 |
 | `E0` | 从"靠记性"变成 artifact 字段 + 判据，**本轮首次 pass** |
 | 派发工具 | 加了并发锁与 `--pair-with`；`--allow-stale-tree` 从死开关变成可用开关 |
-| 门禁 | tools 3,155 passed / 1 failed（`export-census` 基线，已重建）；`cortex-eval` 122 条新增；`Verify` 待本轮最后一推 |
+| 估计量 | 从"`questions[].correct`（当它是多数票）"改成四次重复均值 + exact sign-flip，见 §142.16 |
+| 门禁 | tools 全量 + `cortex-eval` 78 条相关单测；`Verify` 待本轮最后一推 |
+
+### 142.15 把读数接回产品侧：一条判据指向了错的 artifact
+
+`acceptance.ts` 的 `S17` 行原本读 `cortex-docs/evidence/longmemeval/query-expansion.json`，取
+`paired.deltaQuestions` —— 也就是 §142.3 里那份**不可归因**的 `S17` 配对。这不是笔误，是当时唯一存在的
+读数：本轮之前没有第二个 artifact 可读。
+
+`S18` 落盘后这一行必须改指向，理由不是整洁而是它自己的 `attest` 语义：那条配对的对照比处理早三天，
+delta 量的是两个代码版本；让一条"关于一个 flag"的判据继续读它，等于在判据层把不可归因的差当成结论。
+新指向 `query-expansion-s18.json#mr.deltaQuestions`，`attest` 换成 `pair.treatment.run = 44723845151`
+—— 那正是"这一读数是同 commit 派发"的断言。
+
+改完之后仍有两处数字在原地，两处都不是手改能发现的：
+
+| 缺陷 | 谁抓到 | 症状 |
+| --- | --- | --- |
+| `docs/ACCEPTANCE-MATRIX.md` 的 `reading:S17` 是 `0` | `node tools/docs-crosscheck.mjs` | `document: 0 / code: 4 — document and code disagree`（79 个 marker 里 1 个） |
+| 台账第 23 行的 `reason` 仍写"dispatched but unattributed candidate" | 人工，但被 §142.13 的处置表点名 | 结论已关闭、台账还说未定 |
+
+第一条是**机制起作用**的样例：判据的数字只有一个来源（代码），文档里的数字是 marker，两者不一致就红。
+第二条是机制缺口的样例：`reason` 不进 `PRODUCT-CAPABILITY-LEDGER.md` 的表格（表格只渲染 `d3`），所以
+没有任何门会读到它——一份只给人看的字段，改不改都不会红，这正是它会漂移的原因。本轮记在这里，
+而不是现在加门：那条门需要先决定"关闭"在台账里是哪个状态字段，而 §142.13 刚刚才第一次产生"已关闭"。
+
+### 142.16 本轮最严重的缺陷在本轮自己的读数里：`questions[].correct` 不是多数票
+
+**结论先给：`S18` 的 +4 是第 0 次重复的 delta，不是四次重复的。** 按本项目登记的估计量，这一对是
+**+1.75 题，8 赢 5 输，p = 0.3901**。判据结论不变（该族照样关闭），但那个数字必须撤回。
+
+**证据（同一份 artifact，121 题逐题比对）：**
+
+| 对照 | `questions[].correct` 与之一致 |
+| --- | --- |
+| 第 0 次重复的位串 `ablation.featureCorrectByRun[0]` | **121 / 121**（两臂都是） |
+| 四次多数（≥3） | 117 / 121 |
+| 任一次正确 | 116 / 121（对照）、118 / 121（处理） |
+
+**根因是一条写在工具 docstring 里的假设。** `tools/expansion-reading.py` 原文：
+
+> `questions[].correct` is the campaign's majority verdict (>= 3 of 4 repetitions …), and it is the field
+> the published 84.30% was counted from. This tool therefore reads that field and **not**
+> `ablation.featureCorrectByRun`: the bitstrings are in a different order from `questions[]`, and a
+> recomputation over them on `S16` returns 101 of 121 where the artifact's own verdicts return 102.
+
+三句话，三处错：字段不是多数票而是第 0 次；位串**没有**顺序问题（第 0 次位串与 `questions[]` 逐题对齐，
+121/121，这正好是联接证明）；`101 vs 102` 的差不是顺序问题，而是**多数票 102 / 第 0 次 101**。它把"两个
+估计量"的差别误读成"有顺序 bug"，于是为了回避一个不存在的 bug 而选了一个错的估计量，并把这个选择
+写成了规范。
+
+而 `efficiency-frontier.ts` 早就把这个坑写在注释里了：
+
+> Collapsing a `series` to `discordant` throws away the repetitions — that is how `MR` read **2 won to 9
+> lost, p = 0.0654** on repetition 0 and **16 won to 5 lost, p = 0.0039** on the four-repetition means.
+
+**修（机制，不是文案）：**
+
+| 改动 | 作用 |
+| --- | --- |
+| `repetition_reading()`：从 `ablation.featureCorrectByRun` 取四次计数，逐题整数差做 exact sign-flip | 估计量与登记口径一致；`sign_flip_exact` 从 `paired-test.ts` 逐行移植（含 40 对以上走正态尾），两个仪器必须给同一个数 |
+| `field_identity()`：在每个 artifact 上证明 `questions[].correct` 复现哪一种统计 | 字段的含义被**测量**出来并打印，而不是被 docstring 断言；这一次它打印 `repetition-0, 121/121` |
+| `mr.firstRepetition` | 被撤回的数留在文件里，撤回才可核对 |
+| 掩码长度 ≠ 名册长度、一侧有掩码一侧没有 | 两种情形都 `unreadable`，不再静默 zip |
+| `unit: 'count-mean'` | 1.75 不再被 `toFixed(0)` 印成 2；`C1` 的"token 没有小数"规则不变，两个 unit 分开 |
+| `E3` 地板也走均值 | 一条判据看均值、另一条看第 0 次，会让两个并排的数字互相矛盾 |
+| 测试 32 → 37 条 | 新增的 5 条里有 3 条在这个 bug 存在时会红：均值 vs 第 0 次分离、字段身份可分、掩码长度越界 |
+
+**代价与教训。** 这不是实现 bug，是**读数规范 bug**，它污染的不止 `S18`：这一 campaign 用同一字段读过的
+每一次 delta 都是第 0 次重复。影响面是"历史数字的量级"，不是"结论的方向"——所有历史 delta 都远小于
+它们的阈值，改口径不会翻案。真正被改的是这一次的 `+4 → +1.75`，以及从此以后"delta 是哪个估计量"这个
+问题有代码回答而不是有注释回答。
+
+### 142.17 记忆臂与 reference pipeline 的差，才是 `MR` 上真正的那笔账
+
+| 臂 | 基线侧（reference pipeline） | feature 侧（记忆臂） | 差 |
+| --- | ---: | ---: | ---: |
+| 对照（`query_expansion: none`） | 104.75（86.57%） | 99.25（82.02%） | **−4.55pp** |
+| 处理（`query_expansion: llm`） | 104.00（85.95%） | 101.00（83.47%） | **−2.48pp** |
+
+同一个读者、同一批 121 题、同一个 judge：**reference pipeline 把会话取回来截断就给读者，cortex 的记忆臂
+比它低 2.5–4.6 个百分点**。artifact 自己的 run-level t 检验说两边都显著（`p = 0.0105` / `0.0177`），
+逐题 sign-flip 说都不显著（`p = 0.159` / `0.492`）——两种说法都要给：run-level 的 t 检验把 4 次重复当 4 个
+独立样本（伪重复），逐题检验只有 26 / 29 个不一致对，121 题的分辨率约 ±8pp，看不出来不等于没有。
+
+这一项是下一轮的对象，且它比扩展大 3–6 倍。**下一轮不该再派扩展，该拆的是"记忆臂交给读者的那 48,460
+字符里，哪一部分是 reference pipeline 有而我们没有的"。**
+
 
 ### 142.15 把读数接回产品侧：一条判据指向了错的 artifact
 

@@ -1,5 +1,5 @@
 {
-  "$comment": "The attributable reading of query expansion (S18): two dispatches at one commit, 121 MR questions each, four repetitions. Replaces nothing -- S17's row stays as the record of a pair that could not be attributed.",
+  "$comment": "The attributable reading of query expansion (S18): two dispatches at one commit, 121 MR questions each, four repetitions. Produced by `tools/expansion-reading.py` from the two artifacts, not typed. The first version of this file reported +4 of 121 -- that was repetition 0, which is what `questions[].correct` turns out to be; see `fieldIdentity` and tracking report 142.16.",
   "row": "S17",
   "pair": {
     "control": {
@@ -17,19 +17,54 @@
   },
   "population": { "MR": 121 },
   "mr": {
-    "control": 99,
-    "treatment": 103,
-    "deltaQuestions": 4,
-    "controlRate": 0.8182,
-    "treatmentRate": 0.8512,
-    "discordant": { "fixed": 6, "broken": 2 },
-    "mcnemarP": 0.2891
+    "estimator": "four-repetition mean, exact sign-flip over per-question count differences",
+    "runs": 4,
+    "control": 99.25,
+    "treatment": 101.0,
+    "deltaQuestions": 1.75,
+    "controlRate": 0.8202,
+    "treatmentRate": 0.8347,
+    "won": 8,
+    "lost": 5,
+    "ties": 108,
+    "pValue": 0.390137,
+    "firstRepetition": {
+      "$comment": "The retracted reading. `questions[].correct` reproduces repetition 0 on 121 of 121 questions in both arms, so every number this campaign published from that field before round 145 is one repetition's. Kept because a retraction that deletes its own number cannot be checked.",
+      "control": 99,
+      "treatment": 103,
+      "deltaQuestions": 4,
+      "won": 6,
+      "lost": 2,
+      "mcnemarP": 0.289062
+    },
+    "fieldIdentity": {
+      "control": { "agreesWith": "repetition-0", "repetition0": "121/121", "majority": "117/121" },
+      "treatment": { "agreesWith": "repetition-0", "repetition0": "121/121", "majority": "117/121" }
+    }
   },
   "baselineSide": {
-    "$comment": "The deterministic retrieval arm inside each run. It is 105 of 121 in BOTH dispatches, which is the noise control this pair did not have to construct: a non-LLM side that reproduces exactly says the harness, the dataset and the ranking path are the same, so the four questions are the feature arm's.",
-    "control": 105,
-    "treatment": 105,
-    "total": 121
+    "$comment": "The reference pipeline inside each run. The first version of this file called it a deterministic side that reproduced question for question at 105; that was wrong, and the artifact says so: its four repetitions land on 105/107/102/105 in the control and 105/105/103/103 in the treatment. It uses the same LLM reader, so it is stochastic, and the identical 105 in both artifacts' `baseline.metrics.correct` is repetition 0 of both, not a reproduced run.",
+    "control": 104.75,
+    "treatment": 104.0,
+    "total": 121,
+    "controlRatesPerRun": [105, 107, 102, 105],
+    "treatmentRatesPerRun": [105, 105, 103, 103],
+    "controlToTreatment": { "deltaQuestions": -0.75, "won": 6, "lost": 7, "pValue": 0.809082 },
+    "note": "This is the noise floor this pair does have to construct: the same configuration dispatched twice moved by -0.75 questions, 6 won against 7 lost. A treatment delta of +1.75 is the same order."
+  },
+  "memoryArmAgainstReference": {
+    "$comment": "Where the gap to the published frontier actually is. Both arms' memory side is below the reference pipeline on MR, which is the number that does not move when the flag moves.",
+    "control": {
+      "delta": -4.55,
+      "runLevelTTestP": 0.0105,
+      "questionLevel": { "won": 9, "lost": 17, "pValue": 0.158788 }
+    },
+    "treatment": {
+      "delta": -2.48,
+      "runLevelTTestP": 0.0177,
+      "questionLevel": { "won": 13, "lost": 16, "pValue": 0.491542 }
+    },
+    "reading": "The artifact's own t-test over four run scores says significant in both arms; the question-level sign-flip does not, because 121 questions resolve about +/-8 points and the discordant counts are 26 and 29. The honest statement is the point estimate and the resolution, not the smaller of the two p-values."
   },
   "bill": {
     "controlPromptTokensPerQuestion": 13019.4,
@@ -50,8 +85,8 @@
   },
   "criteria": {
     "E0": { "verdict": "pass", "measured": "both artifacts name a7eafcced3f3" },
-    "E1": { "verdict": "fail", "measured": "103 of 121", "threshold": ">= 107" },
-    "E1'": { "verdict": "fail", "measured": "103 against this pair's own control 99", "threshold": ">= control + 5" },
+    "E1": { "verdict": "fail", "measured": "101.00 of 121 (four-repetition mean)", "threshold": ">= 107" },
+    "E1'": { "verdict": "fail", "measured": "101.00 against this pair's own control 99.25", "threshold": ">= control + 5" },
     "E2": { "verdict": "fail", "measured": "12914.9 tokens per question", "threshold": "<= 8600" },
     "E2'": { "verdict": "pass", "measured": "0.992x the control's 13019.4", "threshold": "<= 1.15x" },
     "E3": {
@@ -65,10 +100,10 @@
   },
   "disposition": {
     "decision": "not adopted; the family closes",
-    "licence": "PREREGISTRATION 13.377.9 row 3: E1' fail with E0/E2'/E4' pass licenses the close, including the window reorder's premise.",
-    "whatTheFourQuestionsAre": "A real +3.31pp on the cell, six fixed against two broken (exact McNemar p = 0.289), bought for 0.8% fewer prompt tokens. It is below the five questions the registration asked for and it does not close the gap to the baseline arm, which answers 105 of the same 121 questions without any expansion at all.",
-    "whatItSettles": "S17 could not answer whether the mechanism works: its delta was two code versions. This pair can, and the answer is that it works and not enough.",
-    "whatItLeaves": "The arm's MR cell is 4.96 points BELOW its own deterministic baseline (99 against 105) and 1.66 below it with expansion (103 against 105). That deficit, not the expansion, is the next thing to read."
+    "licence": "PREREGISTRATION 13.377.9 row 3: E1' fail with E0/E2'/E4 pass licenses the close, including the window reorder's premise.",
+    "whatTheDeltaIs": "**+1.75 questions on the four-repetition mean** (+1.45pp): 8 questions won, 5 lost, 108 ties, exact sign-flip p = 0.3901. Not +4: that was repetition 0, and the correction is tracking report 142.16. Below the five questions the registration asked for, and the same order as the -0.75-question movement the reference pipeline shows between the two dispatches.",
+    "whatItSettles": "S17 could not answer whether the mechanism works: its delta was two code versions. This pair's delta is one flag. The answer is that the mechanism does not buy a measurable amount of MR accuracy, and the sentences it adds reach the ranking (1,932 queries against 484 indexes, zero refusals).",
+    "whatItLeaves": "The memory arm is still below the reference pipeline that uses the same reader: -4.55pp on the control and -2.48pp on the treatment. That deficit is 3.5 to 6 times the size of what the expansion bought, and it is the next thing to read."
   },
   "spend": { "projected": 6.9, "currency": "CNY", "runs": 2 }
 }
