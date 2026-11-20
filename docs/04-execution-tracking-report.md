@@ -28351,3 +28351,189 @@ timeline: 30 dozen [2023/03/12 -> now]
 | 4 | `MR` 的"标注边界"占比（双读，`verbatim-acts` vs `route`） | 双读分歧即上界 | 1 轮 | ≈3 | 无 |
 | 5 | `R2` 重派（读者家族） | `R2.1`–`R2.4` | 2 h | ≤30 | Zhipu 额度 |
 | 6 | 竞品 harness 入站 smoke | 同 harness 同判官配对读数 | 1 轮 | ≈14 | 需外网 |
+
+---
+
+## 139. 第 142 轮：把"可请求"变成"可测量"，以及 ⑰ 第一次看见钱花在哪
+
+第 141 轮结束时 `factTimeline` 是 `product (gated)`，**有开关、有渲染、有测试、有手册，没有任何臂能请求它**。
+这一轮补的是那四个环节，以及 ⑰ 的读者侧第一笔真账。**本轮派发 0 次、花费 0 CNY。**
+
+### 139.1 三件事
+
+| # | 做的事 | 判据 | 读数 |
+| --- | --- | --- | --- |
+| 1 | `factTimeline` 补齐五环（臂请求 / 臂转发 / 臂记录 / 工作流转发 / 派发器声明） | 六处变异检验各自转红 | 通过 |
+| 2 | ⑰ 读者侧：`completionTokens / answerChars` 插桩 | 一次调用同时记录"收了多少"与"发了多少" | 通过 |
+| 3 | ⑴ 的量化：三张定位图（准确率 × 成本，多面板区分排行榜与产品类型） | 每个数字带来源；未公布成本不画成点 | 通过 |
+
+第 3 项回应本轮新增的必答要求（用图展示 cortex 与竞品在准确率与成本两维上的位置，并区分开源自托管与闭源云服务）。
+
+### 139.2 五环：`semanticCarry` 付过六轮的账，`factTimeline` 差点再付一次
+
+`factTimeline` 上一轮进产品时的 `reason` 写得很清楚，但**臂侧五个环节一个都没有**：
+
+| 环 | 缺的东西 | 后果 |
+| --- | --- | --- |
+| 2 臂能请求 | `CORTEX_MEMORY_FACT_TIMELINE` 的常量、选项字段、`readToggle` 调用、disabled 投影 | 任何派发都无法开启它 |
+| 3 臂转发 | `run-ablation.ts` 的 `buildCortex` 条件展开 | 变量读到了，构造函数收不到 |
+| 4 臂记录 | `MemoryArmConfig.factTimeline` + `featureConfig` + 日志行 | 产物无法区分"ran the control"与"predates the field" |
+| 5 工作流 | `semantic-carry.yml` 的输入与 `env:` 转发 | 输入不存在，派发器无从发送 |
+| 6 派发器 | `dispatch-semantic-carry.py` 的 `INPUTS` 条目 | 工作流默认值成了实际决定者 |
+
+四个设计决定，每个都否掉一个更显然的做法：
+
+| 显然的做法 | 为什么否掉 |
+| --- | --- |
+| 把 `factTimeline` 折进 `semanticCarry` 一个变量 | 两者是**两个实验**：carry 决定一条事实是否被渲染，timeline 决定它是否**带日期**。折起来会让"carry 无效"与"carry 的渲染无效"变成同一个派发 |
+| 把 `factTimeline` 折进 `pairing` | timeline 实验的两侧**都在 carry**，差别只在日期。折进 pairing 会把 carry 的仪器与 carry 的渲染合成一次运行 |
+| 在 `run-ablation.ts` 里 `...(armOptions.factTimeline === true ? {factTimeline: true} : {})`（不判 carry） | 产品的渲染器开头就是 `if (this.#options.semanticCarry !== true) return []`，所以在对照侧传它等于传一个产品会**静默忽略**的选项，而产物会把它记成已行使的治疗 |
+| 记录 `armOptions.factTimeline && armOptions.semanticCarry` | 记录的应当是**请求值**（与 `semanticCarry` 同一读法：配置说请求了什么，普查说到达了什么）。用合取会把一个刚被 preflight 拒绝的请求从产物里抹掉，让失败读起来像"没人请求过" |
+
+第三条的兜底是**前置拒绝**，而且排在 `pairing` 规则**之前**：
+
+```text
+CORTEX_MEMORY_FACT_TIMELINE=1 renders the interval a served fact held, and the product only renders it
+when the carry is on: set both ... Without the carry there is no fact to date, so the run would publish
+a treatment that never executed.
+```
+
+顺序是刻意的：两条规则都会触发时，先报更具体的那条，一次派发就能修好两个变量；反过来会让操作者改一次、重跑一次、再被拒一次。
+
+### 139.3 六处变异检验（都是当场转红）
+
+| 变异 | 转红的测试 |
+| --- | --- |
+| 删掉 `factTimeline: readToggle(...)` | 5 条（解析、strict 语法、disabled 投影、记录、hand-built） |
+| 删掉 disabled 投影 `factTimeline: false` | 1 条（"a disabled arm projects the control"） |
+| 展开式去掉 `carry &&` | 1 条（"spreads inside the pair rather than beside it"） |
+| 拒绝条件移到 `pairing` 规则之后 | 1 条（顺序断言） |
+| 删掉工作流 `env:` 行 | 1 条 |
+| 删掉派发器 `INPUTS` 条目 | 1 条 |
+
+**还有一处是机制抓住我的，不是我抓住它的**：加完 `MemoryArmConfig.factTimeline` 后，
+`test_arm_config_baseline.py` 立刻红——
+
+```text
+these fields of `MemoryArmConfig` are in neither `PROJECTED` nor `UNPROJECTED`: ['factTimeline']
+```
+
+这正是那条门禁存在的理由（`supersededRendering` 与 `indexEmbedding` 曾经是"已发布两个轮次但没分类、
+下一次 `--record` 才会炸"）。分类写成 `identity`，理由写进 `arm-config-record.py`：它是
+`semantic-carry.yml` 的派发输入而非本臂工作流的输入，产物记录解析结果，而 `semanticCarry.matched`
+是能反驳它的独立读数。
+
+### 139.4 ⑰ 的第一笔真账：95% 的生成 token 没有进入产物交付的文本
+
+新工具 `tools/reader-cost-census.mjs` 从产物**重算**成本构成，用的是 `usageBySide` 与 `questions[].rawOutput`
+**本体**——不重新实现任何口径。`S17` 的 121 道 `MR`：
+
+| 侧 | 调用 | prompt/次 | completion/次 | 缓存命中 | 交付字符/题 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| feature（cortex-memory） | 495 | **12,831** | **2,938** | 75.5% | **513** |
+| baseline（reference 管线） | 706 | 1,666 | **82** | 88.0% | 未捕获 |
+
+两个数必须并排看才成立：
+
+1. **同一 harness、同一客户端、同一 `thinking` 设置，feature 侧的 completion 是 baseline 的 36 倍。**
+2. **交付出去的文本只有 513 字符/题**（≈147 token），也就是 **95% 的生成 token 不在产物交付的答案里**。
+
+这条读数**没有**定性原因，而这是刻意留白：`rawOutput` 是**最后一轮**的完整 content（`benchmark.ts` 按
+下标覆盖，不截断），所以差额要么是"模型写了一篇没人读的工作稿"（契约问题），要么是"provider 计费的生成
+从未到达调用方"（reasoning token / 多轮采样，计费口径问题）。产物此前**两者都表达不出来**——它记了付了
+多少，从来没有记收到多少。
+
+### 139.5 因此本轮加的插桩：`answerChars`
+
+`LlmUsage` 与 `UsageSnapshot` 各加一个字段，取值在**唯一同时握着两半的那一跳**：
+
+```ts
+const answer = typeof content === 'string' ? content : '';
+const usage = parseUsage(json?.usage);
+recordUsage(usage === undefined ? undefined : { ...usage, answerChars: answer.length });
+```
+
+四个决定：
+
+| 决定 | 理由 |
+| --- | --- |
+| 造在 usage 记录上，不另起计数器 | 两个计数器就是两处"什么算送达"的定义，会一直一致到有人改其中一个 |
+| `LlmUsage` 上可选、`UsageSnapshot` 上必填 | `parseUsage` 读不到它（provider 不把它放进响应体）；而累积值缺它会退化成与"没有任何调用送达"同一个字节 |
+| 测 `answer.length` 而不是 `content.length` | `content` 是数字时（代理改写响应）是"未送达"，不是"送达两个字符" |
+| 报告里渲染成 `chars per completion token` | 这条比率是**唯一**能把"契约让模型写没人读的工作稿"与"provider 计费了调用方看不见的生成"分开的数 |
+
+报告新增一行，三个分支各自有测试：
+
+```text
+- Answer delivered per completion token: **0.50**            # 250 chars / 500 completion tokens
+- Answer delivered per completion token: **0 -- answers billed, none delivered**
+- Answer delivered per completion token: **--**               # 没有 completion 可除（全部 unpriced）
+```
+
+三处变异检验：删掉测量 → 1 条红；改成 `String(content).length` → 1 条红；`usage-by-side.ts` 的
+`plusUsage`/`minusUsage` 字段表各加一项（**闭包断言**：`bothSides(...).answerChars + residual.answerChars == total.answerChars`）。
+
+### 139.6 图：三张，因为三个单位不能同轴
+
+新增 `tools/render-landscape.py` + `docs/figures/landscape.json`。数据是**文件**而不是脚本里的字面量：
+每一行带自己的来源、口径与产品类型，图的全部意义就是读者能回去核对。
+
+| 图 | 轴 | 它回答什么 |
+| --- | --- | --- |
+| `fig-longmemeval-accuracy-vs-cost.png` | 左：token/查询（log） × 准确率；右：未公布成本的系统（共享 y） | **唯一一张两轴都在的混合图** |
+| `fig-longmemeval-accuracy-ranking.png` | 准确率排行，按作答读者分组 | 同一个记忆系统在换读者时跨 90.2–98.4 |
+| `fig-longmemeval-cost-per-query.png` | token/查询 | "最准"与"最便宜"是两个不同的赢家，cortex 两个都不是 |
+
+左侧面板的五个点：Contextier 91.6 @ 2,807（闭源）、Zep 90.2 @ 4,408、Mem0 94.4 @ 6,787、**cortex 91.15 @ 7,448**。
+右侧面板是七个**公布了准确率但没有公布成本**的系统——它们被画成点而不是被插补到某个 x 上：
+插补会为一个没有账单的系统发明一个位置，并把它摆在有账单的系统旁边供人比较。
+
+三处渲染缺陷是看图发现的，不是写完就交的：第一版把"未公布成本"画成顶部灰带（灰带的 y 恰好高于所有点，
+等于谎报准确率，且标签溢出轴外）；第二版用 `barh` 与散点共享 y（柱状图的 y 是分类序号，把散点的数据压进
+顶部十分位）；第三版右侧标签在 96.8/96.2/94.9 三行重叠（改成"标记在真实准确率、标签按最小间距下推、
+引线连回"）。
+
+### 139.7 为什么这一轮仍然没有 A/B（诚实边界）
+
+五环补齐后，`factTimeline` 从"可请求"变成"**可 A/B**"，但它仍然**没有被测量**。一次
+`semantic-carry.yml` 的 `pairing=carry` + `fact_timeline=1` 与 `fact_timeline=0` 配对才会给出读数，
+而这一轮**没有派发**。能说的只有三句：
+
+1. 台账第 19 行的五环现在齐了（六处变异各自转红，不是声称）；
+2. ⑰ 的读者侧现在有了比值，且这个比值把 `S17` 的 36 倍差额变成一个可判定的问题；
+3. 三张图给的是**位置**，不是进展——cortex 仍然在 91.15，成本仍然最贵。
+
+### 139.8 测试与门禁
+
+| 项 | 值 |
+| --- | --- |
+| TS（`cortex-ai`） | 345 条（`usage-answer-chars.test.ts` **6** 条新增，`llm.test.ts` 44、`usage.test.ts` 21） |
+| TS（`cortex-eval`） | 3,697 条（`fact-timeline-arm.test.ts` **15** 条新增；`report-llm-usage.test.ts` 10 → 13；`usage-by-side.test.ts` 13；`bench-memory-arm.test.ts` 228） |
+| Python | **3,095** 通过 / 19 跳过 / 233 subtests（`test_reader_cost_census.py` **10** 条新增） |
+| 全部 TS | core 963 / storage 125 / ai 345 / eval 3,697 / memory 1,674 = **6,804** |
+| 覆盖率 | `cortex-ai` **100/100/100/100**（含 `usage.ts` 100）；`cortex-eval` 99.58/98.68/99.84/99.77；`cortex-memory` 99.88/99.73/100/100 |
+| 变异检验 | 臂侧 6 处、插桩 2 处、census 工具 2 处，**全部转红** |
+| 台账 | 27 行不变：18 product（7 gated）/ 9 instrument；第 19 行仍 `gated`（未测量） |
+| 目录 | `docs/figures/` 新建：3 张 PNG + `landscape.json` |
+
+### 139.9 位置
+
+| 指标 | 数值 | 差距 |
+| --- | --- | --- |
+| 端到端（`S16`） | **91.15%** | Recallium 98.4% **−7.25**；ContextStream 96.8% **−5.65** |
+| 开源可自托管行 | 与 agentmemory V4 96.2 差 **−5.05**；高于 Zep 90.2 **+0.95** | 第二 |
+| `MR` | **84.30%**（`reader-rung` 口径 83.47%） | MemCog 92.48% **−8.18** |
+| 成本 | **7,448** token/题 | Contextier 2,807 / Zep 4,408 / Mem0 6,787（**最贵**） |
+| 读者交付比 | **513 chars / 2,938 completion tokens / 次** | 新读数；baseline 82 completion/次 |
+| 产品完成度 | **18/27 = 66.7%** | 未动 |
+| 可发布信号 | **未发** | 未动 |
+
+### 139.10 剩余步骤
+
+| # | 步骤 | 判据 | 时间 | CNY | 阻塞 |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 定性 2,938 completion/次：`answerChars` 已插桩，一次 `limit=10` 的探针即可把"工作稿"与"计费生成"分开 | 交付比与 provider 的 `reasoning_tokens` 对照 | 1 轮 | ≈1 | 无 |
+| 2 | `factTimeline` 的 A/B（`carry` × `fact_timeline=0/1`，78 题） | 预登记判据 + 配对 McNemar | 2 h | ≈3 | 无 |
+| 3 | 竞品 harness 入站 smoke（`Provider` 适配，3 题） | 同 harness 同判官配对读数 | 1 轮 | ≈14 | 需外网 |
+| 4 | `MR` 的"标注边界"占比（双读，`verbatim-acts` vs `route`） | 双读分歧即上界 | 1 轮 | ≈3 | 无 |
+| 5 | `R2` 重派（读者家族） | `R2.1`–`R2.4` | 2 h | ≤30 | Zhipu 额度 |
