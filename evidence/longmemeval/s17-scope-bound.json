@@ -1,0 +1,153 @@
+{
+ "preregistration": "docs/PREREGISTRATION-SCOPE-BOUND.md",
+ "treatment": {
+  "runId": "44642788342",
+  "ask": "verbatim-scope",
+  "room": {
+   "multi-session": 49035
+  },
+  "questions": 121,
+  "repetitions": 4
+ },
+ "control": {
+  "runId": "44017278305",
+  "ask": "verbatim-acts",
+  "room": {
+   "multi-session": 48460
+  }
+ },
+ "criteria": {
+  "S17.1": {
+   "threshold": "net >= +3",
+   "measured": -2.48,
+   "verdict": "falsified"
+  },
+  "S17.2": {
+   "threshold": "p < 0.05",
+   "measured": 0.5078,
+   "verdict": "falsified"
+  },
+  "S17.3": {
+   "threshold": "evidence identical 121/121",
+   "measured": "15/121",
+   "verdict": "falsified"
+  },
+  "S17.4": {
+   "threshold": "regressions <= 4",
+   "measured": 6,
+   "verdict": "falsified"
+  },
+  "S17.5": {
+   "threshold": "capabilities outside MR do not move",
+   "measured": "not graded (MR only)",
+   "verdict": "n/a"
+  }
+ },
+ "reading": {
+  "control": "83.47%",
+  "treatment": "80.99%",
+  "deltaPoints": -2.48,
+  "regressions": 6,
+  "conversions": 3,
+  "neither": 112,
+  "declinesAllRuns": {
+   "control": 131,
+   "treatment": 6
+  }
+ },
+ "regressions": [
+  {
+   "questionId": "129d1232",
+   "groundTruth": "$5,850",
+   "control": "$5,850",
+   "treatment": "$5,250",
+   "attributableToBound": true
+  },
+  {
+   "questionId": "3a704032",
+   "groundTruth": "3",
+   "control": "3",
+   "treatment": "2",
+   "attributableToBound": true
+  },
+  {
+   "questionId": "7405e8b1",
+   "groundTruth": "Yes.",
+   "control": "Yes",
+   "treatment": "20%",
+   "attributableToBound": false
+  },
+  {
+   "questionId": "9ee3ecd6",
+   "groundTruth": "100",
+   "control": "100 points",
+   "treatment": "300 points",
+   "attributableToBound": false
+  },
+  {
+   "questionId": "c18a7dc8",
+   "groundTruth": "7",
+   "control": "Cannot be determined from the evidence.",
+   "treatment": "10",
+   "attributableToBound": false
+  },
+  {
+   "questionId": "gpt4_2ba83207",
+   "groundTruth": "Thrive Market",
+   "control": "Thrive Market",
+   "treatment": "Walmart",
+   "attributableToBound": true
+  }
+ ],
+ "conversions": [
+  "60bf93ed",
+  "d851d5ba"
+ ],
+ "evidenceDisplacement": {
+  "identical": 15,
+  "total": 121,
+  "deltaChars": {
+   "min": -350,
+   "median": 29,
+   "max": 782
+  },
+  "deliveredDeltaChars": {
+   "min": 225,
+   "median": 575,
+   "max": 918
+  }
+ },
+ "cost": {
+  "featureCalls": 495,
+  "gradings": 484,
+  "promptTokensPerGrading": 13123,
+  "cacheHitRate": 0.755,
+  "cnyApprox": 9.1
+ },
+ "goldInconsistency": [
+  {
+   "questionId": "d851d5ba",
+   "gold": "$3,750",
+   "excludes": "the event raised over $5,000"
+  },
+  {
+   "questionId": "129d1232",
+   "gold": "$5,850",
+   "includes": "$600 the speaker helped organize"
+  }
+ ],
+ "instrument": {
+  "tool": "tools/reader-rung.py --capability MR",
+  "note": "Two instruments on the same pair: the tool recomputes the majority from the four masks (control 101, treatment 98, b 6 / c 3, p 0.5078); the artifact's own `correct` field counts 102 against 98 (6 regressions, 2 conversions). The difference is one question decided by the tie rule. The paired delta is negative under both, which is what the criteria read.",
+  "toolControlCorrect": 101,
+  "toolTreatmentCorrect": 98,
+  "fieldControlCorrect": 102,
+  "fieldTreatmentCorrect": 98
+ },
+ "rawFieldCounts": {
+  "regressions": 6,
+  "conversions": 2,
+  "controlCorrect": 102,
+  "treatmentCorrect": 98
+ }
+}

@@ -1,0 +1,266 @@
+{
+ "source": {
+  "runId": "44017278305",
+  "questions": 500,
+  "repetitions": 4,
+  "ask": "verbatim-acts",
+  "reader": {
+   "providerId": "deepseek",
+   "model": "deepseek-chat",
+   "baseUrl": "https://api.deepseek.com/v1",
+   "endpoint": "matches",
+   "thinking": "enabled",
+   "thinkingRoutes": [
+    "multi-session",
+    "temporal"
+   ],
+   "temperature": 0,
+   "deadlineMs": 600000
+  },
+  "judge": {
+   "providerId": "deepseek",
+   "model": "deepseek-chat",
+   "temperature": 0,
+   "source": "reader"
+  }
+ },
+ "capabilities": {
+  "IE": 150,
+  "ABS": 30,
+  "MR": 121,
+  "TR": 127,
+  "KU": 72
+ },
+ "routes": {
+  "flat": 94,
+  "abstention": 30,
+  "multi-session": 121,
+  "temporal": 127,
+  "knowledge-update": 72,
+  "assistant": 56
+ },
+ "overall": {
+  "correct": 456,
+  "total": 500
+ },
+ "mr": {
+  "total": 121,
+  "correct": 102,
+  "countingShaped": 81,
+  "countingShapedWrong": 15,
+  "goldOverlapOfFailures": {
+   "all": 15,
+   "most": 4
+  },
+  "correctRunsOfFailures": {
+   "0": 16,
+   "3": 3
+  },
+  "failures": [
+   {
+    "questionId": "6d550036",
+    "mechanism": "under",
+    "goldOverlap": "22/22",
+    "correctRuns": 0,
+    "groundTruth": "2",
+    "answer": "1",
+    "question": "How many projects have I led or am currently leading?"
+   },
+   {
+    "questionId": "gpt4_a56e767c",
+    "mechanism": "under",
+    "goldOverlap": "18/18",
+    "correctRuns": 0,
+    "groundTruth": "I attended four movie festivals.",
+    "answer": "3",
+    "question": "How many movie festivals that I attended?"
+   },
+   {
+    "questionId": "gpt4_2f8be40d",
+    "mechanism": "over",
+    "goldOverlap": "18/18",
+    "correctRuns": 0,
+    "groundTruth": "I attended three weddings. The couples were Rachel and Mike, Emily and Sarah, and Jen and Tom.",
+    "answer": "5",
+    "question": "How many weddings have I attended in this year?"
+   },
+   {
+    "questionId": "88432d0a",
+    "mechanism": "over",
+    "goldOverlap": "23/24",
+    "correctRuns": 0,
+    "groundTruth": "4",
+    "answer": "5",
+    "question": "How many times did I bake something in the past two weeks?"
+   },
+   {
+    "questionId": "gpt4_7fce9456",
+    "mechanism": "over",
+    "goldOverlap": "29/30",
+    "correctRuns": 3,
+    "groundTruth": "I viewed four properties before making an offer on the townhouse in the Brookside neighborhood. The reasons I didn't make an offer on them were: the kitchen of the bungalow needed serious renovation, the property in Cedar Creek was out of my budget, the noise from the highway was a deal-breaker for the 1-bedroom condo, and my offer on the 2-bedroom condo was rejected due to a higher bid.",
+    "answer": "5",
+    "question": "How many properties did I view before making an offer on the townhouse in the Brookside neighborhood?"
+   },
+   {
+    "questionId": "7024f17c",
+    "mechanism": "other",
+    "goldOverlap": "18/18",
+    "correctRuns": 3,
+    "groundTruth": "0.5 hours",
+    "answer": "0 hours",
+    "question": "How many hours of jogging and yoga did I do last week?"
+   },
+   {
+    "questionId": "60bf93ed",
+    "mechanism": "decline",
+    "goldOverlap": "12/12",
+    "correctRuns": 0,
+    "groundTruth": "5 days. 6 days (including the last day) is also acceptable.",
+    "answer": "Cannot be determined from the evidence.",
+    "question": "How many days did it take for my laptop backpack to arrive after I bought it?"
+   },
+   {
+    "questionId": "d851d5ba",
+    "mechanism": "over",
+    "goldOverlap": "22/22",
+    "correctRuns": 0,
+    "groundTruth": "$3,750",
+    "answer": "$8,750",
+    "question": "How much money did I raise for charity in total?"
+   },
+   {
+    "questionId": "gpt4_ab202e7f",
+    "mechanism": "over",
+    "goldOverlap": "24/30",
+    "correctRuns": 0,
+    "groundTruth": "I replaced or fixed five items: the kitchen faucet, the kitchen mat, the toaster, the coffee maker, and the kitchen shelves.",
+    "answer": "7",
+    "question": "How many kitchen items did I replace or fix?"
+   },
+   {
+    "questionId": "gpt4_731e37d7",
+    "mechanism": "under",
+    "goldOverlap": "23/23",
+    "correctRuns": 0,
+    "groundTruth": "$720",
+    "answer": "$200",
+    "question": "How much total money did I spend on attending workshops in the last four months?"
+   },
+   {
+    "questionId": "2b8f3739",
+    "mechanism": "under",
+    "goldOverlap": "18/18",
+    "correctRuns": 0,
+    "groundTruth": "$495",
+    "answer": "$375",
+    "question": "What is the total amount of money I earned from selling my products at the markets?"
+   },
+   {
+    "questionId": "bf659f65",
+    "mechanism": "under",
+    "goldOverlap": "17/17",
+    "correctRuns": 0,
+    "groundTruth": "3",
+    "answer": "2",
+    "question": "How many music albums or EPs have I purchased or downloaded?"
+   },
+   {
+    "questionId": "gpt4_372c3eed",
+    "mechanism": "under",
+    "goldOverlap": "17/17",
+    "correctRuns": 0,
+    "groundTruth": "10 years",
+    "answer": "8 years",
+    "question": "How many years in total did I spend in formal education from high school to the completion of my Bachelor's degree?"
+   },
+   {
+    "questionId": "gpt4_2f91af09",
+    "mechanism": "under",
+    "goldOverlap": "17/17",
+    "correctRuns": 0,
+    "groundTruth": "23",
+    "answer": "22",
+    "question": "How many total pieces of writing have I completed since I started writing again three weeks ago, including short stories, poems, and pieces for the writing challenge?"
+   },
+   {
+    "questionId": "a4996e51",
+    "mechanism": "decline",
+    "goldOverlap": "12/12",
+    "correctRuns": 3,
+    "groundTruth": "50",
+    "answer": null,
+    "question": "How many hours do I work in a typical week during peak campaign seasons?"
+   },
+   {
+    "questionId": "a1cc6108",
+    "mechanism": "decline",
+    "goldOverlap": "8/10",
+    "correctRuns": 0,
+    "groundTruth": "11",
+    "answer": "Cannot be determined from the evidence.",
+    "question": "How old was I when Alex was born?"
+   },
+   {
+    "questionId": "d6062bb9",
+    "mechanism": "over",
+    "goldOverlap": "11/11",
+    "correctRuns": 0,
+    "groundTruth": "1,998",
+    "answer": "1,456",
+    "question": "What is the total number of views on my most popular videos on YouTube and TikTok?"
+   },
+   {
+    "questionId": "37f165cf",
+    "mechanism": "decline",
+    "goldOverlap": "10/10",
+    "correctRuns": 0,
+    "groundTruth": "856",
+    "answer": null,
+    "question": "What was the page count of the two novels I finished in January and March?"
+   },
+   {
+    "questionId": "21d02d0d",
+    "mechanism": "under",
+    "goldOverlap": "11/11",
+    "correctRuns": 0,
+    "groundTruth": "2",
+    "answer": "1",
+    "question": "How many fun runs did I miss in March due to work commitments?"
+   }
+  ],
+  "mechanismCounts": {
+   "under": 8,
+   "over": 6,
+   "other": 1,
+   "decline": 4
+  }
+ },
+ "deliveredTurns": {
+  "total": 24337,
+  "atTurnCap400": 21
+ },
+ "llmUsage": {
+  "calls": 5661,
+  "unpricedCalls": 0,
+  "promptTokens": 17855078,
+  "completionTokens": 2294133,
+  "cacheHitPromptTokens": 16757264
+ },
+ "usageBySide": {
+  "baseline": {
+   "calls": 2715,
+   "unpricedCalls": 0,
+   "promptTokens": 2758154,
+   "completionTokens": 82369,
+   "cacheHitPromptTokens": 2264221
+  },
+  "feature": {
+   "calls": 2078,
+   "unpricedCalls": 0,
+   "promptTokens": 14895566,
+   "completionTokens": 2210896,
+   "cacheHitPromptTokens": 14472828
+  }
+ }
+}
