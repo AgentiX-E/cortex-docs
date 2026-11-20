@@ -28939,17 +28939,40 @@ instrument reach: 2 every-question, 6 never, 1 conditional (0 active in the regi
 | 5 | 竞品 harness 入站 smoke | 1 轮 | ≈ 14 CNY，需外网 | 排队 |
 | 6 | `R2` 重派（读者家族） | 阻塞 | — | 等 Zhipu 额度 |
 
-### 141.11 `S18` 已按 §13.377.9 派发（同一个 sha，两条臂）
+### 141.11 `S18` 派发了，被我们自己的注册门拒绝
 
-本轮把 §13.377.9 的登记直接执行掉，而不是留成一条待办：
+两条臂都按 §13.377.9 发了出去（`44711009470` / `44711018477`，同一个 sha `69967dcc`），**两条都在
+preflight 上失败，一分钟内结束，0 CNY，无 partial record**。拒绝的原因不是环境、不是额度，是门自己：
 
-| 项 | 值 |
-| --- | --- |
-| 参考点 | `master` @ `69967dcc`（本轮推送后的头）——**两条臂同一个 sha，同一个 tree** |
-| 控制 | run `44711009470`（`capability=MR`、`limit=0`、`ablation_runs=4`、`query_expansion=none`） |
-| 处理 | run `44711018477`（同上，`query_expansion=llm`） |
-| 成本 | ≈ 6 CNY（121 × 4 × 2 侧） |
-| 判据 | `E0` 同 tree 前置 + `E1'`≥对照 +5、`E2'` ≤ 8,600、`E4'` 收据、`E5'` 对照 `queries == indexes` |
+```text
+registration preflight: dispatch-cortex-memory-ab.py INPUTS
+  asked 9 field(s), 22 registered, 15 departed, 1 declared ['cortex_memory_query_expansion']
+    DEPARTED  capability: "all" (registered) -> "MR" (asked)
+    ABSENT    cortex_memory_ask: registered "verbatim-acts", nothing asked
+    ... 13 more ABSENT
+  declared but unchanged: cortex_memory_query_expansion
+  verdict: 15 field(s) departed and 15 were not declared
+```
 
-**哪个 id 是哪条臂不必猜**：`expansion-reading.py` 对 `queryExpansion != 'llm'` 的处理臂直接抛 `Unreadable`，
-所以读的时候认 artifact 的字段而不是认 id。这也是 §13.377.9 里 `E0` 的形态——它查的是配置面，不是意图。
+§13.377.9 的 `E0` 是有代价的：它要求两条臂同一个 tree，而**同一个 repo 变量装不下两条臂**。
+
+### 141.12 这一对被三处设计挡住，每一处都是"文档说的和代码做的不一样"
+
+| # | 挡点 | 文档怎么说 | 代码怎么做 |
+| --- | --- | --- | --- |
+| 1 | `capability` | 输入描述写着"它是 run-level 选择器而不是臂配置，所以注册门像忽略 `limit` 一样忽略它" | `registration-preflight.py` 把它当**已登记字段**，`all → MR` 记成 `DEPARTED` |
+| 2 | 未提交的输入 | 门只把"问了且不等于登记值"算偏离 | 14 个登记字段因为 payload 没写而被记成 `ABSENT`＝"nothing asked"，同样算偏离 → **必须走 `dispatch-cortex-memory-ab.py`**，它会把每个输入填满 |
+| 3 | 声明清单 | `CORTEX_DECLARED_DEPARTURES` 由派发脚本按"这一跑真的动了什么"写入 | 它是**仓库级变量**：控制臂（`query_expansion=none`）在同一变量下被判"声明了却没动" |
+
+第 1 与第 3 是同一个形状的两半：**一个 run-level 的东西被当成臂配置来记账，而记账的容器是仓库级的**。
+于是"同一 sha 的一对臂"在当前设计下无法从一个仓库配置里发出去——这不是 S18 的执行问题，是 `E0` 这个前置
+与派发机制的结构冲突，只是 18 轮里没人试过在同一个 sha 上发两条臂。
+
+**处置**：`S18` 记为 **unread（派发被拒）**，不是 fail。下一轮先修门再派，修法已经明确：
+
+1. `capability` 与 `limit` 归入 run-level 选择器，preflight 与 `readout-arm-run.py` 都不再当臂配置；
+2. 声明清单改为**随派发传参**（同 `ref`），不再只有一个仓库变量；
+3. 两条臂改由 `dispatch-cortex-memory-ab.py` 发（它负责把 22 个输入填满），`query_expansion` 作为唯一覆盖。
+
+修这三处的成本是 1 轮 + 0 CNY（不派发也能测），比 6 CNY 的派发更该先做——**门挡住了一个合法实验，这本身
+就是本轮最该修的东西**。
