@@ -1,188 +1,244 @@
 {
-  "dataset": "LongMemEval-S",
-  "questions": 500,
+ "dataset": "LongMemEval-S",
+ "questions": 500,
+ "asOf": "2026-11-20",
+ "note": "Every competitor row is that vendor or paper’s own published figure under its own answer model and judge; only the cortex row is measured by this repository, and its two coordinates come from one artifact (`costEfficiency.accuracy` 0.9125 and `.promptTokensPerQuestion` 7447.783, run 44017278305). Rows without a token count did not publish one. Self-reported accuracy is not comparable across rows -- the answer model alone moves Mastra from 84.23 to 94.87 -- which is why the cost axis is plotted rather than trusted alone. Re-checked 2026-11-20.",
+ "overall": [
+  {
+   "system": "Recallium",
+   "reader": "Claude Opus 5.5",
+   "accuracy": 98.4,
+   "type": "closed-cloud",
+   "tokensPerQuery": null,
+   "source": "self-reported 2026-10-17, 6/6 disclosure (05-competitor-analysis.md 1.22.1)",
+   "costNote": null
+  },
+  {
+   "system": "ContextStream",
+   "reader": "Claude Opus 5.5",
+   "accuracy": 96.8,
+   "type": "closed-cloud",
+   "tokensPerQuery": null,
+   "source": "self-reported 2026-10-27, held-out half 96.0% (CI 94.9-98.0)",
+   "costNote": null
+  },
+  {
+   "system": "agentmemory V4",
+   "reader": "undisclosed",
+   "accuracy": 96.2,
+   "type": "open-source",
+   "tokensPerQuery": null,
+   "source": "self-reported; cited by ContextStream as the previous high",
+   "costNote": null
+  },
+  {
+   "system": "Maximem Synap",
+   "reader": "Gemini 3.8 Flash",
+   "accuracy": 95.6,
+   "type": "closed-cloud",
+   "tokensPerQuery": 7400,
+   "source": "vendor page 2026-10-28, 478/500, per-question run data public (05-competitor-analysis.md 1.22.2)",
+   "costNote": "memory tokens / question"
+  },
+  {
+   "system": "Mastra OM",
+   "reader": "GPT-5-mini",
+   "accuracy": 94.87,
+   "type": "open-source",
+   "tokensPerQuery": null,
+   "source": "self-reported; the same system reads 84.2 on GPT-4o",
+   "costNote": null
+  },
+  {
+   "system": "Mem0",
+   "reader": "GPT-5",
+   "accuracy": 94.4,
+   "type": "open-source",
+   "tokensPerQuery": 6787,
+   "source": "self-reported 2026-04 algorithm, 4/6 disclosure",
+   "costNote": "avg per retrieval call"
+  },
+  {
+   "system": "Perpetuity",
+   "reader": "Claude Opus 5 (thinking)",
+   "accuracy": 94.0,
+   "type": "closed-cloud",
+   "tokensPerQuery": 3600,
+   "source": "vendor self-measurement, 470/500, official GPT-4o judge, 2026-11 leaderboard page",
+   "costNote": "reader's tokenizer, median frame"
+  },
+  {
+   "system": "Graphon Labs",
+   "reader": "undisclosed",
+   "accuracy": 92.8,
+   "type": "closed-cloud",
+   "tokensPerQuery": 15100,
+   "source": "vendor benchmark page 2026-11; the same page also quotes a 96.2 best case with no cost",
+   "costNote": "tokens per question"
+  },
+  {
+   "system": "al-buddy-memory",
+   "reader": "Claude Sonnet",
+   "accuracy": 92.6,
+   "type": "open-source",
+   "tokensPerQuery": null,
+   "source": "self-reported, dual gpt-4o judge",
+   "costNote": null
+  },
+  {
+   "system": "Mnemis",
+   "reader": "undisclosed",
+   "accuracy": 91.6,
+   "type": "open-source",
+   "tokensPerQuery": null,
+   "source": "Microsoft, repository + DeepWiki summary",
+   "costNote": null
+  },
+  {
+   "system": "Contextier",
+   "reader": "undisclosed",
+   "accuracy": 91.6,
+   "type": "closed-cloud",
+   "tokensPerQuery": 2807,
+   "source": "self-reported",
+   "costNote": "per query"
+  },
+  {
+   "system": "cortex",
+   "reader": "DeepSeek (deepseek-chat)",
+   "accuracy": 91.25,
+   "type": "open-source",
+   "tokensPerQuery": 7448,
+   "source": "run 44017278305 (`S16`), 500 questions x 4 passes, official judge prompts, registered configuration; accuracy is `costEfficiency.accuracy` 0.9125 and the cost is `costEfficiency.promptTokensPerQuestion` 7447.783 -- one run, one pair",
+   "costNote": "prompt tokens per question, from the same artifact as the accuracy"
+  },
+  {
+   "system": "Honcho",
+   "reader": "Claude Haiku 4.5",
+   "accuracy": 90.4,
+   "type": "open-source",
+   "tokensPerQuery": 11600,
+   "source": "self-reported 2025-12-12, run data public (leaderboard compiled by a competitor)",
+   "costNote": "tokens per question"
+  },
+  {
+   "system": "Zep",
+   "reader": "GPT-5.4",
+   "accuracy": 90.2,
+   "type": "open-source",
+   "tokensPerQuery": 4408,
+   "source": "self-reported, 3/6 disclosure",
+   "costNote": "per query"
+  },
+  {
+   "system": "Recallium",
+   "reader": "GPT-4o",
+   "accuracy": 90.2,
+   "type": "closed-cloud",
+   "tokensPerQuery": null,
+   "source": "same memory as its 98.4 row, official GPT-4o reader script -- the reader is the only variable",
+   "costNote": null
+  },
+  {
+   "system": "Supermemory",
+   "reader": "Gemini 3 Pro",
+   "accuracy": 85.2,
+   "type": "closed-cloud",
+   "tokensPerQuery": null,
+   "source": "self-reported, 3/6 disclosure",
+   "costNote": null
+  },
+  {
+   "system": "Zep (paper)",
+   "reader": "GPT-4o",
+   "accuracy": 71.2,
+   "type": "open-source",
+   "tokensPerQuery": null,
+   "source": "peer-reviewed; the same system reads 90.2 three ways in the literature",
+   "costNote": null
+  },
+  {
+   "system": "no memory (full history)",
+   "reader": "GPT-4o",
+   "accuracy": 60.4,
+   "type": "unstated",
+   "tokensPerQuery": null,
+   "source": "LongMemEval paper baseline, 60.2-60.6%",
+   "costNote": null
+  },
+  {
+   "system": "Hindsight",
+   "reader": "Gemini 3.1 Pro",
+   "accuracy": 94.6,
+   "type": "open-source",
+   "tokensPerQuery": 43600,
+   "source": "vendor, 23 Mar 2026 (96.2% is Graphon's own best case, not this row); re-checked 2026-11-20 -- 'max_tokens lowers it'",
+   "costNote": "43.6K retrieved tokens per question, 5.9x the cortex row's 7,448"
+  },
+  {
+   "system": "KITE",
+   "reader": "paper's own reader",
+   "accuracy": 86.0,
+   "type": "unstated",
+   "tokensPerQuery": 1600,
+   "source": "research paper (retrieval-as-a-decision-procedure), LongMemEval-S, LLM-as-judge; checked 2026-11-20",
+   "costNote": "cheapest published reader context; temporal-aware retrieval, preference questions remain weak"
+  }
+ ],
+ "independent": {
   "asOf": "2026-11-20",
-  "note": "Every competitor row is that vendor or paper’s own published figure under its own answer model and judge; only the cortex row is measured by this repository, and its two coordinates come from one artifact (`costEfficiency.accuracy` 0.9125 and `.promptTokensPerQuestion` 7447.783, run 44017278305). Rows without a token count did not publish one. Self-reported accuracy is not comparable across rows -- the answer model alone moves Mastra from 84.23 to 94.87 -- which is why the cost axis is plotted rather than trusted alone. Re-checked 2026-11-20.",
-  "overall": [
-    {
-      "system": "Recallium",
-      "reader": "Claude Opus 5.5",
-      "accuracy": 98.4,
-      "type": "closed-cloud",
-      "tokensPerQuery": null,
-      "source": "self-reported 2026-10-17, 6/6 disclosure (05-competitor-analysis.md 1.22.1)",
-      "costNote": null
-    },
-    {
-      "system": "ContextStream",
-      "reader": "Claude Opus 5.5",
-      "accuracy": 96.8,
-      "type": "closed-cloud",
-      "tokensPerQuery": null,
-      "source": "self-reported 2026-10-27, held-out half 96.0% (CI 94.9-98.0)",
-      "costNote": null
-    },
-    {
-      "system": "agentmemory V4",
-      "reader": "undisclosed",
-      "accuracy": 96.2,
-      "type": "open-source",
-      "tokensPerQuery": null,
-      "source": "self-reported; cited by ContextStream as the previous high",
-      "costNote": null
-    },
-    {
-      "system": "Maximem Synap",
-      "reader": "Gemini 3.8 Flash",
-      "accuracy": 95.6,
-      "type": "closed-cloud",
-      "tokensPerQuery": 7400,
-      "source": "vendor page 2026-10-28, 478/500, per-question run data public (05-competitor-analysis.md 1.22.2)",
-      "costNote": "memory tokens / question"
-    },
-    {
-      "system": "Mastra OM",
-      "reader": "GPT-5-mini",
-      "accuracy": 94.87,
-      "type": "open-source",
-      "tokensPerQuery": null,
-      "source": "self-reported; the same system reads 84.2 on GPT-4o",
-      "costNote": null
-    },
-    {
-      "system": "Mem0",
-      "reader": "GPT-5",
-      "accuracy": 94.4,
-      "type": "open-source",
-      "tokensPerQuery": 6787,
-      "source": "self-reported 2026-04 algorithm, 4/6 disclosure",
-      "costNote": "avg per retrieval call"
-    },
-    {
-      "system": "Perpetuity",
-      "reader": "Claude Opus 5 (thinking)",
-      "accuracy": 94.0,
-      "type": "closed-cloud",
-      "tokensPerQuery": 3600,
-      "source": "vendor self-measurement, 470/500, official GPT-4o judge, 2026-11 leaderboard page",
-      "costNote": "reader's tokenizer, median frame"
-    },
-    {
-      "system": "Graphon Labs",
-      "reader": "undisclosed",
-      "accuracy": 92.8,
-      "type": "closed-cloud",
-      "tokensPerQuery": 15100,
-      "source": "vendor benchmark page 2026-11; the same page also quotes a 96.2 best case with no cost",
-      "costNote": "tokens per question"
-    },
-    {
-      "system": "al-buddy-memory",
-      "reader": "Claude Sonnet",
-      "accuracy": 92.6,
-      "type": "open-source",
-      "tokensPerQuery": null,
-      "source": "self-reported, dual gpt-4o judge",
-      "costNote": null
-    },
-    {
-      "system": "Mnemis",
-      "reader": "undisclosed",
-      "accuracy": 91.6,
-      "type": "open-source",
-      "tokensPerQuery": null,
-      "source": "Microsoft, repository + DeepWiki summary",
-      "costNote": null
-    },
-    {
-      "system": "Contextier",
-      "reader": "undisclosed",
-      "accuracy": 91.6,
-      "type": "closed-cloud",
-      "tokensPerQuery": 2807,
-      "source": "self-reported",
-      "costNote": "per query"
-    },
-    {
-      "system": "cortex",
-      "reader": "DeepSeek (deepseek-chat)",
-      "accuracy": 91.25,
-      "type": "open-source",
-      "tokensPerQuery": 7448,
-      "source": "run 44017278305 (`S16`), 500 questions x 4 passes, official judge prompts, registered configuration; accuracy is `costEfficiency.accuracy` 0.9125 and the cost is `costEfficiency.promptTokensPerQuestion` 7447.783 -- one run, one pair",
-      "costNote": "prompt tokens per question, from the same artifact as the accuracy"
-    },
-    {
-      "system": "Honcho",
-      "reader": "Claude Haiku 4.5",
-      "accuracy": 90.4,
-      "type": "open-source",
-      "tokensPerQuery": 11600,
-      "source": "self-reported 2025-12-12, run data public (leaderboard compiled by a competitor)",
-      "costNote": "tokens per question"
-    },
-    {
-      "system": "Zep",
-      "reader": "GPT-5.4",
-      "accuracy": 90.2,
-      "type": "open-source",
-      "tokensPerQuery": 4408,
-      "source": "self-reported, 3/6 disclosure",
-      "costNote": "per query"
-    },
-    {
-      "system": "Recallium",
-      "reader": "GPT-4o",
-      "accuracy": 90.2,
-      "type": "closed-cloud",
-      "tokensPerQuery": null,
-      "source": "same memory as its 98.4 row, official GPT-4o reader script -- the reader is the only variable",
-      "costNote": null
-    },
-    {
-      "system": "Supermemory",
-      "reader": "Gemini 3 Pro",
-      "accuracy": 85.2,
-      "type": "closed-cloud",
-      "tokensPerQuery": null,
-      "source": "self-reported, 3/6 disclosure",
-      "costNote": null
-    },
-    {
-      "system": "Zep (paper)",
-      "reader": "GPT-4o",
-      "accuracy": 71.2,
-      "type": "open-source",
-      "tokensPerQuery": null,
-      "source": "peer-reviewed; the same system reads 90.2 three ways in the literature",
-      "costNote": null
-    },
-    {
-      "system": "no memory (full history)",
-      "reader": "GPT-4o",
-      "accuracy": 60.4,
-      "type": "unstated",
-      "tokensPerQuery": null,
-      "source": "LongMemEval paper baseline, 60.2-60.6%",
-      "costNote": null
-    },
-    {
-      "system": "Hindsight",
-      "reader": "Gemini 3.1 Pro",
-      "accuracy": 94.6,
-      "type": "open-source",
-      "tokensPerQuery": 43600,
-      "source": "vendor, 23 Mar 2026 (96.2% is Graphon's own best case, not this row); re-checked 2026-11-20 -- 'max_tokens lowers it'",
-      "costNote": "43.6K retrieved tokens per question, 5.9x the cortex row's 7,448"
-    },
-    {
-      "system": "KITE",
-      "reader": "paper's own reader",
-      "accuracy": 86.0,
-      "type": "unstated",
-      "tokensPerQuery": 1600,
-      "source": "research paper (retrieval-as-a-decision-procedure), LongMemEval-S, LLM-as-judge; checked 2026-11-20",
-      "costNote": "cheapest published reader context; temporal-aware retrieval, preference questions remain weak"
-    }
+  "note": "The same benchmark, read by someone other than the vendor. Rows are (claim, measurement) pairs only where both exist for the same suite; a system with no independent re-run is absent rather than drawn at its claim, because the absence is the finding.",
+  "oracleCeiling": 82.4,
+  "oracleSource": "jakecuth.com/work/agent-memory-lab (2026-11): LongMemEval-S oracle variant, evidence sessions only, gpt-4o",
+  "rows": [
+   {
+    "system": "Mem0",
+    "claim": 94.4,
+    "measured": [
+     {
+      "value": 71.0,
+      "by": "HEAMS (arXiv, 2026-11)"
+     },
+     {
+      "value": 65.7,
+      "by": "Lobu harness, glm-5.1 answerer (2026-11)"
+     }
+    ],
+    "claimSource": "vendor: memory-benchmarks, top-200 retrieval budget"
+   },
+   {
+    "system": "Zep / Graphiti",
+    "claim": 90.2,
+    "measured": [
+     {
+      "value": 71.2,
+      "by": "jakecuth lab re-run, gpt-4o"
+     },
+     {
+      "value": 63.8,
+      "by": "Graphiti temporal-KG figure, 2026-05"
+     }
+    ],
+    "claimSource": "vendor 2026-10"
+   },
+   {
+    "system": "Full context (no retrieval)",
+    "claim": 60.4,
+    "measured": [
+     {
+      "value": 51.0,
+      "by": "HEAMS (arXiv, 2026-11)"
+     }
+    ],
+    "claimSource": "this repository, LongMemEval-S 500"
+   },
+   {
+    "system": "cortex",
+    "claim": 91.25,
+    "measured": [],
+    "claimSource": "this repository, 500 questions, DeepSeek reader + LLM judge",
+    "note": "no independent re-run exists; the claim is ours and the harness is ours"
+   }
   ]
+ }
 }
