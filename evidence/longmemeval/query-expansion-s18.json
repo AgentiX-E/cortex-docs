@@ -1,0 +1,74 @@
+{
+  "$comment": "The attributable reading of query expansion (S18): two dispatches at one commit, 121 MR questions each, four repetitions. Replaces nothing -- S17's row stays as the record of a pair that could not be attributed.",
+  "row": "S17",
+  "pair": {
+    "control": {
+      "run": "44717750493",
+      "sha": "a7eafcced3f3d1caba7f836935bfe0a9d08afa6e",
+      "queryExpansion": "none"
+    },
+    "treatment": {
+      "run": "44723845151",
+      "sha": "a7eafcced3f3d1caba7f836935bfe0a9d08afa6e",
+      "queryExpansion": "llm"
+    },
+    "sameCommit": true,
+    "why": "S17 paired a 2026-11-20 treatment against a 2026-11-17 control and read the difference as one flag; fifty of 379 non-target prompts had moved with identical evidence bytes, which is a renderer drift. This pair is one dispatch after another at one sha, so the only difference is the flag -- and the artifacts carry the sha that proves it (AblationReport.revision, added in the same round)."
+  },
+  "population": { "MR": 121 },
+  "mr": {
+    "control": 99,
+    "treatment": 103,
+    "deltaQuestions": 4,
+    "controlRate": 0.8182,
+    "treatmentRate": 0.8512,
+    "discordant": { "fixed": 6, "broken": 2 },
+    "mcnemarP": 0.2891
+  },
+  "baselineSide": {
+    "$comment": "The deterministic retrieval arm inside each run. It is 105 of 121 in BOTH dispatches, which is the noise control this pair did not have to construct: a non-LLM side that reproduces exactly says the harness, the dataset and the ranking path are the same, so the four questions are the feature arm's.",
+    "control": 105,
+    "treatment": 105,
+    "total": 121
+  },
+  "bill": {
+    "controlPromptTokensPerQuestion": 13019.4,
+    "treatmentPromptTokensPerQuestion": 12914.9,
+    "ratio": 0.992,
+    "registeredCeiling": 8600,
+    "note": "The 8,600 ceiling was written for the 500-question file. An MR-only run gives every question the 48,460-character multi-session room, so its per-question bill IS the multi-session bill -- 13,019 on the control, which the ceiling is already below. Registered as mis-scaled in PREREGISTRATION 13.377.11 before this artifact existed; E2' (ratio, <= 1.15) was registered at the same time and reads 0.992."
+  },
+  "receipt": {
+    "queries": 1932,
+    "indexes": 484,
+    "refused": 0,
+    "phrases": 362,
+    "expandedQuestions": 121,
+    "controlQueries": 484,
+    "controlIndexes": 484,
+    "note": "The product's own census, both sides. 484 queries against 484 indexes on the control (it expands nothing) and 1,932 against the same 484 on the treatment: four queries per index, one per question per repetition. The phrases reached the ranking."
+  },
+  "criteria": {
+    "E0": { "verdict": "pass", "measured": "both artifacts name a7eafcced3f3" },
+    "E1": { "verdict": "fail", "measured": "103 of 121", "threshold": ">= 107" },
+    "E1'": { "verdict": "fail", "measured": "103 against this pair's own control 99", "threshold": ">= control + 5" },
+    "E2": { "verdict": "fail", "measured": "12914.9 tokens per question", "threshold": "<= 8600" },
+    "E2'": { "verdict": "pass", "measured": "0.992x the control's 13019.4", "threshold": "<= 1.15x" },
+    "E3": {
+      "verdict": "pass",
+      "measured": "0 of 0 non-MR prompts moved, 0 capabilities below floor",
+      "threshold": "0 moved, no capability more than 2 below",
+      "note": "Vacuous on an MR-only roster and recorded as such rather than as evidence: there is no other cell to leak into, and E0 is what carries the same-code claim."
+    },
+    "E4": { "verdict": "pass", "measured": "queries 1932 vs indexes 484, refused 0", "threshold": "queries > indexes, refused <= 12" },
+    "E5": { "verdict": "pass", "measured": "control queries 484 vs indexes 484", "threshold": "control queries == indexes" }
+  },
+  "disposition": {
+    "decision": "not adopted; the family closes",
+    "licence": "PREREGISTRATION 13.377.9 row 3: E1' fail with E0/E2'/E4' pass licenses the close, including the window reorder's premise.",
+    "whatTheFourQuestionsAre": "A real +3.31pp on the cell, six fixed against two broken (exact McNemar p = 0.289), bought for 0.8% fewer prompt tokens. It is below the five questions the registration asked for and it does not close the gap to the baseline arm, which answers 105 of the same 121 questions without any expansion at all.",
+    "whatItSettles": "S17 could not answer whether the mechanism works: its delta was two code versions. This pair can, and the answer is that it works and not enough.",
+    "whatItLeaves": "The arm's MR cell is 4.96 points BELOW its own deterministic baseline (99 against 105) and 1.66 below it with expansion (103 against 105). That deficit, not the expansion, is the next thing to read."
+  },
+  "spend": { "projected": 6.9, "currency": "CNY", "runs": 2 }
+}
