@@ -28326,7 +28326,8 @@ timeline: 30 dozen [2023/03/12 -> now]
 | 覆盖率 | `timeline.ts` **100/100/100/100**；`llm-latch.ts` **100/100/100/100**；`bench-failure.ts` **100/100/100/100** |
 | 台账 | 27 行不变：**18 product（7 gated）** / 9 instrument / 0 blocked / 0 gap；边界 54 exports |
 | 手册 | `factTimeline` 一行 + §6.1.2 一节；**42** 示例、**58/58** 选项都有示例 |
-| 导出普查 | 无新孤儿（`TimelineSpan` 从导出降为模块私有，理由写进类型注释） |
+| 导出普查 | 无新孤儿（`TimelineSpan` 从导出降为模块私有，理由写进类型注释）；孤儿 **498 → 496**，两个名额是 `normalizeAnswer`/`numericAnswerVerdict` 因为新工具成了第一个调用方而**结清**，不是放宽匹配器 |
+| CI | `44661602758`（`e23ff5b8`）三 job success：library / browser suites / PostgreSQL |
 
 ### 138.8 位置
 
