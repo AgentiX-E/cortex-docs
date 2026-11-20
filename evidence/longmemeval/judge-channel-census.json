@@ -1,0 +1,45 @@
+{
+  "artifact": "/root/.codebuddy/artifact/2f8a7d30-9c21-4f0b-1d70-34ea84db1000/s17/benchmark-cortex-memory-ablation-report.json",
+  "generatedAt": "2026-11-20T00:49:21.644Z",
+  "questionCount": 121,
+  "channels": {
+    "structural": 1,
+    "exact": 77,
+    "numeric": 24,
+    "judge": 19
+  },
+  "shares": {
+    "structural": "0.8%",
+    "exact": "63.6%",
+    "numeric": "19.8%",
+    "judge": "15.7%"
+  },
+  "judgeWithNumericGold": 3,
+  "disagreements": [],
+  "judgeRowsWithNumericGold": [
+    {
+      "questionId": "d905b33f",
+      "gold": "20%",
+      "answer": "Cannot be determined from the evidence."
+    },
+    {
+      "questionId": "a1cc6108",
+      "gold": "11",
+      "answer": "Cannot be determined from the evidence."
+    },
+    {
+      "questionId": "d6062bb9",
+      "gold": "1,998",
+      "answer": "Cannot determine (TikTok: 1,456 views; YouTube view count missing)"
+    }
+  ],
+  "byCapability": {
+    "MR": {
+      "structural": 1,
+      "exact": 77,
+      "numeric": 24,
+      "judge": 19,
+      "judgeWithNumericGold": 3
+    }
+  }
+}
