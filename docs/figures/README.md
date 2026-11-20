@@ -62,6 +62,16 @@ document that discusses it says so in words.
    the two field names written into the row's `source`. A figure whose two coordinates come from two experiments
    is a position that no system ever occupied.
 
+7. **A label is placed by measurement, not by a rule.** The first two attempts at keeping names off each
+   other were rules over data coordinates -- alternate sides when two rows are within 1.8 points, then the
+   same test with a cost ratio added. Both failed the moment the row set grew: `Perpetuity` (94.0 at 3,600)
+   and `Mem0` (94.4 at 6,787) pass every such test and still printed as `PerpetuMem0`, and `KITE` at 1,600
+   tokens sits in the axis's leftmost eighth, where the left-hand escape put its name off the canvas. Where
+   text lands is a display-coordinate question, so the renderer now draws a candidate, asks for its bounding
+   box, and keeps it only if it hits nothing already placed and stays inside the axes. The same rewrite moved
+   the cost notes out of the bars and into a footnote: with `Hindsight` at 43,600 and `KITE` at 1,600 the
+   short bars are nine pixels tall, and a rotated note inside one is a white smear over the bar it describes.
+
 ## What the figures do not show
 
 - **Recall versus accuracy.** No figure mixes them.

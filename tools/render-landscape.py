@@ -40,13 +40,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import pathlib
+import textwrap
 
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import matplotlib.ticker  # noqa: E402
+import matplotlib.transforms  # noqa: E402
 from matplotlib.lines import Line2D  # noqa: E402
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -56,6 +59,80 @@ DATA = REPO / "docs" / "figures" / "landscape.json"
 # Colour encodes product type, and the encoding is stated on every figure because it is the axis the
 # review asks about: a self-hostable system a reader can run is a different proposition from a hosted one
 # at the same score.
+
+# Where a label may go, in preference order. Right of the marker is the default a reader's eye expects; the
+# rest are the escapes, and the list is why this is a loop rather than a rule.
+_LABEL_OFFSETS = (
+    (12, 4, "left"),
+    (-12, 4, "right"),
+    (0, 13, "center"),
+    (0, -17, "center"),
+    (13, -13, "left"),
+    (-13, -13, "right"),
+    (13, 13, "left"),
+    (-13, 13, "right"),
+)
+
+
+def _place_labels(ax, fig, rows):
+    """Put every name beside its own marker, and never on top of another name or marker.
+
+    ## Why this replaced a rule
+
+    The rule was `crowded_left`: if another row was within 1.8 points of accuracy and 30% of the cost,
+    alternate sides. It was written for `Maximem Synap`/`Mem0` and it failed the third time the row set
+    grew -- `Perpetuity` (94.0 at 3,600) and `Mem0` (94.4 at 6,787) are 0.4 points apart but twice as far
+    apart in cost, so the rule called them uncrowded and printed `PerpetuMem0`. Then `KITE` arrived at
+    1,600 tokens, inside the axis but in its leftmost eighth, and the left-hand escape put its name off
+    the canvas entirely.
+
+    A rule over data coordinates cannot see where the *text* lands, which is a display-coordinate
+    question. So the placement is measured instead: draw the candidate, ask the renderer for its bounding
+    box, keep it if it hits nothing already placed and stays inside the axes, otherwise try the next
+    offset. Rows are placed from the highest accuracy down, so the labels a reader looks at first get the
+    preferred position.
+    """
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    placed = []
+    for row in rows:
+        x, y = ax.transData.transform((row["tokensPerQuery"], row["accuracy"]))
+        # The marker's own box, so a label cannot cover a point either: a marker under a name reads as
+        # "this system is here", which is the one thing the figure exists to say.
+        placed.append(matplotlib.transforms.Bbox([[x - 10, y - 10], [x + 10, y + 10]]))
+    for row in sorted(rows, key=lambda item: -item["accuracy"]):
+        chosen = None
+        for dx, dy, align in _LABEL_OFFSETS:
+            annotation = ax.annotate(
+                row["system"],
+                (row["tokensPerQuery"], row["accuracy"]),
+                textcoords="offset points",
+                xytext=(dx, dy),
+                ha=align,
+                fontsize=9,
+                zorder=4,
+            )
+            box = annotation.get_window_extent(renderer=renderer)
+            inside = ax.bbox.x0 <= box.x0 and box.x1 <= ax.bbox.x1 and ax.bbox.y0 <= box.y0 and box.y1 <= ax.bbox.y1
+            if inside and not any(box.overlaps(other) for other in placed):
+                chosen = box
+                placed.append(box)
+                break
+            annotation.remove()
+        if chosen is None:
+            # Every candidate collided. Draw the preferred one anyway rather than dropping the name: an
+            # unlabelled marker is an unnamed system, which is worse than a crowded label.
+            annotation = ax.annotate(
+                row["system"],
+                (row["tokensPerQuery"], row["accuracy"]),
+                textcoords="offset points",
+                xytext=_LABEL_OFFSETS[0][:2],
+                ha=_LABEL_OFFSETS[0][2],
+                fontsize=9,
+                zorder=4,
+            )
+            placed.append(annotation.get_window_extent(renderer=renderer))
+
 def _cost_ticks(low: float, high: float) -> list[float]:
     """Tick positions for a log cost axis, rounded to numbers a reader can repeat.
 
@@ -66,8 +143,16 @@ def _cost_ticks(low: float, high: float) -> list[float]:
     candidates = [500, 1_000, 2_000, 2_500, 3_000, 4_000, 5_000, 6_000, 7_500, 10_000, 15_000, 20_000, 30_000,
                   40_000, 50_000, 75_000, 100_000]
     inside = [value for value in candidates if low * 0.82 <= value <= high * 1.22]
+    # A log axis crowds its own labels at the top end: `40,000` and `50,000` are 11% of a decade apart on a
+    # ten-inch panel, so the two printed as `40,00050,000` -- one tick whose value a reader cannot read,
+    # which is worse than one tick fewer. Keep a tick only when it is at least 35% away from the last kept
+    # one, measured in the axis's own (logarithmic) units.
+    spaced: list[float] = []
+    for value in inside:
+        if not spaced or math.log(value / spaced[-1]) >= 0.30:
+            spaced.append(value)
     # A single tick is not an axis: fall back to the two ends of the observed range, rounded.
-    return inside if len(inside) >= 2 else [round(low, -2), round(high, -2)]
+    return spaced if len(spaced) >= 2 else [round(low, -2), round(high, -2)]
 
 
 COLOURS = {
@@ -128,26 +213,6 @@ def figure_accuracy_cost(data: dict, out: pathlib.Path) -> pathlib.Path:
             linewidths=1.2,
             zorder=3,
         )
-        crowded_left = sum(
-            1
-            for other in priced
-            if other is not row
-            and other["accuracy"] > row["accuracy"]
-            and abs(other["accuracy"] - row["accuracy"]) < 1.8
-            and 0.8 < other["tokensPerQuery"] / row["tokensPerQuery"] < 1.3
-        ) % 2 == 1
-        # Crowded rows alternate sides instead of all moving up. Pushing both labels above their markers
-        # moved the collision from the markers to the text -- the second attempt had `Maximem Synap` printed
-        # across `Mem0`, which is worse than the original overlap because now one system's name is hidden
-        # behind another's rather than merely close to it.
-        left.annotate(
-            row["system"],
-            (row["tokensPerQuery"], row["accuracy"]),
-            textcoords="offset points",
-            xytext=(-13, -4) if crowded_left else (11, -4),
-            ha="right" if crowded_left else "left",
-            fontsize=9,
-        )
     left.set_xscale("log")
     # Derived from the rows, not written down. The first version hard-coded `(2_200, 9_000)`, which was correct
     # for the six rows that existed then and silently CLIPPED the next two that arrived above 9,000 -- a point
@@ -163,6 +228,7 @@ def figure_accuracy_cost(data: dict, out: pathlib.Path) -> pathlib.Path:
     left.set_ylabel("LongMemEval-S QA accuracy (%)")
     left.set_title("cost published", fontsize=11)
     left.grid(True, which="both", alpha=0.25, zorder=0)
+    _place_labels(left, fig, priced)
 
     # Points on a shared accuracy axis rather than bars. A bar chart's y axis is a category index, and sharing
     # it with a scatter of accuracies squashed the left panel's data into the top decile -- the first attempt
@@ -313,12 +379,26 @@ def figure_accuracy_ranking(data: dict, out: pathlib.Path) -> pathlib.Path:
 
 
 def figure_cost(data: dict, out: pathlib.Path) -> pathlib.Path:
-    """The column this project loses on, and the one it is cheapest to be honest about."""
+    """The column this project loses on, and the one it is cheapest to be honest about.
+
+    ## Two layouts that did not survive a new row, and what replaced them
+
+    The notes used to be printed **inside** each bar, rotated. That works while every bar is tall: with
+    `Hindsight` at 43,600 and `KITE` at 1,600 the short bars are nine pixels high, so the note for `Zep`
+    was a white vertical smear covering the bar it described, and the note for `KITE` was a single
+    illegible letter. The name labels were the other casualty -- `Mem0`, `Maximem Synap` and `cortex` are
+    three systems within 10% of each other on cost, and horizontally they printed as one word.
+
+    So the notes moved out of the bars and into a footnote list under the axis, which has room for them
+    at a readable size and cannot cover data, and the system names are rotated. A bar chart whose labels
+    collide is a chart that has stopped saying which system is which.
+    """
     rows = sorted(
         [row for row in data["overall"] if row.get("tokensPerQuery") is not None],
         key=lambda row: row["tokensPerQuery"],
     )
-    fig, ax = plt.subplots(figsize=(10, 5.5))
+    noted = [row for row in rows if row.get("costNote")]
+    fig, ax = plt.subplots(figsize=(11, 6.8))
     bars = ax.bar(
         [row["system"] for row in rows],
         [row["tokensPerQuery"] for row in rows],
@@ -329,31 +409,43 @@ def figure_cost(data: dict, out: pathlib.Path) -> pathlib.Path:
     for bar, row in zip(bars, rows):
         ax.text(
             bar.get_x() + bar.get_width() / 2,
-            bar.get_height() + 120,
+            bar.get_height() + max(row["tokensPerQuery"] for row in rows) * 0.012,
             f"{row['tokensPerQuery']:,}",
             ha="center",
             fontsize=9,
         )
-        if row.get("costNote"):
-            ax.text(
-                bar.get_x() + bar.get_width() / 2,
-                bar.get_height() / 2,
-                row["costNote"],
-                ha="center",
-                va="center",
-                fontsize=7,
-                rotation=90,
-                color="white",
-            )
     ax.set_ylabel("tokens per query")
+    ax.set_ylim(0, max(row["tokensPerQuery"] for row in rows) * 1.12)
+    ax.set_xticks(range(len(rows)))
+    ax.set_xticklabels([row["system"] for row in rows], rotation=32, ha="right", fontsize=9)
     ax.set_title(
         "Reported cost per query, LongMemEval-S\n"
-        "Bars are the published figures; the note inside a bar is how that figure was defined",
+        "Bars are the published figures; the footnote below is how each figure was defined",
         fontsize=12,
     )
     ax.grid(True, axis="y", alpha=0.25)
+    handles = [
+        Line2D([0], [0], color=COLOURS[k], lw=8, label=LABELS[k])
+        for k in COLOURS
+        if any(row["type"] == k for row in rows)
+    ]
+    ax.legend(handles=handles, loc="upper left", frameon=False, fontsize=9)
+    # The footnote is drawn in figure coordinates and the axes are inset to make room for it: a note
+    # placed in data coordinates would move with the axis limits, which is how the old in-bar version
+    # ended up outside the bars it was describing.
+    fig.tight_layout(rect=(0, 0.05 + 0.012 * len(noted), 1, 1))
+    if noted:
+        fig.text(
+            0.01,
+            0.01,
+            "\n".join(
+                textwrap.fill(f"{row['system']}: {row['costNote']}", width=150, subsequent_indent="    ")
+                for row in noted
+            ),
+            fontsize=7.5,
+            va="bottom",
+        )
     path = out / "fig-longmemeval-cost-per-query.png"
-    fig.tight_layout()
     fig.savefig(path, dpi=150)
     plt.close(fig)
     return path

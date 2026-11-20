@@ -2,7 +2,7 @@
   "dataset": "LongMemEval-S",
   "questions": 500,
   "asOf": "2026-11-20",
-  "note": "One row per published reading. `type` is the product's distribution model, not its licence: `open-source` means a reader can self-host the whole stack, which is the axis the review asks about. `tokensPerQuery` is null when the source publishes no cost, and null is not zero -- the renderer draws those rows in a band rather than at an imputed position. Two of the rows added this iteration were checked against a competitor's own compiled leaderboard rather than the vendor's page, and one of them (Graphon) publishes two figures for one system: the row carries the one that names a cost, because a single row cannot hold both a best case and a bill without the figure implying they happened together.",
+  "note": "Every competitor row is that vendor or paper’s own published figure under its own answer model and judge; only the cortex row is measured by this repository, and its two coordinates come from one artifact (`costEfficiency.accuracy` 0.9125 and `.promptTokensPerQuestion` 7447.783, run 44017278305). Rows without a token count did not publish one. Self-reported accuracy is not comparable across rows -- the answer model alone moves Mastra from 84.23 to 94.87 -- which is why the cost axis is plotted rather than trusted alone. Re-checked 2026-11-20.",
   "overall": [
     {
       "system": "Recallium",
@@ -165,6 +165,24 @@
       "tokensPerQuery": null,
       "source": "LongMemEval paper baseline, 60.2-60.6%",
       "costNote": null
+    },
+    {
+      "system": "Hindsight",
+      "reader": "Gemini 3.1 Pro",
+      "accuracy": 94.6,
+      "type": "open-source",
+      "tokensPerQuery": 43600,
+      "source": "vendor, 23 Mar 2026 (96.2% is Graphon's own best case, not this row); re-checked 2026-11-20 -- 'max_tokens lowers it'",
+      "costNote": "43.6K retrieved tokens per question, 5.9x the cortex row's 7,448"
+    },
+    {
+      "system": "KITE",
+      "reader": "paper's own reader",
+      "accuracy": 86.0,
+      "type": "unstated",
+      "tokensPerQuery": 1600,
+      "source": "research paper (retrieval-as-a-decision-procedure), LongMemEval-S, LLM-as-judge; checked 2026-11-20",
+      "costNote": "cheapest published reader context; temporal-aware retrieval, preference questions remain weak"
     }
   ]
 }
