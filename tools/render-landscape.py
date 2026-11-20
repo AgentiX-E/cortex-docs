@@ -56,6 +56,20 @@ DATA = REPO / "docs" / "figures" / "landscape.json"
 # Colour encodes product type, and the encoding is stated on every figure because it is the axis the
 # review asks about: a self-hostable system a reader can run is a different proposition from a hosted one
 # at the same score.
+def _cost_ticks(low: float, high: float) -> list[float]:
+    """Tick positions for a log cost axis, rounded to numbers a reader can repeat.
+
+    Derived from the data rather than written down: a fixed tick list is a fixed axis, and the axis has to
+    follow whatever rows the file holds -- including the next system that publishes a cost outside today's
+    range.
+    """
+    candidates = [500, 1_000, 2_000, 2_500, 3_000, 4_000, 5_000, 6_000, 7_500, 10_000, 15_000, 20_000, 30_000,
+                  40_000, 50_000, 75_000, 100_000]
+    inside = [value for value in candidates if low * 0.82 <= value <= high * 1.22]
+    # A single tick is not an axis: fall back to the two ends of the observed range, rounded.
+    return inside if len(inside) >= 2 else [round(low, -2), round(high, -2)]
+
+
 COLOURS = {
     "open-source": "#1f77b4",
     "closed-cloud": "#d62728",
@@ -99,7 +113,11 @@ def figure_accuracy_cost(data: dict, out: pathlib.Path) -> pathlib.Path:
         gridspec_kw={"width_ratios": [1.45, 1]},
     )
 
-    for row in priced:
+    # Labels are placed top-down and pushed ABOVE their marker when the row below is close enough that the
+    # two would collide. `Maximem Synap` (95.6 at 7,400) and `Mem0` (94.4 at 6,787) are 1.2 points and 9% of
+    # an axis apart: at a fixed offset the first one's text lands on the second one's marker, and a marker
+    # under a label reads as "this system is here" -- the label IS the data, so it cannot cover another.
+    for row in sorted(priced, key=lambda r: -r["accuracy"]):
         left.scatter(
             row["tokensPerQuery"],
             row["accuracy"],
@@ -110,18 +128,36 @@ def figure_accuracy_cost(data: dict, out: pathlib.Path) -> pathlib.Path:
             linewidths=1.2,
             zorder=3,
         )
+        crowded_left = sum(
+            1
+            for other in priced
+            if other is not row
+            and other["accuracy"] > row["accuracy"]
+            and abs(other["accuracy"] - row["accuracy"]) < 1.8
+            and 0.8 < other["tokensPerQuery"] / row["tokensPerQuery"] < 1.3
+        ) % 2 == 1
+        # Crowded rows alternate sides instead of all moving up. Pushing both labels above their markers
+        # moved the collision from the markers to the text -- the second attempt had `Maximem Synap` printed
+        # across `Mem0`, which is worse than the original overlap because now one system's name is hidden
+        # behind another's rather than merely close to it.
         left.annotate(
             row["system"],
             (row["tokensPerQuery"], row["accuracy"]),
             textcoords="offset points",
-            xytext=(11, -4),
+            xytext=(-13, -4) if crowded_left else (11, -4),
+            ha="right" if crowded_left else "left",
             fontsize=9,
         )
     left.set_xscale("log")
-    left.set_xlim(2_200, 9_000)
+    # Derived from the rows, not written down. The first version hard-coded `(2_200, 9_000)`, which was correct
+    # for the six rows that existed then and silently CLIPPED the next two that arrived above 9,000 -- a point
+    # outside the axis is not a point with a surprising position, it is an absent system, and the figure's whole
+    # job is to show which systems exist at which cost.
+    costs = [row["tokensPerQuery"] for row in priced]
+    left.set_xlim(min(costs) * 0.82, max(costs) * 1.22)
     # Plain numbers rather than 3x10^3: a reader comparing 2,807 with 7,448 should not have to decode an
-    # exponent to do it.
-    left.set_xticks([2_500, 3_000, 4_000, 5_000, 6_000, 7_500])
+    # exponent to do it. The ticks follow the data for the same reason the limits do.
+    left.set_xticks(_cost_ticks(min(costs), max(costs)))
     left.get_xaxis().set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: f"{v:,.0f}"))
     left.set_xlabel("tokens per query (log scale)")
     left.set_ylabel("LongMemEval-S QA accuracy (%)")
