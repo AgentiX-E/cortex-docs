@@ -1,0 +1,128 @@
+{
+  "preregistration": "docs/PREREGISTRATION-FACT-TIMELINE.md",
+  "treatment": {
+    "runId": "44680735798",
+    "factTimeline": true,
+    "capability": "KU",
+    "questions": 144,
+    "windows": 2,
+    "repetitions": 2,
+    "reach": 8
+  },
+  "control": {
+    "runId": "44680588835",
+    "factTimeline": false,
+    "repetitions": 2,
+    "reach": 9
+  },
+  "population": {
+    "corpora": 72,
+    "windows": 2,
+    "questions": 144,
+    "shards": 4,
+    "note": "every KU corpus asked twice; the second window is the one a carry can reach"
+  },
+  "accuracy": {
+    "control": {
+      "baselinePerRun": [
+        0.8681,
+        0.8333
+      ],
+      "baselineMean": 0.8507,
+      "featurePerRun": [
+        0.8542,
+        0.875
+      ],
+      "featureMean": 0.8646,
+      "difference": 0.0139
+    },
+    "treatment": {
+      "baselinePerRun": [
+        0.8472,
+        0.8681
+      ],
+      "baselineMean": 0.8576,
+      "featurePerRun": [
+        0.8611,
+        0.875
+      ],
+      "featureMean": 0.8681,
+      "difference": 0.0104
+    }
+  },
+  "decomposition": {
+    "deltaAxisQuestions": 0.5,
+    "deltaDriftQuestions": 1.0,
+    "deltaNetQuestions": -0.5,
+    "perRepetitionNetQuestions": [
+      4.0,
+      -5.0
+    ],
+    "note": "delta_net = [feature(timeline) - feature(no-timeline)] - [baseline(timeline) - baseline(no-timeline)], paired by repetition index. The two repetitions carry OPPOSITE signs, which is the shape of noise rather than of a mechanism."
+  },
+  "secondWindow": {
+    "control": {
+      "n": 72,
+      "delta": 0.5,
+      "discordant": {
+        "b": 2,
+        "c": 3
+      },
+      "mcnemarP": 1.0
+    },
+    "treatment": {
+      "n": 72,
+      "delta": 0.0,
+      "discordant": {
+        "b": 2,
+        "c": 2
+      },
+      "mcnemarP": 1.0
+    }
+  },
+  "criteria": {
+    "F1": {
+      "threshold": "delta_net >= +3 questions",
+      "measured": -0.5,
+      "verdict": "falsified"
+    },
+    "F2": {
+      "threshold": "McNemar p < 0.05",
+      "measured": 1.0,
+      "verdict": "falsified"
+    },
+    "F3": {
+      "threshold": "regressions <= 6",
+      "measured": "b=2/c=2 on the treatment's second window",
+      "verdict": "not exceeded, but not meaningful at this dosage"
+    },
+    "F4": {
+      "threshold": "|delta_drift| <= 3 questions",
+      "measured": 1.0,
+      "verdict": "passed"
+    },
+    "F5": {
+      "threshold": "descriptive",
+      "measured": "not captured this pass",
+      "verdict": "unread"
+    }
+  },
+  "dosage": {
+    "reachWindows": {
+      "control": 9,
+      "treatment": 8
+    },
+    "share": 0.0625,
+    "consequence": "The mechanism could only act on 8-9 of 144 questions (6%). A +3-question criterion needs a mechanism that reaches at least an order of magnitude more of the population; this dispatch never had the power to confirm F1, so 'not detected' here is weaker than 'not effective'."
+  },
+  "cost": {
+    "projectedCnyPerDispatch": 2.05,
+    "dispatches": 2,
+    "projectedTotalCny": 4.1
+  },
+  "disposition": {
+    "ledgerRow19": "product (gated) - unchanged",
+    "default": "off",
+    "reason": "F1 and F2 falsified; F4 passed so the reading is legible; the dosage was 6%, so the honest statement is 'no increment detected at this reach', not 'the mechanism does not work'."
+  }
+}

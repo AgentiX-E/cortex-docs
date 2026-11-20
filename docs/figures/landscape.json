@@ -2,7 +2,7 @@
   "dataset": "LongMemEval-S",
   "questions": 500,
   "asOf": "2026-11-20",
-  "note": "One row per published reading. `type` is the product's distribution model, not its licence: `open-source` means a reader can self-host the whole stack, which is the axis the review asks about. `tokensPerQuery` is null when the source publishes no cost, and null is not zero -- the renderer draws those rows in a band rather than at an imputed position.",
+  "note": "One row per published reading. `type` is the product's distribution model, not its licence: `open-source` means a reader can self-host the whole stack, which is the axis the review asks about. `tokensPerQuery` is null when the source publishes no cost, and null is not zero -- the renderer draws those rows in a band rather than at an imputed position. Two of the rows added this iteration were checked against a competitor's own compiled leaderboard rather than the vendor's page, and one of them (Graphon) publishes two figures for one system: the row carries the one that names a cost, because a single row cannot hold both a best case and a bill without the figure implying they happened together.",
   "overall": [
     {
       "system": "Recallium",
@@ -32,6 +32,15 @@
       "costNote": null
     },
     {
+      "system": "Maximem Synap",
+      "reader": "Gemini 3.8 Flash",
+      "accuracy": 95.6,
+      "type": "closed-cloud",
+      "tokensPerQuery": 7400,
+      "source": "vendor page 2026-10-28, 478/500, per-question run data public (05-competitor-analysis.md 1.22.2)",
+      "costNote": "memory tokens / question"
+    },
+    {
       "system": "Mastra OM",
       "reader": "GPT-5-mini",
       "accuracy": 94.87,
@@ -48,6 +57,24 @@
       "tokensPerQuery": 6787,
       "source": "self-reported 2026-04 algorithm, 4/6 disclosure",
       "costNote": "avg per retrieval call"
+    },
+    {
+      "system": "Perpetuity",
+      "reader": "Claude Opus 5 (thinking)",
+      "accuracy": 94.0,
+      "type": "closed-cloud",
+      "tokensPerQuery": 3600,
+      "source": "vendor self-measurement, 470/500, official GPT-4o judge, 2026-11 leaderboard page",
+      "costNote": "reader's tokenizer, median frame"
+    },
+    {
+      "system": "Graphon Labs",
+      "reader": "undisclosed",
+      "accuracy": 92.8,
+      "type": "closed-cloud",
+      "tokensPerQuery": 15100,
+      "source": "vendor benchmark page 2026-11; the same page also quotes a 96.2 best case with no cost",
+      "costNote": "tokens per question"
     },
     {
       "system": "al-buddy-memory",
@@ -84,6 +111,15 @@
       "tokensPerQuery": 7448,
       "source": "run 44017278305, 500 questions x 4 passes, official judge prompts, registered configuration",
       "costNote": "prompt chars / 4"
+    },
+    {
+      "system": "Honcho",
+      "reader": "Claude Haiku 4.5",
+      "accuracy": 90.4,
+      "type": "open-source",
+      "tokensPerQuery": 11600,
+      "source": "self-reported 2025-12-12, run data public (leaderboard compiled by a competitor)",
+      "costNote": "tokens per question"
     },
     {
       "system": "Zep",

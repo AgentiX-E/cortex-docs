@@ -44,6 +44,16 @@ document that discusses it says so in words.
 3. **A crowded label moves; a marker does not.** Three systems lie within 1.9 points of each other (96.8, 96.2,
    94.9). Their labels are pushed down by a minimum spacing with a leader line back to the marker, because
    moving the marker would be a lie about the score.
+4. **The axis follows the data, and a fixed axis deletes systems.** The limits used to be written down
+   (`2,200`-`9,000`), which was right for the six rows that existed then and silently **clipped** the next two
+   that arrived above 9,000. A point outside the axis is not a point in a surprising place -- it is an absent
+   system, and the figure's whole job is to show which systems exist at which cost. Limits and ticks are now
+   derived from the rows.
+5. **When two labels collide, one changes side rather than both moving up.** `Maximem Synap` (95.6 at 7,400) and
+   `Mem0` (94.4 at 6,787) are 1.2 points and 9% of an axis apart. The first repair pushed both labels above
+   their markers, which moved the collision from the markers to the text: one system's name was then printed
+   across another's. The second repair alternates sides within a crowded cluster, so each label leaves its own
+   marker visible.
 
 ## What the figures do not show
 
@@ -52,3 +62,14 @@ document that discusses it says so in words.
   repository does not own (`cortex-ai/src/usage.ts` states the same rule for the artifact).
 - **A trend.** These are readings from different days on different stacks. The ranking figure groups by reader
   precisely so that no one reads the ordering as a progression.
+
+## The rows added on 2026-11-20
+
+Four rows arrived from an external re-check: Perpetuity (94.0 at 3,600), Graphon Labs (92.8 at 15,100), Honcho
+(90.4 at 11,600) and Maximem Synap (95.6 at 7,400). Perpetuity is the one worth looking at twice: the cheapest
+published path to 94 on this suite, at half this arm's bill. `05-competitor-analysis.md` §30 draws the
+consequence, and it is not "we are behind" -- it is that the lever is which text the frame holds rather than how
+much of it there is.
+
+`Graphon` publishes two figures for one system (96.2 best case, 92.8 with a cost). Only the row that names a
+cost is entered: a single row cannot hold a best case and a bill without implying they happened together.
