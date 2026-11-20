@@ -28563,3 +28563,133 @@ packages/cortex-eval build: src/report.ts(3224,13): error TS2339:
 | 3 | 竞品 harness 入站 smoke（`Provider` 适配，3 题） | 同 harness 同判官配对读数 | 1 轮 | ≈14 | 需外网 |
 | 4 | `MR` 的"标注边界"占比（双读，`verbatim-acts` vs `route`） | 双读分歧即上界 | 1 轮 | ≈3 | 无 |
 | 5 | `R2` 重派（读者家族） | `R2.1`–`R2.4` | 2 h | ≤30 | Zhipu 额度 |
+
+---
+
+## 140. 第 143 轮：一次 0.09 CNY 的派发把"待定性"变成"可判定"，以及最便宜的派发档为什么一直是死的
+
+第 139 轮末尾写着三件"未做"：定性 36 倍生成差额、`factTimeline` 的 A/B、竞品 harness smoke。
+本轮的顺序不是按这三个的重要性，而是按**它们对彼此的依赖**：36 倍差额决定 ⑰ 的杠杆应该放在生成侧
+还是提示词侧，而 `factTimeline` 的 A/B 只有在杠杆位置确定之后才值得花。
+
+三件事，一次派发，零返工：
+
+| # | 事 | 形态 | 花费 |
+| --- | --- | --- | --- |
+| 1 | 36 倍生成差额归因 | 一次 12 题探针（`44676731032`） | **0.09 CNY** 投影 |
+| 2 | `truncatedCalls` 插桩 | 产品侧 `usage.ts` + 报告一行 + 7 + 5 条测试 | 0 |
+| 3 | merge 在单次重复上必失败的缺陷 | 6 条测试 + 一处重建路径 | 0 |
+| 4 | `S18`（`factTimeline` A/B） | 两次派发（`44680588835` / `44680735798`） | 4.10 CNY 投影 |
+
+### 140.1 36 倍差额的答案，以及它不是哪个答案
+
+第 139 轮把 `S17` 的 2,938 completion token/次 与 513 字符交付写成了三个候选：provider 计费了看不见的
+推理、契约让模型写工作稿、生成在上限处被切断。三个候选的修法互不相容，所以**先分清，再决定**。
+
+探针跑的是**默认契约**，12 题，1 次重复，两臂：
+
+| 字段 | 值 |
+| --- | --- |
+| calls | 38（baseline 14 / feature 14 / 判官与 setup 10） |
+| prompt tokens | 213,422（**96.73%** 命中 prefix cache） |
+| completion tokens | **3,017**（每侧每次调用 103 / 112） |
+| 交付字符 | **11,038** |
+| **交付比** | **3.66 字符 / 生成 token** |
+| 重试 | 0 |
+
+`3.66` 与 3.5 的经验比一致：**默认契约没有未交付的生成**。于是三个候选的判定是
+
+| 候选 | 判定 |
+| --- | --- |
+| provider 计费不可见推理 | **否证**（同一 provider、同一 `thinking=disabled`，交付比正常） |
+| 契约工作稿 | **成立**（差额只在 `ask=verbatim-scope`，而 `verbatim-acts` 侧是 82/次） |
+| 截断 | **本次未发生**，且插桩已上线 |
+
+这条结论的价值不在"知道了原因"，而在它**换了杠杆的位置**：默认契约每次调用只生成 112 token，
+所以 ⑰ 的读者侧不可能靠"改生成策略"再省；能省的只有**每道题读进去多少字符**（`room` 48,460），
+而 room 曲线的准确率代价已经测过。全文见 `ANALYSIS-COMPLETION-GAP.md`。
+
+同时它给 `RETRACTIONS.md` 的 `verbatim-scope` 条目补上第二条独立否证理由：那份契约不只让准确率掉
+2.48 点，还让每次调用多生成 35 倍。"两处失败指向同一结论"比"一处失败"硬。
+
+### 140.2 `truncatedCalls`：为什么这次读数全是 0，插桩仍然必须存在
+
+`answerChars` 能说"多少账单没变成答案"，不能说"为什么"。而"为什么"决定修法：
+
+| 机制 | 修法 |
+| --- | --- |
+| 契约让模型写工作稿 | 改契约，需要预登记 A/B |
+| 生成在上限处被切断 | **缺陷**：答案从未存在，任何提示词修改都救不回 |
+
+一次被截断的调用在其余每个字段里都与正常调用无法区分：`calls: 1`、有计价、有部分文本（所以
+`answerChars` 非零）。只有 provider 的 `finish_reason` 能把它分开。
+
+三个实现决定：
+
+| 决定 | 理由 |
+| --- | --- |
+| 计在 `UsageSnapshot.truncatedCalls`，不塞进 `LlmUsage` | `finish_reason` 与 `usage` 是同一响应体的两个块；"被截断且无 `usage` 块"必须两个事实都留下 |
+| 只在 `=== 'length'` 时 +1 | 字段在线上格式里可选，"没说"不等于"说被切断"；把缺字段当截断等于把猜测写进唯一的缺陷判据 |
+| observer 转发第二个参数 | 侧级快照才是臂报的数；只让进程总数知道截断，会让每个侧读数都声称 0 截断 |
+
+报告侧：表格**总是**印那一行（`calls the provider cut off at its output limit`），因为"没有截断"与
+"这个构建不测截断"不能是同一份文档；只有真正发生时，才多印一行把它命名为缺陷。
+
+一处自查抓到的缺陷：`usage-by-side.ts` 的 observer 最初是单参数回调，`truncatedCalls` 在侧级统计里
+被静默丢弃——`bothSides` 的闭包断言把它抓成 `NaN`，不是靠读代码。
+
+### 140.3 最便宜的派发档为什么一直是死的
+
+`44676731032` 的 shard job 全绿、arm 答完、artifact 上传，然后在 merge 阶段被拒：
+
+```text
+refusing: a shard does not carry 1 `baselineCorrectByRun` bitstrings,
+so its verdicts are not aligned with the repetitions the report declares.
+```
+
+根因是两侧对同一件事的约定不一致，而两边各自都对：
+
+| 组件 | 约定 | 单独看是否合理 |
+| --- | --- | --- |
+| `ablation.ts` | `runs > 1` 才写 `*.CorrectByRun` | 合理：1 次重复时它是镜像字段的第二份拷贝，"两个必须一致的数组就是两个可能分叉的数组" |
+| `merge-ablation.mjs` | 无条件要求 `runs` 个位串 | 合理：合并的输入必须自描述 |
+
+两者相遇时死掉的是**最便宜的那一档**：`ablation_runs=1` 的 screening 派发整段人群答完、付完钱、
+在最后一步被拒。它把每次 screening 从 1 次重复推到 2 次（成本翻倍），也让"先 screening 再正式"只能
+靠人记住不要用 1——而这是约束⑰ 最不愿意看到的一种浪费：**不是花多了，是花了之后拿不到读数**。
+
+修法不是"改成必须写"（继续拒），也不是"1 次也写"（制造第二个表达），而是**重建**：1 次重复只有
+一个可能位串，artifact 已经用布尔镜像记录了它。三条守卫同时加：镜像缺席拒绝、镜像不是布尔拒绝
+（`"1"` 被 `=== true` 读成 `false` 会把满分运行报成 0%）、重建结果仍要过 roster 对齐。
+并且**记录**哪些 shard 走了重建（`merged.parts[].bitstringsFrom`）：读的向量与重建的向量来自不同字段，
+跨两次 merge 比较的人不该靠推断。
+
+6 条测试（1 绿路径 + 1 记录 + 1 "多重复时不记录" + 3 拒绝），27 条 merge 测试全过。
+
+### 140.4 `S18`：双时态时间轴，预登记已写，答案未看
+
+台账第 19 行第 141 轮从 `instrument` 推到 `product (gated)`——可达、有开关注释、有手册，**没有读数**。
+本轮派发两次（`fact_timeline=0` / `=1`，`capability=KU`、`windows=2`、2 次重复、4 shard、8 worker），
+预登记在 `PREREGISTRATION-FACT-TIMELINE.md`，写定于任何答案被看到之前。
+
+设计上必须记住的一点：这是一个**跨派发**配对（`fact_timeline` 是全局输入），所以它带一条漂移校正——
+
+```text
+Δ_net = [feature(timeline) - feature(no-timeline)] - [baseline(timeline) - baseline(no-timeline)]
+```
+
+`baseline` 侧不含时间轴，所以它的差只能是漂移。这是本仓处理 1.7–2.1pp 时漂移的标准做法。
+
+### 140.5 测试与门禁
+
+| 项 | 值 |
+| --- | --- |
+| TS（`cortex-ai`） | **352**（`usage-truncation.test.ts` 7 条新增） |
+| TS（`cortex-eval`） | **3,700**（`report-llm-usage` 13→15；`usage-by-side` 13→14） |
+| TS（`cortex-core` / `cortex-storage` / `cortex-memory`） | 963 / 125 / 1,674 |
+| 全部 TS | **6,814**（上轮 6,804） |
+| Python | **3,101** 通过 / 19 跳过（`test_merge_ablation.py` 21→27） |
+| 覆盖率 | `cortex-eval` 99.58 / 98.68 / 99.84 / 99.77；其余与上轮同 |
+| 门禁 | `pnpm check` **exit 0** |
+| Dependabot | 两仓 0 alert / 0 open PR |
+| 派发 | 探针 1 次（0.09 CNY 投影）；`S18` 两臂（各 2.05 CNY 投影） |
