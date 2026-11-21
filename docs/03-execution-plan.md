@@ -11236,3 +11236,29 @@ python3 tools/dispatch-multi-step-probe.py               # 121 题 × 1 步，�
 **这一轮的教训不是「记得装 pytest」**：一条需要人记得的步骤就是一条会被漏掉的步骤。教训是**审计的定义域
 不能是一个文件名**——同一个缺陷在 §14.98.7 的 `manual-examples.mjs`（硬编码包清单）里出现过一次，那是
 枚举写死；这次是**文件写死**。两次都是「清单代替了派生」。详见 `04-execution-tracking-report.md` §148。
+
+### 14.98.11 探针的前置条件：两次派发换一条规则，然后把它删掉
+
+`44863794098` 死在 `pytest` 缺失，`44865288439` 死在**兄弟仓库**未检出（`tools/__tests__` 里若干测试读
+`cortex-docs/evidence/longmemeval/scripts/`，而 `verify.yml` 用 `actions/checkout` `path: cortex-docs`
+把它检出来）。两次都**没到探针**，花费 0 元。
+
+两个不同的前置条件死在同一个位置，说明问题不是「漏了哪一步」，而是**「测量前跑一遍全套」这个设计本身**：
+`verify.yml` 用两个 job、十几步建立的前提链，不是一个四步的测量 job 靠复制能复现的。
+
+于是把它删掉，把判据移到唯一花钱的地方：
+
+| 做法 | 前置条件 | 每次派发代价 |
+| --- | --- | --- |
+| 测量前跑全套 | 要复制 `verify.yml` 的前提链（已漏两次） | +10 分钟 CI，且失败在**花了时间之后** |
+| **派发前读判决** | 无（只查 API） | 一次 API 调用，0 元，失败在**分配 runner 之前** |
+
+规则写进 `tools/dispatch-multi-step-probe.py`：读 `master` head 的 `Verify` 结论，**非 `success` 拒绝
+派发**；只认 `push`/`pull_request` 事件（手派的 `Verify` 是可派发的判据，会退化成永远绿）；`--wait N`
+只等待、不绕过，没有 `--force`。
+
+同时 `probe-multi-step.yml` 删掉 `pnpm check` 与随之无用的 Python 前置，并在原位置留注释写明**为什么没有
+这一步**和两次失败的 run id；`test_ci_gate_audit.py` 新增一条**反向**测试
+（`test_the_probe_workflow_does_not_run_the_suite`）：把 `pnpm check` 加回探针工作流必须带论证，而不是
+一个看起来更像安全改进的 diff。`check-prerequisites` 规则本身留着，仍然守护 `verify.yml` 与
+`benchmark.yml`——测试直接断言这个集合，变了就要重新论证。

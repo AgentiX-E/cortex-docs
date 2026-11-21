@@ -29870,3 +29870,48 @@ pytest，所以 `pnpm check` 在自己内部第 2 条命令上就死了，**前�
 | 可发布信号 | **否**——7 个 gated 能力未解锁 |
 | 探针 | 第一次派发失败（0 元），修复后重新派发 |
 | 门禁规则数 | 8 → **9**（新增 `check-prerequisites`，覆盖全部 13 个工作流） |
+
+### 148.5 第二次派发：这次死在「兄弟仓库」上
+
+修好 pytest 之后的 `44865288439`，`Verify library` **还是失败**，但换了一个原因：
+
+```
+AssertionError: ... can't open file
+  '/home/runner/work/cortex/cortex-docs/evidence/longmemeval/scripts/semantic_carry_analysis.py'
+```
+
+`tools/__tests__` 里有若干测试要读**兄弟仓库**的分析脚本，而 `verify.yml` 是用一步
+`actions/checkout`（`path: cortex-docs`）把它检出来的。我的工作流没有这一步，于是
+`test_semantic_carry_analysis`、`test_turn_window_analysis` 等一起红。
+
+两次派发、两个不同的前置条件，都是「跑 `pnpm check`」这句话背后的**隐性前提**。这个事实本身就是结论：
+`verify.yml` 用两个 job、十几步建立的前提链，**不是一个测量工作流能靠复制四步复现的东西**。
+
+### 148.6 结论：不要重复跑套件，把出处判据挪到花钱的地方
+
+`Verify` 在**每次 push 上**都跑。也就是说，探针要测的那个 commit 本来就有自己的判决，而且以 SHA 为键。
+所以正确的修法不是「把前置条件补齐」，而是**不再重复**，并把「树是好的」这一要求移到唯一花钱的时刻：
+
+| 位置 | 谁保证 | 花费 |
+| --- | --- | --- |
+| 测量前在 job 里跑全套 | 复制一份 `verify.yml` 的前置条件链 | 每次派发多 10 分钟 CI，且两次各漏一条前提 |
+| 派发前读判决 | `tools/dispatch-multi-step-probe.py` 查 `master` head 的 `Verify` 结论，**非 `success` 即拒绝派发** | 一次 API 调用，0 元，且拒绝发生在 GitHub 分配 runner **之前** |
+
+具体规则：只认 `push` / `pull_request` 事件的 `Verify` 运行——手派的 `Verify` 是一次「有人再问一遍同样
+的问题」，拿它当判据会让判据本身也变成可派发的；`--wait N` 只**等待**，不**绕过**（没有 `--force`，
+理由和仓库里每一条 `continue-on-error` 的论证是同一条）。
+
+工作流因此删掉 `pnpm check` 与它的 Python 前置（一个不跑 Python 的 job 不该装 pytest），并在原位置留下
+注释：**为什么这里没有这一步**，以及两次失败各自的 run id。
+
+### 148.7 门禁规则留着，并且反向钉了一条
+
+`check-prerequisites` 仍然对**跑套件的**工作流生效——现在这个集合是 `verify.yml` 与 `benchmark.yml`
+两个，测试直接断言这个集合（`test_the_rule_reaches_every_workflow_that_runs_the_suite`）：集合变了就得
+在这里重新论证，而不是悄悄消失。
+
+同时新增 `test_the_probe_workflow_does_not_run_the_suite`：**探针工作流不得再跑全套**。这条测试的存在
+意义是让「把 `pnpm check` 加回去」变成一个**必须带论证的改动**，而不是一个看起来更像安全改进的 diff。
+
+三次派发的花费：**0 元**（三次都死在测量之前）。这一轮的真正读数不是探针，而是**探针的第一笔成本不是
+0.09 元，是它的前置条件**。
