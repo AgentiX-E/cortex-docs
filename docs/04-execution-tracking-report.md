@@ -30942,3 +30942,77 @@ Synap（95.6% @ 7.4K）与 Mem0（94.4% @ 6.8K）给出可比的成本点，其�
 **5. 是否仍可能 SOTA，路径与预算。** 可能，但**成本轴在渲染层已经关闭**（三条候选分别要付 1.15 / 4.00 点，
 或账单不降）。剩余路径见 §14.150.3：浏览器轴（0 CNY，成熟度）、7 个 gated（每条 ≤10 CNY）、减调用次数
 （≤18 CNY）、`resolution` 的 4 轮确认（≤18 CNY，仅在需要 `MR` 默认值时）。
+
+### 154 机制修复：产品侧第一次真正拿到评估侧的设置
+
+#### 154.1 结论（一句话）
+
+**「评估侧最优 → 产品侧自动获取 → 验证发货就是最优」这条链此前不存在；现在它存在，并且由四个可失败的检查组成。**
+
+用户此前的质问正确到具体：不是"产品侧跟得慢"，而是 `AssembleOptions` **根本没有** `promptContract` 与 `ask`
+两个字段，所以 `assembleMemory` 这个对外入口装出来的东西与 91.25% 那次测量**不是同一个臂**，而仓库里没有任何
+检查会红。
+
+#### 154.2 四个缺陷（同一类的四次）
+
+| # | 位置 | 症状 | 谁能发现 |
+| --- | --- | --- | --- |
+| 1 | `AssembleOptions` | 缺 `promptContract`/`ask`：入口装的是 `abstention` + 各路由参考块 | 没人；`CortexMemory` 的测试全绿 |
+| 2 | `assembleMemory` | 即便有字段也没有默认值，`undefined` 落到 `prompt.ts` 的 `DEFAULT_PROMPT_CONTRACT='abstention'` | 没人 |
+| 3 | `.github/workflows/semantic-carry.yml` | `temporal:48000` / `relevance:retrieval-anchored` / `thinking:disabled`，三处未申报偏离 | 没人：`arm-config-record.py` 只比基线/派发表/预注册三份 |
+| 4 | 证据文件的正/反两面 | 只查"必须等于注册指纹"，没查"对照臂必须不等于" | 没人 |
+
+第 3 条是"三份文档互相一致、与运行不一致"的第四次复发，而它的公开数字 87.00% 就带在这三处偏离上。
+
+#### 154.3 交付物
+
+| 文件 | 作用 | 检查 |
+| --- | --- | --- |
+| `packages/cortex-memory/src/registered-arm.ts` | 产品侧首次有"整臂"常量（23 个产品决策字段） | `registered-arm.test.ts` 逐字段 ↔ 基线，**双向完备** |
+| `packages/cortex-memory/src/assemble.ts` | `promptContract`/`ask` 进入组装入口；裸调用 = 注册臂，`minimal` 例外 | 比 **prompt 字节**（裸 = 显式注册 ≠ 参考臂） |
+| `tools/arm-config-guard.mjs` | 读 14 个带 `CORTEX_MEMORY_*` 的工作流：字面量、`\|\|` 回退、输入 `default:` | `pnpm guard:arm-config`（已入 `pnpm check`） |
+| `tools/__tests__/test_arm_config_guard.py` | 13 个用例，其中 9 个是失败用例 | 门禁自己也被钉住 |
+| `packages/cortex-eval/src/acceptance.ts` | `CONFIGURATION_COUNTERFACTUAL`：对照臂指纹必须**不等于**注册 | `acceptance:check` |
+| `docs/DESIGN-ARM-ADOPTION.md` | 机制说明（英文，对外） | — |
+
+#### 154.4 顺带修掉的既有漂移
+
+`benchmark-cortex-memory.yml` 有 14 个输入 `default: ''`，含义是"交给臂代码里的默认值"——即**第三份副本**，
+只有事后拿 87 MB artifact 才看得见。现在它们写注册值。
+
+`CORTEX_MEMORY_MAX_PROMPT_CHARS` 是唯一**保持** `''` 的：臂读产品常量 `REGISTERED_ROOMS`，而该常量被
+`assemble-rooms.test.ts` 与 `registered-arm.test.ts` 双向钉在基线上，工作流再写一遍正是
+`test_prompt_budget_parity.py` 明确拒绝的第三份副本。门禁把它记为一条**延迟豁免**并每次运行打印。
+
+#### 154.5 测试与门禁
+
+| 项 | 结果 |
+| --- | --- |
+| `packages/cortex-memory` | 1696 passed（新增 7） |
+| `tools/__tests__` | 3235 passed（新增 13） |
+| `node tools/arm-config-guard.mjs` | 4 个工作流一致，**6 条申报偏离**，逐条打印 |
+| `pnpm check` | 全绿（build → tools → guards → lint → typecheck → census → registration → arm-config → test → coverage → acceptance → docs → format） |
+
+#### 154.6 必须写下来的反面
+
+**准确率一个点都没涨。** 这次修的是"测出来的数"与"发出去的东西"之间的等式。对 SOTA 的差距一字未变：
+
+| 系统 | 准确率 | 账单 |
+| --- | ---: | ---: |
+| Synap | **95.6%** | ~7.4K tokens |
+| MemCog | 92.48% | — |
+| **cortex（注册臂，`S16`）** | **91.25%** | **9,201 tokens** |
+| memoricai | 85.8% | ~11K |
+
+差距 = **准确率 4.35 点 + 账单高 24%**。任何"已经 SOTA"的说法在这一行面前都是假的。
+
+#### 154.7 下一步（`P0` 的钱要花在哪，先写清算术）
+
+| # | 事项 | 依据 | 预算 |
+| --- | --- | --- | ---: |
+| `P0` | `ask: enumerated` 在注册臂上跑 500×2 配对 | `MR` 错配 41 + 拒答 22；上限 ≈ `MR` +12.6 → 总体 +3.0 | ≤18 CNY |
+| `P1` | `review_pass: bare` vs `none` 500 题配对 | 唯一未试过的降本轴（动调用次数，不动每 token） | ≤18 CNY |
+| `P2` | 浏览器轴 `I6③`/`I7`/`I8`/`#25` | 成熟度优先于 SOTA | 0 |
+
+**算术必须写在派发前**：`enumerated` 拿满也只有 ≈94.3%，仍低于 Synap 95.6%。要越线需要**两条**同量级轴叠加
+（`enumerated` + `review_pass` 配对，或 `conflicts` 的 `KU` 复测）。这一条不改写、不事后解释。

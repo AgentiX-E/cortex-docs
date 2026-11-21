@@ -12054,3 +12054,102 @@ dispatch"，并给出两个数。
 
 `P0` 与 `P1` 可并行且都不花钱；`P2` 是唯一还可能有免费降本的实验，但它必须先在契约层确认 `reviewPass: 'none'`
 确实省下一次调用（否则又是一次没有机制可测的派发）。
+
+### 14.151 机制修复：把"发货的就是最优"从一句话变成四个可失败的检查
+
+#### 14.151.1 结论
+
+**用户此前的质问是对的，而且缺陷比"产品侧没跟上评估侧"更具体：产品侧从来没有拿到过评估侧的设置。**
+
+`tools/arm-config-baseline.json` 记录的是 `S16`（run `44017278305`）跑出 **91.25%** 的那套配置。而按产品自己
+手册的写法调用 `assembleMemory({ llm, now, storage })`，拿到的是另一套：
+
+| 字段 | 注册表 | 裸调用实际装配的 |
+| --- | --- | --- |
+| `promptContract` | `evidence-blocks-unsourced` | `abstention`（`prompt.ts` 的默认） |
+| `ask` | `verbatim-acts` | 缺省 —— 每条路由各自的参考块 |
+| `maxPromptCharsByRoute` | 48,460 / 24,000×5 | 一致（`rooms.ts` 已被双向钉住） |
+| `maxTurnChars` | 两条路由 400 | 缺省 |
+
+第四行恰好是**反证**：`rooms.ts` 是唯一有产品侧常量、且有 `assemble-rooms.test.ts` 双向钉住基线的字段。其余
+字段连**入口都没有**——`AssembleOptions` 根本没有 `promptContract` 与 `ask` 字段，所以 §12.5 与 §13.291–318
+花了十几个小节采纳的两个杠杆，从**已发布的组装入口**不可达。手册写着 `assembleMemory`，旁边印着 91.25%，
+而那次调用装的是 `S9` 之前的臂。
+
+#### 14.151.2 同一缺陷的派发侧：三份文档互相一致，并与运行不一致
+
+| 文件 | 值 |
+| --- | --- |
+| `tools/arm-config-baseline.json` | `temporal: 24000` / `relevance: self-index` / `thinking: multi-session+temporal` |
+| `tools/dispatch-cortex-memory-ab.py` | 同上 |
+| `docs/PREREGISTRATION-…` §10.3 | 同上 |
+| **`.github/workflows/semantic-carry.yml`** | **`temporal: 48000` / `relevance: retrieval-anchored` / `thinking: disabled`** |
+
+`arm-config-record.py --check` 只比前三份，全程绿灯——因为**工作流不是它比的副本之一**，而工作流才是真正执行
+的那一份。所以 `semantic-carry.yml` 公布的 87.00% 是在一个带三处未申报偏离的臂上取的。
+
+这不是"多写一份数字"能修的。修法是读那份会执行的副本。
+
+#### 14.151.3 四个检查（每个都能独立变红）
+
+| # | 主张 | 检查 | 失败长什么样 |
+| --- | --- | --- | --- |
+| 1 | 产品常量 = 注册记录 | `registered-arm.test.ts` 逐字段比对 `REGISTERED_ARM` ↔ `memoryArmConfig`，并断言**双向完备**：注册表里有、两张表都没有 = 没人决策过 | 新增一个 arm 选项而不决策 → 红 |
+| 2 | 裸调用装的就是记录的臂 | 同一文件比 **prompt 字节**：裸装配 = 显式点名的注册臂 ≠ 参考臂 | 字段到了、没到读者手上 → 红 |
+| 3 | 每个工作流要么拼出记录、要么写明为什么不 | `tools/arm-config-guard.mjs` 读全部 14 个带 `CORTEX_MEMORY_*` 的工作流：字面量、`\|\| '回退值'`、以及表达式所指输入的 `default:` | 今天这三处漂移 → 红；改法是值，或 `# arm-config: <VAR> departs — 理由`，豁免**每次运行都打印** |
+| 4 | 证据文件写着自己被测量的配置，及其镜像 | `CONFIGURATION_ATTESTED` 要求指纹**等于**注册；新增 `CONFIGURATION_COUNTERFACTUAL` 要求指纹**不等于**，并写明偏离轴 | 对照臂漂成注册指纹 → 红（它的数字就不再是对照） |
+
+第 4 条的镜像半边是新加的，理由值得写下来：只查"正面"时，`no-ranking.json`（39.55%）、`room-24k.json`（`S15`）、
+`lexical-index.json`（离线词法仪器）这三个**以"不是注册臂"为价值**的文件，可以漂成携带注册指纹而全仓库没有任何
+检查会说话——它的数字会被当作"与某配置的对照"引用，而它已经不再与那个配置不同。
+
+#### 14.151.4 门禁的当前状态（`node tools/arm-config-guard.mjs`）
+
+```
+arm-config-guard: 4 workflows agree with the registration (run 44017278305, adopted by §32);
+6 declared departure(s).
+```
+
+6 条申报偏离，逐条打印：
+
+| 文件 | 变量 | 理由 |
+| --- | --- | --- |
+| `semantic-carry.yml` | `ABLATION_RUNS` | 一对就是两轮，四轮会把派发翻倍却回答同一个问题 |
+| `semantic-carry.yml` | `CORTEX_MEMORY_REVIEW_PASS` | carry 没有吸收那次 pass 就无可承载之物；对照是本文件的 `semantic_carry=0` |
+| `lexical-recall.yml` | `ABLATION_RUNS` | 这条仪器每题每配置答一次 |
+| `lexical-recall.yml` | `DEEPSEEK_MODEL` | 本派发没有读者，`offline-instrument` 是哨兵值 |
+| `restore-counterfactual.yml` | 整文件 | 它重放一个已存在的配置，每个值按设计都是历史的 |
+| `benchmark-cortex-memory.yml` | `CORTEX_MEMORY_MAX_PROMPT_CHARS` | **延迟**：臂读 `REGISTERED_ROOMS`，该表被两个测试钉在基线上，工作流再写一遍就是 `test_prompt_budget_parity.py` 拒绝的第三份副本 |
+
+同时把 `benchmark-cortex-memory.yml` 里 14 个 `default: ''` 的输入改成注册值。它们原本的含义是"由臂自己的代码默认
+值决定"，也就是第**三**份副本——`arm-config-record.py` 只能事后拿 87 MB artifact 才看得见它。
+
+#### 14.151.5 这次修复**没有**做什么
+
+**没有提高一个点准确率。** 它让"测出来的那个数"等于"发出去的那个东西"，并让下一次采纳变成机械的：重录基线而
+产品不跟 → 红；工作流派发别的 → 红。
+
+对 SOTA 的差距一字未变：
+
+| 系统 | 准确率 | 账单 | 说明 |
+| --- | ---: | ---: | --- |
+| Synap | 95.6% | ~7.4K tokens | 要打的就是这个 |
+| MemCog | 92.48% | — | |
+| **cortex（注册臂）** | **91.25%** | **9,201 tokens** | 本仓库，`S16` |
+| memoricai | 85.8% | ~11K | |
+
+差距是**准确率 4.35 点 + 账单高 24%**。这是两个数，不是一句话。
+
+#### 14.151.6 修正后的下一步（覆盖 §14.150.3 的 `P2`）
+
+| # | 事项 | 预算 | 依据 |
+| --- | --- | ---: | --- |
+| `P0` | **派发 `ask: enumerated` 在注册臂上**（500 题 × 2 轮配对） | ≤18 CNY | 唯一已测量、未采纳、且落在 `MR` 的杠杆：错配 41 题 + 拒答 22 题，`MR` 上限 +12.6 点 ≈ 总体 +3.0 |
+| `P0'` | 并行：用同一派发的基线侧确认产品侧 91.25% 可复现 | 0 额外 | 机制修完后，产品与臂同构，这一项第一次有意义 |
+| `P1` | `review_pass: bare` vs `none` 的 500 题配对 | ≤18 CNY | §14.150.3 的 `P2`，唯一未试过的降本轴 |
+| `P2` | 浏览器轴 `I6 ③`/`I7`/`I8`/`#25` | 0 CNY | 成熟度优先 |
+| `P3` | `resolution` 四轮确认 | ≤18 CNY | +2.40 p=0.088，不足以改默认 |
+
+`P0` 的算术必须写清楚：即使 `MR` 拿满 +12.6 点，总体到 **≈94.3%**，仍低于 Synap 的 95.6%。要越过它，需要
+`enumerated` **加上**另一条同量级的轴（候选：`review_pass` 配对 + `conflicts` 的 `KU` 复测）。这一条写在派发
+之前，而不是之后。
