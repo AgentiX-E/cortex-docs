@@ -11262,3 +11262,34 @@ python3 tools/dispatch-multi-step-probe.py               # 121 题 × 1 步，�
 （`test_the_probe_workflow_does_not_run_the_suite`）：把 `pnpm check` 加回探针工作流必须带论证，而不是
 一个看起来更像安全改进的 diff。`check-prerequisites` 规则本身留着，仍然守护 `verify.yml` 与
 `benchmark.yml`——测试直接断言这个集合，变了就要重新论证。
+
+### 14.98.12 探针读数（`44867629266`）：判据达成，但柜台还没建
+
+`--steps 1`、`MR` 121 题、DeepSeek 读者，语料 sha256 `d6f21ea9…c3a442`（与注册基准一致）。读数：
+
+| 读数 | 值 |
+| --- | ---: |
+| 决策调用 / 查询 | 121 / 106（106 道题写了查询） |
+| 读者的动作带来新证据 | 118 题 |
+| **读者捞到的金标** | **586 轮 / 105 题** |
+| 提示词里的金标（种子 → 选中 → 携带） | 862 → 1448 → 1377（总 3663） |
+| 选中却被房间砍掉 | 71 轮 |
+| 决策提示词 | 4,141 字符/题，实花约 0.28 CNY |
+
+**§14.98.8 的判据（`gainedQuestions ≥ 5`）以 105 达成，取消条件不成立。** 这是本 campaign 第一次拿到
+「静态检索的缺口不是零」的读数——它和 §3/§9 不矛盾：那两处量的是**答错的题所需的**金标已经在提示词里，
+这里量的是**提示词里的金标质量**（862 → 1448，×1.68）。两个量不同，不能互相印证。
+
+**但两步臂现在派发不出去**：§14.98.5 的不派发条件是「`multiStep: 0` 逐题复现注册臂」，而 `multiStep`
+在 `cortex-eval` / `cortex-memory` 里一次都没出现——`cortex-agent` 是一个能跑的包，评测臂不知道它存在。
+所以 §14.98.5 的 14 CNY 排到下一轮，前置是**接线**：
+
+1. `cortex-memory`（或 `cortex-eval` 的臂）暴露 `multiStep` 选项，`0` 走现有路径**逐字节一致**；
+2. 接进 `benchmark.yml` 的输入与 arm-config 记录（`registration:check` 会盯着）；
+3. 再按 §14.98.5 的判据派发（≥+3 题、McNemar `p < 0.05`、账单 ≤1.15×、上限 14 CNY）。
+
+**`foundNotCarried = 71` 不重开房间轴**：§145 已量过 +20.9% 词元买回 0.25 道题，房间的边际收益是零。
+
+**仪器缺陷两处已修**：per-case JSON 因 `pnpm --filter` 的 cwd 是包目录而没进 artifact（`--out` 改绝对
+路径、`if-no-files-found` 改 `error`）；bench 标签把 `addedQuestions` 叫成「searches that added」，而
+`session` 动作同样计入（118 对 106 的差就是它）。

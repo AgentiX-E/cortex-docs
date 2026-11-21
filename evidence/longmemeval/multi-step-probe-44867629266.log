@@ -1,0 +1,32 @@
+
+> @agentix-e/cortex-agent@0.1.0 probe:multi-step /home/runner/work/cortex/cortex/packages/cortex-agent
+> node --import tsx bench/probe-multi-step.ts "--" "--steps" "1" "--capability" "MR" "--limit" "0" "--out" "multi-step-probe.json"
+
+cases                : 121 (MR, maxSteps 1)
+reader calls         : 121, searches 106 on 106 questions
+searches that added  : 118 questions
+gold found by reader : 586 turns on 105 questions
+gold: seed / selected / carried / total : 862 / 1448 / 1377 / 3663
+found but not carried: 71
+deciding prompt chars: 4141 per question
+  0a995998: +4 gold, 1 search(es), stop step-limit
+  6d550036: +1 gold, 1 search(es), stop step-limit
+  gpt4_59c863d7: +8 gold, 1 search(es), stop step-limit
+  b5ef892d: +7 gold, 1 search(es), stop step-limit
+  e831120c: +1 gold, 1 search(es), stop step-limit
+  3a704032: +9 gold, 1 search(es), stop step-limit
+  gpt4_d84a3211: +14 gold, 1 search(es), stop step-limit
+  aae3761f: +4 gold, 1 search(es), stop step-limit
+  gpt4_f2262a51: +8 gold, 1 search(es), stop step-limit
+  dd2973ad: +4 gold, 1 search(es), stop step-limit
+  c4a1ceb8: +10 gold, 1 search(es), stop step-limit
+  gpt4_a56e767c: +16 gold, 1 search(es), stop step-limit
+  6cb6f249: +3 gold, 1 search(es), stop step-limit
+  46a3abf7: +7 gold, 1 search(es), stop step-limit
+  28dc39ac: +6 gold, 1 search(es), stop step-limit
+  gpt4_2f8be40d: +11 gold, 1 search(es), stop step-limit
+  2e6d26dc: +13 gold, 1 search(es), stop step-limit
+  gpt4_15e38248: +16 gold, 1 search(es), stop step-limit
+  88432d0a: +11 gold, 1 search(es), stop step-limit
+  80ec1f4f: +8 gold, 1 search(es), stop step-limit
+written              : multi-step-probe.json
