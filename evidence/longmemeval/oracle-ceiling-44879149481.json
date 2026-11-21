@@ -1,0 +1,93 @@
+{
+  "run": "44879149481",
+  "commit": "2de6af9b71c01c64264c14343f25c1bd3fc42adf",
+  "dataset": "longmemeval+oracle",
+  "questionCount": 500,
+  "oracleCensus": {
+    "questions": 500,
+    "sourced": 500,
+    "unsourced": 0,
+    "turns": 10960,
+    "chars": 13579817,
+    "shippedTurns": 246750,
+    "shippedChars": 252922565
+  },
+  "feature": {
+    "accuracy": 0.89,
+    "perCapability": {
+      "IE": {
+        "total": 150,
+        "correct": 143
+      },
+      "MR": {
+        "total": 121,
+        "correct": 110
+      },
+      "KU": {
+        "total": 72,
+        "correct": 62
+      },
+      "TR": {
+        "total": 127,
+        "correct": 101
+      },
+      "ABS": {
+        "total": 30,
+        "correct": 29
+      }
+    }
+  },
+  "baseline": {
+    "accuracy": 0.838,
+    "perCapability": {
+      "IE": {
+        "total": 150,
+        "correct": 145
+      },
+      "MR": {
+        "total": 121,
+        "correct": 110
+      },
+      "KU": {
+        "total": 72,
+        "correct": 62
+      },
+      "TR": {
+        "total": 127,
+        "correct": 102
+      },
+      "ABS": {
+        "total": 30,
+        "correct": 0
+      }
+    }
+  },
+  "ablation": {
+    "delta": 0.052000000000000046,
+    "pValue": null,
+    "discordant": {
+      "baselineCorrectFeatureIncorrect": 3,
+      "baselineIncorrectFeatureCorrect": 29
+    }
+  },
+  "featureConfig": {
+    "candidateDiscrimination": false,
+    "retrievalSides": false,
+    "entityIdentityClause": true,
+    "reranker": false,
+    "aggregationCritique": false,
+    "aggregationCritiquePerItem": false
+  },
+  "shippedReference": {
+    "run": "44017278305",
+    "accuracy": 0.9125,
+    "perCapability": {
+      "ABS": 1.0,
+      "IE": 0.9333,
+      "KU": 0.8889,
+      "MR": 0.8347,
+      "TR": 0.9606
+    }
+  },
+  "note": "Gold-only pools (22.5x fewer turns than the shipped corpus), same reader, same judge, same temperature, same rooms, one pass. The shipped comparison is the registered 4-pass mean from a different run, so the two are cross-run: the noise floor is 2.5 questions (0.5 points overall)."
+}
