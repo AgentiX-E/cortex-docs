@@ -1,0 +1,131 @@
+{
+  "run": 44891901371,
+  "workflow": "semantic-carry.yml",
+  "commit": "61cd99ec",
+  "artifact": "semantic-carry-merged",
+  "dispatch": {
+    "pairing": "clock",
+    "capability": "MR",
+    "windows": 1,
+    "limit": 0,
+    "review_pass": "bare",
+    "turn_rendering": "head",
+    "ablation_runs": 2,
+    "shards": 4,
+    "model": "deepseek-chat",
+    "thinking": "disabled",
+    "budget_cny": 20
+  },
+  "artifactConfig": {
+    "featureConfig": {
+      "carryPair": false,
+      "clockPair": true,
+      "semanticCarry": false,
+      "cortexMemory": true,
+      "conflicts": false,
+      "factTimeline": false,
+      "windowReorder": false
+    },
+    "memoryArmConfig": {
+      "sessionClock": "on",
+      "reviewPass": "bare",
+      "evidenceSource": "corpus"
+    }
+  },
+  "readout": {
+    "command": "tools/read-merged-population.py --windows 1 --pairing clock",
+    "population": {
+      "corpora": 121,
+      "windows": 1,
+      "questions": 121,
+      "runs": 2,
+      "shards": 4
+    },
+    "deltaQuestions": -1.5,
+    "discordant": {
+      "controlOnly": 4,
+      "treatmentOnly": 2
+    },
+    "mcnemarExactTwoSided": 0.6875
+  },
+  "accuracy": {
+    "controlAnswersCorrect": 193,
+    "controlAnswers": 242,
+    "controlPercent": 79.752,
+    "treatmentAnswersCorrect": 190,
+    "treatmentAnswers": 242,
+    "treatmentPercent": 78.512,
+    "controlQuestionMean": 96.5,
+    "treatmentQuestionMean": 95.0
+  },
+  "cost": {
+    "pricesCnyPerMTokens": {
+      "cached": 0.2,
+      "miss": 2.0,
+      "output": 3.0
+    },
+    "control": {
+      "promptTokens": 3092034,
+      "completionTokens": 47462,
+      "cacheHitPromptTokens": 3046098,
+      "cacheHitShare": 0.985,
+      "cny": 0.843
+    },
+    "treatment": {
+      "promptTokens": 3192446,
+      "completionTokens": 48370,
+      "cacheHitPromptTokens": 1623506,
+      "cacheHitShare": 0.509,
+      "cny": 3.608
+    },
+    "totalCny": 4.451,
+    "projectedCny": 1.73
+  },
+  "criteria": {
+    "C1": {
+      "threshold": ">= +3 questions and up-down >= +3",
+      "observed": "-1.5 questions, 2 gained / 4 lost",
+      "verdict": "fail"
+    },
+    "C4": {
+      "threshold": "<= +1% tokens per correct answer",
+      "observed": "+4.9% (16,021 -> 16,802)",
+      "verdict": "fail"
+    }
+  },
+  "flips": {
+    "gained": [
+      {
+        "id": "2e6d26dc",
+        "distinctDates": 1
+      },
+      {
+        "id": "92a0aa75",
+        "distinctDates": 11
+      }
+    ],
+    "lost": [
+      {
+        "id": "46a3abf7",
+        "distinctDates": 11
+      },
+      {
+        "id": "c4a1ceb8",
+        "distinctDates": 11
+      },
+      {
+        "id": "gpt4_7fce9456",
+        "distinctDates": 1
+      },
+      {
+        "id": "gpt4_a56e767c",
+        "distinctDates": 11
+      }
+    ],
+    "multiDatePopulation": {
+      "questions": 93,
+      "of": 121
+    }
+  },
+  "decision": "default stays off; RETRACTIONS.md entry 5; mechanism kept optional"
+}
