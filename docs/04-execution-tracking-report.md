@@ -29974,3 +29974,116 @@ AssertionError: ... can't open file
 | 是否 SOTA | **否**。`MR` 83.47% 对 MemCog 92.48%（−9.01）；端到端 91.25% 对 Maximem Synap 95.6%（−4.35） |
 | 探针花费 | 约 **0.28 CNY**（预算 2 CNY），三次派发合计仍为 0.28 |
 | 下一步 | 把 `multiStep` 接进评测臂 + `0` 态复现注册臂 → 再派发两步（≤14 CNY，判据 ≥+3 题 & McNemar p<0.05） |
+
+## 150 第 153 轮：`91.25%` 高于公开 oracle 上限这件事，可以在本仪器上直接量掉
+
+### 150.1 本轮没有按上一轮写的计划走，理由写在计划里而不是事后
+
+上一轮 §149.5 的下一步是「把 `multiStep` 接进评测臂 + `0` 态复现注册臂 → 再派发两步（≤14 CNY）」。
+**本轮把它撤了**，因为这条计划的前提在写它的同一份文档里已经被量掉了：
+
+| 事实 | 出处 |
+| --- | --- |
+| `MR` 22 道稳定失败里 18 道的金标数字**已在提示词里** | `AUDIT-MR-ENUMERATION.md` §3 |
+| 22/22 的答案**等于 Step 1 的行数**（算术没错，错的是集合） | 同上 §1 |
+| 七个 ask 措辞全部否证；房间/密度/近重复三条成本路按判据关闭 | 跟踪报告 §136 |
+| `v4-pro` + thinking 读 80.99%（**−3 题**） | `44507560716` |
+
+两步检索改变的是**证据集合**，而上面四条说的都是「集合的错不在证据上」。在前提被否证时先花 14 CNY 去
+接线，是把「能不能买」当成「该不该买」。预登记的价值就在这里：它允许一个实验在派发前被自己的前置读数
+取消，而且取消这件事本身是可审计的。
+
+### 150.2 真正没有出处的是那个对外数字
+
+§143.7 记着一条至今未解的矛盾：`LongMemEval-S` 的公开 **oracle 上限 82.4%**，而 cortex 对外 **91.25%**
+——高出 8.85 点。三种解释（判官更宽松 / 读者更强 / oracle 在别的变体上算）都指向同一个测量，而那个测量
+本项目**自己就有**：`oracleEvidence` 把每道题的证据换成金标会话，读者/判官/温度/房间/重复次数全不动，
+`oracle-evidence.ts` 有 333 行测试。
+
+它缺的不是实现，是**调用者**：这个条件一直只接在产品臂上，读到 `92.90%`（对 shipped `80.80%`，
+`42521885948`）。而对外 91.25% 是**另一条臂**（`benchmark.yml` → `runNaturalLanguageBenchmark`）产出的，
+两条臂的读者不同、检索栈不同、提示词构建器不同。**上限不能跨臂搬运**——上限属于读者与池，而两者都不共享。
+
+所以本轮只做一件事：**把 oracle 条件接到产出 91.25% 的那条臂上，让它说出自己的上限。**
+
+### 150.3 实现：三处结构保证，每条对应一个会静默失败的形状
+
+| 保证 | 静默失败的形状 | 机制 |
+| --- | --- | --- |
+| 变换在**任何系统被构造之前**发生 | 变换在臂被调用之后才应用 → 出货语料的分数戴上 oracle 标签（这类数字事后任何复读都修不回来） | `runner.ts` 在 `loadLongMemEval` 之后、两个 `NaturalLanguageMemorySystem` 之前做变换 |
+| **census 跟着 artifact 走** | 上限只在日志里 → artifact 无法单独引用 | `AblationReport.oracleCensus` 新可选字段；缺席即「这次不是上限运行」，而不是「跑了一次、改写了 0 题」 |
+| **断言打在 artifact 上**，不是局部变量 | 中间隔着数据集交接、限制计划与一次 ablation，三类失败里有两类产出「标签对了、数错了」 | `assertOracleReached(report, census)` 在 run 结束时校验 `dataset` 后缀与 `questionCount` 双侧一致 |
+
+`readOracleEvidence` 只多了一个参数，且只用于**错误信息里的变量名**：两条臂走两个通道
+（`CORTEX_MEMORY_ORACLE` / `ORACLE_EVIDENCE`），说错名字会把读者送去改一个与本次失败无关的工作流。
+
+### 150.4 三条测试，每条都在断言一个「只查字段就会漏掉」的性质
+
+1. **提示词里只有金标轮次**（`prompts.every(p ⇒ p.includes(gold))` 且 `prompts.some(p ⇒ p.includes(干扰))` 为假）。
+   这是整个选项存在的理由：只断言 `report.dataset` 带 `+oracle` 会漏掉「变换没到系统」。
+   断言写成「每条提示词都带金标」而不是「没有提示词带干扰」，因为一个**没提供任何证据**的运行也会满足后者。
+2. **`false` 与缺席是同一次运行**：检出于 91.25% 那个 commit 的人必须拿回同一配置。干扰句在这条里必须
+   出现，否则第 1 条的「未出现」是空的。
+3. **通道名**：`readOracleEvidence('oracle', 'ORACLE_EVIDENCE')` 的消息里不能出现 `CORTEX_MEMORY_ORACLE`，
+   而默认参数必须仍是产品臂的名字。
+
+`runner.ts` 的四条新分支（`=== true`、三元、断言、spread）两侧都有用例；包内覆盖率
+**99.59 / 98.66 / 99.84 / 99.77**（165 文件 3,717 条全绿），`pnpm check` 全绿。
+
+### 150.5 派发通道：变量而不是第 19 个输入
+
+`benchmark.yml` 读 `vars.ORACLE_EVIDENCE`，理由与 `benchmark-cortex-memory.yml` 的 `CORTEX_MEMORY_ORACLE`
+逐字同源：这个条件一代读者只量一次，而 repo variable 是 GitHub 25 输入上限绑不到的那条通道。代价是它可能被
+一次没人武装的派发继承，所以：
+
+- `tools/dispatch-oracle-ceiling.py` **每次调用都写这个变量**（`1` 之前武装，`--restore` 写回 `0`）；
+- 字面量 `'0'` 兜底，而不是「变量上次是多少」，使检出旧 commit 的人拿回注册配置；
+- 继承在事后**可见**：artifact 的 `dataset` 带 `+oracle`，而 `assertOracleReached` 会拒绝两者不一致的运行；
+- 派发前读 `verify.yml` 对 `master` head 的结论，非 `success` 拒绝派发（与探针派发器同一条规则：拒绝发生在
+  花钱之前，而不是十分钟之后）；
+- 语料哈希钉死为 `d6f21ea9…c3a442`（所有注册读数所在的同一份文件）。
+
+### 150.6 派发 `44876637554`：产出所有对外数字的工作流，六天来无法通过自己的门禁
+
+第一次派发在 `Verify library` 就死了，**一道基准题都没答**。日志里的失败不是一条：
+
+```
+AssertionError: ... can't open file
+  '/home/runner/work/cortex/cortex-docs/evidence/longmemeval/scripts/semantic_carry_analysis.py'
+tools/__tests__/test_semantic_carry_analysis.py:140
+```
+
+十三次。`benchmark.yml` 的 `longmemeval-s` job 跑 `pnpm check`，而 `tools/__tests__` 里有若干套件要**读兄弟
+仓库** `cortex-docs` 的分析脚本——`verify.yml` 从这些测试落地那天起就用一步 `actions/checkout`
+（`path: cortex-docs`）把它检出来，`benchmark.yml` **从来没有**。
+
+**它的时间窗是可算的**：那个测试文件 `2f491ca3`（2026-11-15）加入；`benchmark.yml` 上一次成功派发是
+`40427127569`（2026-10-27）。也就是说 **11-15 之后的每一次派发都会在 `Verify library` 失败**，只是这六天
+里没有人派发过，所以没有人知道。上一轮探针的两次失败（缺 pytest、缺兄弟仓）被当作**探针工作流**的缺陷修
+掉了，我在那里删掉了 `pnpm check`、并把判据前移到派发器——**但没有回头看同样一句话在主导出工作流里是否
+成立**。这一轮它自己说了。
+
+#### 修法：与上一轮同一条规则，第三个前提
+
+| 层 | 动作 |
+| --- | --- |
+| 缺陷 | `benchmark.yml` 补 `Checkout cortex-docs`（`repository` + `path: cortex-docs` + `fetch-depth: 1`），位置与 `verify.yml` 逐字一致 |
+| 规则 | `ci-gate-audit.py` 的 `check-prerequisites` 从「两个前提」扩到**三个**：任何跑 `pnpm check` 的 job 必须 setup Python、装 `requirements-dev.txt`、并检出兄弟仓 |
+| 判定的形态 | 新函数 `checks_out_sibling(job)` 读 `with:` 块，**不**扩 `steps_text`。扩前者会让 `with:` 里的任何字符串满足任何一条门禁；判定必须看结构与那两个具体键 |
+| 两个键都要 | 只给 `repository` 会把树放在 workspace 根目录，而套件不看那里——`verify.yml` 自己的注释就记着「第一次写 `path: cortex-docs` 以为它等于 `../cortex-docs`」这个错误 |
+| 反向验证 | 规则先跑在未修的工作流上：`FAIL check-prerequisites benchmark.yml: longmemeval-s: ..., cortex-docs checkout MISSING` —— **规则抓到了它诞生的那个缺陷** |
+| 测试 | 三条：缺检出即失败、有 `repository` 无 `path` 即失败、不跑套件的 job 空真通过并说明（否则下一个人会加 `|| true`） |
+
+#### 这一轮真正的读数
+
+不是 oracle 上限（被这条缺陷挡在门外），而是：
+
+> **本项目对外引用的每一个数字，都由一个在六天里无法通过自身门禁的工作流产出。**
+
+这不是「运气不好」。它是 §148.2 的同一个形状第二次出现：**被测对象（TypeScript）在两处一致，不被测的对
+象（工作流的步骤编排）只在 CI 上存在**。两次的修法也一样：把「需要人记得的步骤」变成「派生的规则」。第一次
+是 `pytest`，第二次是兄弟仓，第三次会是别的——所以规则写成「跑套件就必须满足套件的全部前提」，而不是「记得
+装 pytest」和「记得检出 cortex-docs」。
+
+`check-prerequisites` 现在有 11 条断言（原 8 条 + 这 3 条），`test_ci_gate_audit.py` 26 条全绿，
+`guard:ci` 对 13 个工作流全绿。
