@@ -29745,3 +29745,80 @@ docs cross-check: 74 of 79 marker(s) verified against the code, 5 skipped — 16
 
 与本地逐字一致。CI 上的 `unrun` 从 11 条降到 **6** 条（`D1`/`S6`/`S7`/`S9`/`C3`/`P1`），剩下这 6 条是判据
 本身就没有读数，不是读不到。
+
+## 147 第 150 轮：把「选证据」交给读者——`cortex-agent` 建成，零派发
+
+### 147.1 这一轮做了什么
+
+§14.97.8 的结论是交互：契约离不开选出证据的那套选择。于是本轮把选择本身交出去——新子包
+`@agentix-e/cortex-agent`，读者用三个工具（search / session / answer）一步步要证据，最后由
+`cortex-memory` 的 `buildPrompt` 合成提示词。**不派发**，因为 §14.98.5 的预登记要求先证明「关掉等于没装」。
+
+### 147.2 交付物
+
+| 文件 | 职责 | 行数 |
+| --- | --- | ---: |
+| `src/types.ts` | `Retrieval` 三工具、`Decision`、`StopReason`、`AgentStep`、`AgentTrace`、选项 | 200 |
+| `src/tools.ts` | `SearchIndex` → 三工具的适配器（不复制任何排序） | 76 |
+| `src/prompt.ts` | 决策提示词 + `DECISION_SCHEMA`（只进请求体，不进提示词） | 96 |
+| `src/parse.ts` | 回复解析：围栏、前言、尾逗号、弯引号、截断，全部可恢复且不抛 | 87 |
+| `src/stop.ts` | 八种停止理由，顺序即规范 | 93 |
+| `src/trace.ts` | 选择序 = 证据首次出现在读者面前的顺序 | 33 |
+| `src/loop.ts` | 循环本体 | 232 |
+| `src/compose.ts` | 选择 → 注册渲染器 | 108 |
+| `src/probe.ts` | 花 1 元判断 14 元派发是否值得的仪器 | 207 |
+| `bench/probe-multi-step.ts` | 入口：只构造与委托 | 120 |
+
+### 147.3 三处偏离预登记，各有理由
+
+| 预登记 | 实际 | 理由 |
+| --- | --- | --- |
+| 依赖 `cortex-ai` | 不依赖 | 只吃 `cortex-core` 的 `LLM` 接口；依赖适配器包等于依赖供应商清单 |
+| 6 文件 | 10 文件 | 提示词与解析是两块独立演进的东西，塞进 `loop.ts` 会让成本论证无处可读 |
+| 2 工具 | 3 工具（+`session`） | 「打开某轮所在对话」是这类机制的关键动作，索引已有轮次，缺的只是边界 |
+
+`maxSteps` 定义成**模型调用次数**而不是步数：种子检索免费且不计入，`0` 即「一次检索、零调用」。
+
+### 147.4 覆盖率与门禁
+
+| 项 | 读数 |
+| --- | --- |
+| 单测 | **64 条**，7 个文件 |
+| 覆盖率 | 8 个源文件 4 维 **100 / 100 / 100 / 100**（`index.ts`、`types.ts` 记为 `nothing-to-execute`） |
+| 覆盖闸门 | 196 个文件 4 维全绿，18 个豁免 |
+| 导出普查 | **0 个新孤儿**（8 个导出全部由 bench/loop 实际引用） |
+| 手册 | 44 个示例编译通过；新增 §6.14 |
+| 依赖方向 | `cortex-agent → {core, memory}`，`memory ↛ agent`，无环 |
+
+**为达成 100% 分支覆盖删掉的两处死代码**：`parse.ts` 的 `not-object`（`objectSlice` 只返回以 `{` 开头、
+`}` 结尾的文本，`JSON.parse` 要么给对象要么抛），`compose.ts` 的 `?? 0`（`buildPrompt` 只对收到的轮次打
+分，全部在表内）。没人观察到的行为就是猜测，删掉而不是保留。
+
+### 147.5 门禁自己也有一个缺陷
+
+`tools/manual-examples.mjs` 的 `PACKAGES` 是硬编码五项，新包被报成「不是任何工作区包的导出」——错误指向
+手册正文，而不是那份清单。已改为从 `packages/` 派生。这是本 campaign 第四次发现「清单式门禁」的同类缺陷
+（前三次都在跨仓根解析上）。
+
+### 147.6 探针的执行路径：一份跑不出来的预登记不是预登记
+
+§14.98.8 写死了判据（`--steps 1`、`MR` 121 题、`gainedQuestions >= 5` 才派发、上限 2 CNY），但没有回答
+「这个读数在哪跑」。本机两条都缺：语料不在磁盘上，`DEEPSEEK_API_KEY` 不在环境里。本轮把执行路径补成可
+派发的东西——`probe-multi-step.yml`（4 个输入、`pnpm check` 前置、artifact 带语料 sha256）加
+`tools/dispatch-multi-step-probe.py`（`INPUTS` 即注册配置，派发前打印投影）。
+
+顺带更正一个口径：2 CNY 是**上限**，按实测尺度是 **约 0.09 CNY**（121 × 1.5k 字符 ÷ 3.8528 字符/token
+× 2 CNY/Mtok），两个常数都取自 `tools/token-basis.json` 与 `tools/spend-projection.mjs`。详见
+`03-execution-plan.md` §14.98.9。
+
+门禁这次是正例：`test_dispatch_inputs.py` 用 glob 发现脚本、要求每个脚本在 `SCRIPT_WORKFLOW` 里有归属，
+新脚本一落地两个测试立刻红。枚举派生、清单只记不可推导的那一条——这和 §147.5 的硬编码清单正好互为对照。
+
+### 147.7 位置
+
+| 项 | 读数 |
+| --- | ---: |
+| 产品完成度 | **19/28**（新增第 28 行「多步检索」；7 gated / 0 blocked / 9 instrument / 0 gap） |
+| 可发布信号 | **否**——7 个 gated 能力未解锁 |
+| 是否 SOTA | **否**。`MR` 公开最高 MemCog 92.48%；全基准最高 Maximem Synap 95.6% |
+| 下一步 | 先推（`workflow_dispatch` 只认默认分支上的工作流）→ 派发探针（约 0.09 CNY）：`gainedQuestions ≥ 5` 才派发两步，否则转 `M1` 或 gated |
