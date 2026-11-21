@@ -29668,9 +29668,12 @@ Step 1 的那张清单，不是契约能提供的。
   会印出一个 artifact 里没有的数）。
 - 该行 `dataset` 原文写着「treatment 与 control 在逐字节相同的窗口上」，**这句话是本轮的实证否定项**：
   对照在 `62,000`。已改。
-- 跨仓路径其实一直可读：`tools/acceptance-check.mjs` 的 `root` 默认是 `REPO/..`。上一轮看到 `unrun`
-  是**本地 `dist` 陈旧**（改了 `acceptance.ts` 没重建），不是解析缺陷——记在这里，因为它差点被写成一条
-  不存在的 bug。
+- 跨仓路径**并不**一直可读，这一条在同一个小时内被自己否证了两次：本地那次 `unrun` 是 **`dist` 陈旧**
+  （改了 `acceptance.ts` 没重建），而**CI 上的 `unrun` 是真缺陷**。CI 日志里 `S8` 到本轮推送之后仍然是
+  `unrun`、`docs cross-check` 只有 15/45 marker 被验证、30 个 `skipped` ——因为 `actions/checkout` 的
+  `path:` 相对 `$GITHUB_WORKSPACE` 解析，`cortex-docs` 落在 **`cortex/cortex-docs`（checkout 里面）**，
+  而所有读数工具按 `REPO/..` 找。两个仓在开发者机上是并排的，这就是「本地绿、CI 静默跳」的来源。
+  修法见 §146.11。
 
 ### 146.9 门禁与花费
 
@@ -29690,3 +29693,38 @@ Step 1 的那张清单，不是契约能提供的。
 | `MR`（同一 artifact 内） | feature **78.72%** / reference-pipeline **84.09%**，−5.37pp，p=0.0931 |
 | 是否 SOTA | **否**。`MR` 公开最高 **MemCog 92.48%**；全基准最高 **Maximem Synap 95.6%**（7.4K token/题） |
 | 下一步 | 读者/契约轴里「改措辞」到此为止；换**多步检索**（MemCog 族 2–3 步 ReAct），预登记见 §14.98 |
+
+### 146.11 CI 一直在静默跳过三成文档与五行矩阵：跨仓根解析是坏的
+
+**证据（本轮的 CI 日志 `44845318639`，`Verify library` 作业）：**
+
+```
+S8   —         ≥ 9       unrun   multi-session reasoning
+  S8   unrun cortex-docs/evidence/longmemeval/aggregation-ask.json#doubleDifference.questions: no value ...
+docs cross-check: 15 of 45 marker(s) verified against the code, 30 skipped (no value in this checkout)
+```
+
+而同一份代码在本地是 `74 of 79 marker(s) verified`、`S8 = -3.75`。
+
+**根因**：`actions/checkout` 的 `path: cortex-docs` 相对 `$GITHUB_WORKSPACE` 解析，所以文档仓在 CI 上
+落在 **`cortex/cortex-docs`（代码仓里面）**，而 `acceptance-check.mjs` / `docs-crosscheck.mjs` 都按
+`path.resolve(REPO, '..')` 找。开发者机上是并排的，于是**两种布局只有一种被支持**。
+
+**为什么没人发现**：根找错与文件不存在印出同一个字——`unrun` / `skipped`。矩阵里甚至写着错误的诊断
+（"CI without the documents repository"），而工作流从第一版起就在 checkout 那个仓。
+
+**修法**：新增 `tools/workspace-root.mjs`，按路径首段决定仓库，再决定根：
+
+| 路径首段 | 试的顺序 | 理由 |
+| --- | --- | --- |
+| `cortex/…` | `REPO/…`（剥掉首段） | 就是本 checkout，目录叫什么名字都对 |
+| `cortex-docs/…` | `REPO/…` → `DEFAULT_ROOT/…` | CI 在 checkout 里面；开发者机在并排处 |
+| 显式 `--root` | 先试，且**替代** `DEFAULT_ROOT` | 操作者指名 workspace 是一次陈述，不能被回退覆盖 |
+
+`cortex/…` 那条还顺手修掉一个双嵌：`--root` 换位置时它曾变成 `cortex/cortex/packages/…`，六条读数因此
+丢值。新测试 `tools/__tests__/test_workspace_root.py` **6 条**，按 CI 的嵌套布局与开发者的并排布局各搭
+一份 fixture，包含「显式根仍可达嵌套的文档仓」与「显式根不许回退去读真仓」。
+
+**验证**：本地 `74/79 verified` 不变；把 `cortex-docs` 软链到 `cortex/cortex-docs` 并给一个空 `--root`
+（等价 CI）后，`S8 = -3.75`、`docs cross-check: 71 of 79 verified, 8 skipped`（此前 15/45、30 skipped）。
+剩下的 8 条是对应判据本身就没有读数的（`S7`/`S9`/`P1` 等）。
