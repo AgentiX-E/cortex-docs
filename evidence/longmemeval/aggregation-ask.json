@@ -1,0 +1,55 @@
+{
+  "row": "S8",
+  "run": 44835820692,
+  "ref": "a84f35fb",
+  "ask": "aggregation",
+  "controlRun": 44829684980,
+  "controlAsk": "verbatim-acts",
+  "dataset": "LongMemEval-S, 121 multi-session questions (`capability=MR`)",
+  "repetitions": 4,
+  "accuracySource": "the ablation's own per-capability four-repetition mean, one statistic on all three sides",
+  "within": {
+    "feature": 0.7872,
+    "baseline": 0.8409,
+    "deltaPoints": -0.0537,
+    "mcnemarP": 0.0931,
+    "discordant": { "baselineOnly": 16, "featureOnly": 7 },
+    "note": "Both arms live inside `44835820692`, on the same windows, the same reader and the same 121 questions, so this pair prices the run and not the change: the reference pipeline never reads this arm's ask. It is here because it is the only comparison with no second variable in it."
+  },
+  "crossRun": {
+    "controlMrMean": 101.5,
+    "treatmentMrMean": 95.25,
+    "deltaQuestions": -6.25,
+    "note": "The feature arm against the previous dispatch's feature arm. Two variables moved and only one of them was the intended one: the ask (`verbatim-acts` -> `aggregation`) and the multi-session room (`62,000` -> `48,460`). The raw difference is therefore an upper bound on what the ask cost, not a single-variable delta."
+  },
+  "doubleDifference": {
+    "controlAnchorMean": 104.25,
+    "treatmentAnchorMean": 101.75,
+    "driftQuestions": -2.5,
+    "questions": -3.75,
+    "points": -0.031,
+    "note": "The reference-pipeline anchor inside each of the same two runs, differenced the same way: `104.25 -> 101.75` is `-2.50` questions of run-to-run movement on an arm nobody changed. Subtracting that drift from the `-6.25` above leaves `-3.75` questions, which is this row's reading. The room moved the other way by `-22%` characters and section 14.97.5 measured that slope at `+0.25` questions per `+28%`, so the room accounts for about `-0.2` of the `-3.75` and cannot explain it."
+  },
+  "reading": {
+    "verdict": "refuted",
+    "preregistered": "multi-session correct answers gained >= 9 (S8 row); the plan added that a net gain below +1 question means the ask is void on this arm and the route returns to `verbatim-acts`",
+    "measured": "minus 3.75 questions: 95.25 against 101.5 on four-repetition means, with the anchor's own drift removed",
+    "why": "The reference pipeline's aggregation contract, migrated whole onto the multi-session route, costs questions rather than gaining them. The pre-registered anti-criterion fired at the first reading, so the ask returns to `verbatim-acts` and the registered arm does not change.",
+    "whatItDoesNotSay": "It does not say the reference pipeline's contract is worse than ours. That arm still reads 84.09% on the same 121 questions inside this very artifact, 5.37 points above the treatment, with a smaller window and a reader this arm also uses. The contract works where the evidence is chosen by the pipeline that writes it, and fails when it is laid over a window filled by relevance ranking. The interaction is the finding: an instruction and the selection that feeds it are one mechanism, and a contract cannot be transplanted without the selection that produced it.",
+    "failureTaxonomy": {
+      "numericMismatch": 18,
+      "abstention": 4,
+      "other": 5,
+      "note": "first repetition, 27 of 121 wrong. Under `verbatim-acts` the same population read 14 numeric mismatches, 2 abstentions and 3 other, so the contract did not move failures out of arithmetic: it added thirteen of them."
+    },
+    "goldRanks": {
+      "gold": 1832,
+      "surfaced": 1832,
+      "topEight": 620,
+      "topSixteen": 890,
+      "topThirtyTwo": 1117,
+      "note": "Read on the fixed order -- this run's `ref` carries the section 145.2 repair -- every gold turn was surfaced and none read `-1`. The window did not starve the reader; the instruction changed what the reader did with the evidence it already had."
+    }
+  },
+  "note": "Written from `tools/readout-arm-run.py` over the downloaded artifact of `44835820692` and, for the anchor drift, over `44829684980`'s artifact read the same way. The row had been `unrun` since it was registered because it named `silent-ask.json#delta.multiSession`, a file that does not exist in this repository; `silent` is also the wrong ask, since it removes the written list (`-26`) rather than migrating the reference's contract."
+}
