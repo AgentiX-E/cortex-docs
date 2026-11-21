@@ -29822,3 +29822,51 @@ docs cross-check: 74 of 79 marker(s) verified against the code, 5 skipped — 16
 | 可发布信号 | **否**——7 个 gated 能力未解锁 |
 | 是否 SOTA | **否**。`MR` 公开最高 MemCog 92.48%；全基准最高 Maximem Synap 95.6% |
 | 下一步 | 先推（`workflow_dispatch` 只认默认分支上的工作流）→ 派发探针（约 0.09 CNY）：`gainedQuestions ≥ 5` 才派发两步，否则转 `M1` 或 gated |
+
+## 148 第 151 轮：探针第一次派发死在自己的第二行命令上，于是多了一条门禁
+
+### 148.1 发生了什么
+
+`44863794098` —— `probe-multi-step.yml` 的第一次运行。**7 号步骤 `Verify library` 失败，语料没下载、
+探针没跑、0 元花费**。日志第一行有用信息是：
+
+```
+> @agentix-e/cortex@0.0.0 test:tools
+> python3 -m pytest tools/__tests__ -q && python3 tools/check-shell-interpolation.py .
+/usr/bin/python3: No module named pytest
+```
+
+原因很简单，也很典型：这个工作流**照抄了 `benchmark.yml` 的语料下载步骤，却没抄它的前置步骤**。
+`pnpm check` 链条的第二条命令就是 `pnpm test:tools`，而 `tools/` 的脚本还要 `yaml`。runner 上没有
+pytest，所以 `pnpm check` 在自己内部第 2 条命令上就死了，**前面 6 个步骤（含一次完整 build）已经付过**。
+
+### 148.2 为什么本地的 `pnpm check` 全绿却抓不到
+
+因为它根本不是同一个环境问题：本地的 pyenv 里有 pytest 和 pyyaml，而**本地从来没有执行过这个工作流的
+步骤列表**。这正是「local-pass / CI-fail 漂移」的标准形状：被测对象（TypeScript）在两处一致，**不被测的
+对象（工作流的步骤编排）只在 CI 上存在**。
+
+更要紧的是：仓库里唯一审计工作流步骤的检查（`tools/ci-gate-audit.py`）**只审计 `verify.yml` 一个文件**。
+8 条要求全是「`verify.yml` 里的门禁还在不在位」——而出问题的是**另一个文件**。所以这不是「漏了一条断言」，
+是「审计的**定义域**是一个固定文件名」。
+
+### 148.3 修法：先修缺陷，再把缺陷变成规则
+
+| 层 | 动作 |
+| --- | --- |
+| 缺陷 | `probe-multi-step.yml` 补 `actions/setup-python@v5` + `pip install --requirement tools/requirements-dev.txt`，位置与 `benchmark.yml` 逐字一致（Checkout → Setup Python → Install Python deps → pnpm → Node） |
+| 规则 | `ci-gate-audit.py` 新增第 9 条 `check-prerequisites`：**任何 job 只要跑 `pnpm check`，就必须 setup Python 且安装 `tools/requirements-dev.txt`**；`audit_directory()` 扫描 `.github/workflows/*.yml` 全部文件，而不是被审计的那一个 |
+| 反向验证 | 规则写完、工作流还没修时先跑一次：`FAIL check-prerequisites probe-multi-step.yml: probe: setup-python MISSING, requirements-dev.txt MISSING` —— **规则确实抓到了它诞生的那个缺陷** |
+| 测试 | `test_ci_gate_audit.py` 新增 7 条：真目录全绿（控制）、探针文件确实在审计范围内（控制）、缺 setup-python 失败、缺 requirements 失败、无 `pnpm check` 的工作流空真通过并说明、不可解析的 YAML 是失败不是崩溃、**CLI 退出码必须为 1**（否则 `guard:ci` 读不到） |
+
+「无 `pnpm check` 的工作流空真通过」这一条是必须的：目录里 13 个工作流中有 11 个只做测量、不跑全套
+门禁，把它们判红等于逼下一个人加 `|| true`。
+
+### 148.4 位置
+
+| 项 | 读数 |
+| --- | ---: |
+| 产品完成度 | **19/28**（不变——本轮没有新增能力，只有一个门禁与一次派发失败） |
+| 可发布信号 | **否**——7 个 gated 能力未解锁 |
+| 探针 | 第一次派发失败（0 元），修复后重新派发 |
+| 门禁规则数 | 8 → **9**（新增 `check-prerequisites`，覆盖全部 13 个工作流） |

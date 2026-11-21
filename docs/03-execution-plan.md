@@ -11214,3 +11214,25 @@ packages/cortex-agent/
 python3 tools/dispatch-multi-step-probe.py --dry-run     # 先看投影
 python3 tools/dispatch-multi-step-probe.py               # 121 题 × 1 步，约 0.09 CNY
 ```
+
+### 14.98.10 第一次派发：探针死在第二行命令上
+
+`44863794098` 是 `probe-multi-step.yml` 的第一次运行。**7 号步骤 `Verify library` 失败，语料没下载、
+探针没跑、花费 0 元**——`pnpm check` 在它自己的第二条命令上就死了：
+
+```
+/usr/bin/python3: No module named pytest
+```
+
+这个工作流照抄了 `benchmark.yml` 的**语料下载**，没抄它的**前置**。而仓库里唯一审计工作流步骤的检查
+只审计 `verify.yml` 一个文件，所以「另一个文件少了两个步骤」在审计的定义域之外——这不是漏了一条断言，
+是审计的定义域写成了一个固定文件名。
+
+修法分两层：工作流补 `actions/setup-python` + `requirements-dev.txt`（与 `benchmark.yml` 逐字一致）；
+`ci-gate-audit.py` 新增第 9 条 `check-prerequisites`——**任何 job 跑 `pnpm check` 就必须装它要的东西**，
+并且 `audit_directory()` 扫全部 13 个工作流。规则先跑在未修的工作流上，明确报了 FAIL，证明它抓得住
+自己诞生的那个缺陷；随后 7 条测试把两个方向都钉住（含「CLI 退出码必须是 1」，否则 `guard:ci` 读不到）。
+
+**这一轮的教训不是「记得装 pytest」**：一条需要人记得的步骤就是一条会被漏掉的步骤。教训是**审计的定义域
+不能是一个文件名**——同一个缺陷在 §14.98.7 的 `manual-examples.mjs`（硬编码包清单）里出现过一次，那是
+枚举写死；这次是**文件写死**。两次都是「清单代替了派生」。详见 `04-execution-tracking-report.md` §148。
