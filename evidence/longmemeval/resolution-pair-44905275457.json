@@ -1,0 +1,151 @@
+{
+  "run": 44905275457,
+  "workflow": "semantic-carry.yml",
+  "commit": "18807fc0",
+  "artifact": "semantic-carry-merged",
+  "replayedFrom": [
+    "semantic-carry-shard-0-of-4",
+    "semantic-carry-shard-1-of-4",
+    "semantic-carry-shard-2-of-4",
+    "semantic-carry-shard-3-of-4"
+  ],
+  "replayWhy": "the run's own merge dropped baselineRoleCensuses/baselinePromptChars (defect 3); the repaired merge reproduces the same reading without a new dispatch",
+  "dispatch": {
+    "pairing": "resolution",
+    "capability": "MR",
+    "windows": 1,
+    "limit": 0,
+    "review_pass": "bare",
+    "turn_rendering": "head",
+    "ablation_runs": 2,
+    "shards": 4,
+    "model": "deepseek-chat",
+    "thinking": "disabled",
+    "budget_cny": 25
+  },
+  "artifactConfig": {
+    "featureConfig": {
+      "resolutionPair": true,
+      "carryPair": false,
+      "clockPair": false,
+      "cortexMemory": true,
+      "semanticCarry": false,
+      "factTimeline": false
+    },
+    "memoryArmConfig": {
+      "resolution": "layered",
+      "reviewPass": "bare",
+      "sessionClock": "off"
+    }
+  },
+  "readout": {
+    "command": "tools/read-merged-population.py --windows 1 --pairing resolution",
+    "population": {
+      "corpora": 121,
+      "windows": 1,
+      "questions": 121,
+      "runs": 2,
+      "shards": 4
+    },
+    "deltaQuestions": 7.5,
+    "discordant": {
+      "controlOnly": 6,
+      "treatmentOnly": 14
+    },
+    "mcnemarExactTwoSided": 0.1153,
+    "perRunFlips": [
+      {
+        "run": 0,
+        "up": 11,
+        "down": 6
+      },
+      {
+        "run": 1,
+        "up": 13,
+        "down": 3
+      }
+    ]
+  },
+  "accuracy": {
+    "controlAnswersCorrect": 192,
+    "controlAnswers": 242,
+    "controlPercent": 79.34,
+    "treatmentAnswersCorrect": 207,
+    "treatmentAnswers": 242,
+    "treatmentPercent": 85.54,
+    "controlQuestionMean": 96.0,
+    "treatmentQuestionMean": 103.5
+  },
+  "density": {
+    "turnsMedianControl": 199,
+    "turnsMedianTreatment": 208,
+    "turnsMedianDeltaPercent": 4.5,
+    "charsMedianControl": 48334,
+    "charsMedianTreatment": 45813,
+    "charsMedianDeltaPercent": -5.2,
+    "turnsTotalControl": 24169,
+    "turnsTotalTreatment": 25242,
+    "charsTotalControl": 5845652,
+    "charsTotalTreatment": 5576752,
+    "charsTotalDeltaPercent": -4.6,
+    "questionsWithMoreTurns": 114,
+    "questionsWithFewerTurns": 2,
+    "questionsWithSameTurns": 5
+  },
+  "cost": {
+    "pricesCnyPerMTokens": {
+      "cached": 0.2,
+      "miss": 2.0,
+      "output": 3.0
+    },
+    "control": {
+      "promptTokens": 3092034,
+      "completionTokens": 48726,
+      "cacheHitPromptTokens": 3046098,
+      "cacheHitShare": 0.985,
+      "cny": 0.847
+    },
+    "treatment": {
+      "promptTokens": 3102492,
+      "completionTokens": 47733,
+      "cacheHitPromptTokens": 1657580,
+      "cacheHitShare": 0.534,
+      "cny": 3.365
+    },
+    "totalCny": 4.212,
+    "projectedCny": 1.73,
+    "promptTokensPerJudgement": {
+      "control": 12672,
+      "treatment": 12767,
+      "deltaPercent": 0.75
+    }
+  },
+  "criteria": {
+    "F1prime": {
+      "threshold": "feature turns median > baseline",
+      "observed": "208 > 199; 114/121 more",
+      "verdict": "pass"
+    },
+    "F3": {
+      "threshold": "turns >= +20% and chars within +-2%",
+      "observed": "+4.5% / -5.2%",
+      "verdict": "fail"
+    },
+    "F4primary": {
+      "threshold": "MR mean >= 101.25 and up-down >= -3",
+      "observed": "103.50, +8",
+      "verdict": "pass"
+    },
+    "F4secondary": {
+      "threshold": "MR mean >= 104.25 and up-down >= +3",
+      "observed": "103.50, +8",
+      "verdict": "mean miss, flips pass"
+    },
+    "F5": {
+      "threshold": "tokens not higher",
+      "observed": "+0.75% per judgement",
+      "verdict": "pass"
+    }
+  },
+  "decision": "C7's density family closes (RETRACTIONS.md entry 6); resolution default stays raw; C8 (relevance-driven reallocation) pre-registered in 03-execution-plan.md 14.106, not dispatched"
+}
