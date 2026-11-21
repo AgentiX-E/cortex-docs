@@ -1,0 +1,182 @@
+{
+  "kind": "merged-evidence-summary",
+  "run": 44915923906,
+  "commit": "f059c8bcd9dbb3528e834c25a6b253f928af6ce5",
+  "workflow": "semantic-carry.yml",
+  "dataset": "longmemeval",
+  "capability": "all",
+  "windows": 1,
+  "questions": 500,
+  "runs": 2,
+  "shards": 8,
+  "pairing": "resolution",
+  "configuration": {
+    "review_pass": "bare",
+    "turn_rendering": "head",
+    "maxTurnChars": 400,
+    "maxTurnCharsRoutes": [
+      "multi-session",
+      "temporal"
+    ],
+    "resolution": "layered"
+  },
+  "accuracy": {
+    "correct_answers": {
+      "baseline": 435,
+      "feature": 447,
+      "out_of": 1000
+    },
+    "question_level_mean": {
+      "baseline": 435.0,
+      "feature": 447.0,
+      "out_of": 500
+    },
+    "delta_questions": 12.0,
+    "delta_points": 2.4,
+    "discordant": {
+      "b_baseline_only": 15,
+      "c_feature_only": 27
+    },
+    "mcnemar_exact_two_sided": 0.0884,
+    "per_run": [
+      {
+        "run": 0,
+        "gained": 21,
+        "lost": 7,
+        "net": 14
+      },
+      {
+        "run": 1,
+        "gained": 24,
+        "lost": 14,
+        "net": 10
+      }
+    ]
+  },
+  "by_capability": {
+    "MR": {
+      "n": 121,
+      "baseline": 78.93,
+      "feature": 86.78,
+      "delta_points": 7.85,
+      "up": 15,
+      "down": 6,
+      "p": 0.0784
+    },
+    "TR": {
+      "n": 127,
+      "baseline": 83.86,
+      "feature": 86.22,
+      "delta_points": 2.36,
+      "up": 11,
+      "down": 7,
+      "p": 0.4807
+    },
+    "KU": {
+      "n": 72,
+      "baseline": 87.5,
+      "feature": 88.19,
+      "delta_points": 0.69,
+      "up": 1,
+      "down": 0,
+      "p": 1.0
+    },
+    "IE": {
+      "n": 150,
+      "baseline": 93.33,
+      "feature": 92.67,
+      "delta_points": -0.67,
+      "up": 0,
+      "down": 2,
+      "p": 0.5
+    },
+    "ABS": {
+      "n": 30,
+      "baseline": 100.0,
+      "feature": 100.0,
+      "delta_points": 0.0,
+      "up": 0,
+      "down": 0,
+      "p": 1.0
+    }
+  },
+  "delivery": {
+    "turns_total": {
+      "baseline": 58634,
+      "feature": 60800,
+      "delta_pct": 3.69
+    },
+    "chars_total": {
+      "baseline": 17751570,
+      "feature": 17252023,
+      "delta_pct": -2.81
+    },
+    "turns_median": {
+      "baseline": 76,
+      "feature": 76,
+      "delta_pct": 0.0
+    },
+    "chars_median": {
+      "baseline": 23997,
+      "feature": 23538.5,
+      "delta_pct": -1.9
+    },
+    "questions_more_turns": 235,
+    "questions_fewer_turns": 6,
+    "questions_same_turns": 259
+  },
+  "tokens": {
+    "baseline": {
+      "calls": 1047,
+      "prompt": 9316101,
+      "completion": 141932,
+      "cache_hit_prompt": 8759495
+    },
+    "feature": {
+      "calls": 1045,
+      "prompt": 9333333,
+      "completion": 145536,
+      "cache_hit_prompt": 7588579
+    },
+    "prompt_per_answer": {
+      "baseline": 9316.1,
+      "feature": 9333.33,
+      "delta_pct": 0.18
+    }
+  },
+  "criteria": {
+    "G1": {
+      "verdict": "unread",
+      "reason": "accessor dropped forms; fixed in the same round"
+    },
+    "G2": {
+      "verdict": "fail",
+      "reason": "magnitude: chars -2.81% against a -3% floor, turns +3.69% >= +1%"
+    },
+    "G3": {
+      "verdict": "pass",
+      "reason": "+2.40 points >= +1.5 and up-down +12 >= +5"
+    },
+    "G4": {
+      "verdict": "unread",
+      "reason": "no form split in the artifact"
+    },
+    "G5": {
+      "verdict": "fail",
+      "reason": "the paired bill rose 0.18%; the absolute threshold belongs to the reference arm"
+    }
+  },
+  "instrument_defects": [
+    {
+      "id": "forms-dropped-by-accessor",
+      "where": "packages/cortex-memory/src/memory.ts lastTurnWindowCensus()",
+      "symptom": "run-level cut 3710 and forms absent from all 500 records",
+      "repair": "forward the split, copied key by key; three tests in memory-turn-window-census.test.ts"
+    }
+  ],
+  "cost_cny": {
+    "projected": 7.13,
+    "actual": 9.1,
+    "cache_hit_share_of_prompted": 0.869
+  }
+}

@@ -57,7 +57,7 @@ at 4.28×: a mechanism that changes every capped turn invalidates the provider's
 The two facts are consistent only if the mechanism did something other than what it claims: characters
 **fell** while turns rose slightly, so the room was **reallocated by relevance** rather than densified.
 `C8` registers that hypothesis with criteria written after this reading but before its own
-(`03-execution-plan.md` §14.106).
+(`03-execution-plan.md` §14.146).
 
 ## What this artifact does not carry
 
