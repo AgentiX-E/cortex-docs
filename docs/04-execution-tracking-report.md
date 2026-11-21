@@ -30968,7 +30968,7 @@ Synap（95.6% @ 7.4K）与 Mem0（94.4% @ 6.8K）给出可比的成本点，其�
 
 | 文件 | 作用 | 检查 |
 | --- | --- | --- |
-| `packages/cortex-memory/src/registered-arm.ts` | 产品侧首次有"整臂"常量（23 个产品决策字段） | `registered-arm.test.ts` 逐字段 ↔ 基线，**双向完备** |
+| `packages/cortex-memory/src/registered-arm.ts` | 产品侧首次有"整臂"常量：**19 个实际应用** + **4 个尚不可交付**（`maxTurnChars`/`maxTurnCharsRoutes`/`evidenceRoles`/`evidenceRolesRoutes`，各自写明缺什么，且"一旦发货就变红"是断言本身） | `registered-arm.test.ts` 逐字段 ↔ 基线，**双向完备** |
 | `packages/cortex-memory/src/assemble.ts` | `promptContract`/`ask` 进入组装入口；裸调用 = 注册臂，`minimal` 例外 | 比 **prompt 字节**（裸 = 显式注册 ≠ 参考臂） |
 | `tools/arm-config-guard.mjs` | 读 14 个带 `CORTEX_MEMORY_*` 的工作流：字面量、`\|\|` 回退、输入 `default:` | `pnpm guard:arm-config`（已入 `pnpm check`） |
 | `tools/__tests__/test_arm_config_guard.py` | 13 个用例，其中 9 个是失败用例 | 门禁自己也被钉住 |
