@@ -29725,6 +29725,23 @@ docs cross-check: 15 of 45 marker(s) verified against the code, 30 skipped (no v
 丢值。新测试 `tools/__tests__/test_workspace_root.py` **6 条**，按 CI 的嵌套布局与开发者的并排布局各搭
 一份 fixture，包含「显式根仍可达嵌套的文档仓」与「显式根不许回退去读真仓」。
 
-**验证**：本地 `74/79 verified` 不变；把 `cortex-docs` 软链到 `cortex/cortex-docs` 并给一个空 `--root`
-（等价 CI）后，`S8 = -3.75`、`docs cross-check: 71 of 79 verified, 8 skipped`（此前 15/45、30 skipped）。
-剩下的 8 条是对应判据本身就没有读数的（`S7`/`S9`/`P1` 等）。
+**第三个缺陷，也是前两个修完之后 CI 仍然不读的原因**：规则对了，**两个调用方把它废掉了**。它们写的是
+`root = flag('--root') ?? path.resolve(REPO, '..')`，然后 `locate(relative, root)` —— 把「解析出来的默认
+根」当成「操作者指名的根」传进去，于是每条路径都显得「显式指定过」，嵌套候选永远不被尝试。本地看不出来
+（默认根本来就在对的位置），CI 上矩阵与三分之一 marker 继续读不到，**而且印的是同一个字**，所以第一次
+修复看起来是成功的。
+
+复现方式（沙箱内）：把仓库硬链到 `/tmp/ci/cortex`、把文档仓软链到 `/tmp/ci/cortex/cortex-docs`，即 CI 的
+嵌套布局。修复前 `136 documents / 45 markers`，修复后 `160 documents / 79 markers`，`S8` 由 `unrun` 变
+`-3.75`。调用方现在把命令行值单独存成 `rootFlag` 并只传它，测试用一条**算术断言**钉住：两个调用方里不
+允许出现任何把 `root` 传给 `locate`/`candidates` 的行。
+
+**最终验证（真实 CI，不是模拟）**：`Verify` run `44851836970`（`d1b95f48`）三个作业全绿，日志里
+
+```
+S8   -3.75     ≥ 9       aim     multi-session reasoning
+docs cross-check: 74 of 79 marker(s) verified against the code, 5 skipped — 160 document(s) scanned
+```
+
+与本地逐字一致。CI 上的 `unrun` 从 11 条降到 **6** 条（`D1`/`S6`/`S7`/`S9`/`C3`/`P1`），剩下这 6 条是判据
+本身就没有读数，不是读不到。
