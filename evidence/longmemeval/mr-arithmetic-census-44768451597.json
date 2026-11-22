@@ -1,0 +1,250 @@
+{
+  "numericGold": 105,
+  "wrong": 19,
+  "byKind": {
+    "over": 5,
+    "refuse": 4,
+    "under": 10
+  },
+  "completeEvidence": {
+    "over": 4,
+    "refuse": 3,
+    "under": 9
+  },
+  "deltaInEvidence": {
+    "over": 1,
+    "refuse": 0,
+    "under": 4
+  },
+  "goldComputed": 18,
+  "rows": [
+    {
+      "questionId": "6d550036",
+      "kind": "under",
+      "gold": "2",
+      "answer": "0",
+      "difference": "2",
+      "evidenceComplete": true,
+      "carried": 22,
+      "total": 22,
+      "deltaInEvidence": false,
+      "goldInEvidence": false
+    },
+    {
+      "questionId": "88432d0a",
+      "kind": "over",
+      "gold": "4",
+      "answer": "6",
+      "difference": "2",
+      "evidenceComplete": false,
+      "carried": 23,
+      "total": 24,
+      "deltaInEvidence": false,
+      "goldInEvidence": false
+    },
+    {
+      "questionId": "7024f17c",
+      "kind": "under",
+      "gold": "1/2",
+      "answer": "0",
+      "difference": "1/2",
+      "evidenceComplete": true,
+      "carried": 18,
+      "total": 18,
+      "deltaInEvidence": false,
+      "goldInEvidence": false
+    },
+    {
+      "questionId": "2ce6a0f2",
+      "kind": "under",
+      "gold": "4",
+      "answer": "3",
+      "difference": "1",
+      "evidenceComplete": false,
+      "carried": 22,
+      "total": 23,
+      "deltaInEvidence": false,
+      "goldInEvidence": false
+    },
+    {
+      "questionId": "60bf93ed",
+      "kind": "refuse",
+      "gold": "5",
+      "answer": null,
+      "difference": null,
+      "evidenceComplete": true,
+      "carried": 12,
+      "total": 12,
+      "deltaInEvidence": false,
+      "goldInEvidence": true
+    },
+    {
+      "questionId": "d851d5ba",
+      "kind": "over",
+      "gold": "3750",
+      "answer": "8750",
+      "difference": "5000",
+      "evidenceComplete": true,
+      "carried": 22,
+      "total": 22,
+      "deltaInEvidence": false,
+      "goldInEvidence": false
+    },
+    {
+      "questionId": "gpt4_731e37d7",
+      "kind": "under",
+      "gold": "720",
+      "answer": "700",
+      "difference": "20",
+      "evidenceComplete": true,
+      "carried": 23,
+      "total": 23,
+      "deltaInEvidence": true,
+      "goldInEvidence": false
+    },
+    {
+      "questionId": "e3038f8c",
+      "kind": "over",
+      "gold": "99",
+      "answer": "100",
+      "difference": "1",
+      "evidenceComplete": true,
+      "carried": 24,
+      "total": 24,
+      "deltaInEvidence": false,
+      "goldInEvidence": false
+    },
+    {
+      "questionId": "2b8f3739",
+      "kind": "under",
+      "gold": "495",
+      "answer": "375",
+      "difference": "120",
+      "evidenceComplete": true,
+      "carried": 18,
+      "total": 18,
+      "deltaInEvidence": true,
+      "goldInEvidence": false
+    },
+    {
+      "questionId": "bf659f65",
+      "kind": "under",
+      "gold": "3",
+      "answer": "2",
+      "difference": "1",
+      "evidenceComplete": true,
+      "carried": 17,
+      "total": 17,
+      "deltaInEvidence": false,
+      "goldInEvidence": false
+    },
+    {
+      "questionId": "gpt4_372c3eed",
+      "kind": "under",
+      "gold": "10",
+      "answer": "8",
+      "difference": "2",
+      "evidenceComplete": true,
+      "carried": 17,
+      "total": 17,
+      "deltaInEvidence": false,
+      "goldInEvidence": false
+    },
+    {
+      "questionId": "gpt4_2f91af09",
+      "kind": "under",
+      "gold": "23",
+      "answer": "22",
+      "difference": "1",
+      "evidenceComplete": true,
+      "carried": 17,
+      "total": 17,
+      "deltaInEvidence": false,
+      "goldInEvidence": false
+    },
+    {
+      "questionId": "a4996e51",
+      "kind": "refuse",
+      "gold": "50",
+      "answer": null,
+      "difference": null,
+      "evidenceComplete": true,
+      "carried": 12,
+      "total": 12,
+      "deltaInEvidence": false,
+      "goldInEvidence": false
+    },
+    {
+      "questionId": "a1cc6108",
+      "kind": "refuse",
+      "gold": "11",
+      "answer": null,
+      "difference": null,
+      "evidenceComplete": false,
+      "carried": 7,
+      "total": 10,
+      "deltaInEvidence": false,
+      "goldInEvidence": false
+    },
+    {
+      "questionId": "9ee3ecd6",
+      "kind": "over",
+      "gold": "100",
+      "answer": "300",
+      "difference": "200",
+      "evidenceComplete": true,
+      "carried": 11,
+      "total": 11,
+      "deltaInEvidence": true,
+      "goldInEvidence": false
+    },
+    {
+      "questionId": "d6062bb9",
+      "kind": "under",
+      "gold": "1998",
+      "answer": "1456",
+      "difference": "542",
+      "evidenceComplete": true,
+      "carried": 11,
+      "total": 11,
+      "deltaInEvidence": true,
+      "goldInEvidence": false
+    },
+    {
+      "questionId": "c18a7dc8",
+      "kind": "over",
+      "gold": "7",
+      "answer": "10",
+      "difference": "3",
+      "evidenceComplete": true,
+      "carried": 11,
+      "total": 11,
+      "deltaInEvidence": false,
+      "goldInEvidence": false
+    },
+    {
+      "questionId": "37f165cf",
+      "kind": "refuse",
+      "gold": "856",
+      "answer": null,
+      "difference": null,
+      "evidenceComplete": true,
+      "carried": 10,
+      "total": 10,
+      "deltaInEvidence": false,
+      "goldInEvidence": false
+    },
+    {
+      "questionId": "21d02d0d",
+      "kind": "under",
+      "gold": "2",
+      "answer": "1",
+      "difference": "1",
+      "evidenceComplete": true,
+      "carried": 11,
+      "total": 11,
+      "deltaInEvidence": true,
+      "goldInEvidence": false
+    }
+  ]
+}
