@@ -48,6 +48,22 @@ def _call_gpt(...):
 
 这不是论文的缺陷，而是"引用这个仓库的数字时，那个数字意味着什么"的一个事实。
 
+### 2.1 而且它在 3.12 以下根本跑不起来，仓库没说
+
+第一次真实派发死在 `manifest produced no response`。驱动 stderr 写着原因：
+
+```
+File ".../store_build/sources.py", line 75
+SyntaxError: f-string expression part cannot include a backslash
+```
+
+PEP 701 在 Python **3.12** 才允许 f-string 替换字段里出现反斜杠。runner 是 3.11.18。于是模块 import 就炸，失败发生在 `main()` 之前，parent 把它报成"驱动死了"而不是"没人核对过的版本假设"——README 里没有任何最低版本说明。
+
+两个后果，且超出这一个文件：
+
+1. **竞品的运行时要求是它配置的一部分**。晚发现的代价是一个完整派发。`memcog_driver.py` 现在在低于 3.12 时 re-exec 进 `MEMCOG_PYTHON`，否则用一句话退出，同时点名版本、文件与 PEP；
+2. 解释器**装在 job 的 3.11 旁边**而不是替换它——这次比较的其它每一步都在 3.11 上测量，换掉它就是实验里多一个变量。
+
 ---
 
 ## 3. Mastra 的 `agent.generate` 走流式，第一版代理拒绝它是我的 bug
