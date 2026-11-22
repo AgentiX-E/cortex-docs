@@ -1,11 +1,12 @@
 {
   "suite": "LongMemEval-S, sampled round-robin across capabilities",
   "asOf": "2026-11-22",
-  "note": "Every row here was produced by this repository's own harness, in one dispatch of its own, against the metering proxy that also meters the reader: the same DeepSeek id for the system's own calls, the same reader prompt (`con`), the same judge and the same top-k. That is what makes the rows comparable to each other and to nothing else. A row says `n` because two of them are n=2 and a two-question row is one coin -- it is on this figure to price a mechanism, not to rank a system. The 500-question leaderboard is a different figure and this data must not be read onto it.",
+  "note": "Every row here was produced by this repository's own harness, in one dispatch of its own, against the metering proxy that also meters the reader: the same DeepSeek id for the system's own calls, the same reader prompt (`con`), the same judge and the same top-k. That is what makes the rows comparable to each other and to nothing else. A row says `n` because one of them is n=2 and a two-question row is one coin -- it is on this figure to price a mechanism, not to rank a system. The 500-question leaderboard is a different figure and this data must not be read onto it. The two `mastra` rows are one system at two settings of its own `messageTokens` trigger: the segment between them is what a tenfold lower trigger bought, and it is -4% of the cost for -3.3 points.",
   "rows": [
     {
-      "system": "mastra (observational memory)",
-      "arm": "SUT, answers on its own generator",
+      "system": "mastra @30k",
+      "series": "mastra",
+      "arm": "SUT, observational memory, vendor-default trigger, answers on its own generator",
       "n": 30,
       "accuracy": 70.0,
       "promptTokensPerQuestion": 125296,
@@ -14,34 +15,45 @@
       "source": "dispatch `sut=mastra`, read_prompts=con, n=30; config.reader `deepseek-chat (chain-of-note/con, temp=0, one request)`"
     },
     {
+      "system": "mastra @3k",
+      "series": "mastra",
+      "arm": "the same SUT with `messageTokens=3000`, the equal-envelope experiment of §10",
+      "n": 30,
+      "accuracy": 66.7,
+      "promptTokensPerQuestion": 120221,
+      "answerer": "self",
+      "type": "open-source",
+      "source": "dispatch `sut=mastra&sut_mastra_message_tokens=3000`, same 30 questions, same reader prompt; the prompt moved -4.05% and the accuracy -3.3 points"
+    },
+    {
       "system": "cortex-session",
       "arm": "Cortex arm: whole sessions, 8-turn budget, shared reader",
       "n": 30,
-      "accuracy": 63.3,
+      "accuracy": 60.0,
       "promptTokensPerQuestion": 33270,
       "answerer": "shared",
       "type": "cortex",
-      "source": "the same dispatch as the mastra row; `ctx tok/q` is what the reader was given"
+      "source": "the same dispatch as the mem0 row; `ctx tok/q` is what the reader was given"
     },
     {
       "system": "cortex/trim-2.8k",
       "arm": "Cortex arm: 2.8k-token window, shared reader",
       "n": 30,
-      "accuracy": 56.7,
+      "accuracy": 53.3,
       "promptTokensPerQuestion": 2799,
       "answerer": "shared",
       "type": "cortex",
-      "source": "the same dispatch as the mastra row"
+      "source": "the same dispatch as the mem0 row"
     },
     {
       "system": "mem0 infer=1",
       "arm": "SUT: LLM extraction at ingest, vector top-k, shared reader",
-      "n": 2,
-      "accuracy": 50.0,
-      "promptTokensPerQuestion": 577131,
+      "n": 30,
+      "accuracy": 63.3,
+      "promptTokensPerQuestion": 544884,
       "answerer": "shared",
       "type": "open-source",
-      "source": "dispatch `sut=mem0&sut_infer=1`, n=2; 576,772 own prompt tokens + 359 the reader read"
+      "source": "dispatch `sut=mem0&sut_infer=1`, n=30; 544,477 own prompt tokens + 407 the reader read; 1,437 model calls, one `add` per stored session"
     },
     {
       "system": "memcog",

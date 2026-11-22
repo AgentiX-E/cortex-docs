@@ -331,27 +331,63 @@ def plot_matched_model(_data: dict, out: Path) -> None:
 
     The two coordinates are (prompt tokens the system caused to be read, accuracy). The token axis is the *system*
     total: what the reader read plus what the system spent producing it. For Mem0 those two halves differ by three
-    orders of magnitude -- 359 tokens handed over, 577k spent extracting -- and a panel that plotted only the first
+    orders of magnitude -- 407 tokens handed over, 544k spent extracting -- and a panel that plotted only the first
     would place the most expensive arm here at the cheap end of the axis, which is also exactly how a vendor's
     "context per question" figure reads.
+
+    Rows sharing a `series` are one system at two settings, drawn joined: the segment between them is a *within-system*
+    comparison and is the only movement on this panel that no cross-system confound can explain. Mastra's two rows are
+    the equal-envelope experiment -- a tenfold lower `messageTokens` -- and the segment is 4% of the cost for 3.3 points
+    of accuracy, which is what "the trigger does not control the number that is large" looks like when drawn.
     """
     data = json.loads(MATCHED.read_text(encoding='utf-8'))
     fig, ax = plt.subplots(figsize=(11, 7))
+
+    # A series is drawn before the points so its line cannot cover a marker.
+    by_series: dict[str, list[dict]] = {}
+    for row in data['rows']:
+        if 'series' in row:
+            by_series.setdefault(row['series'], []).append(row)
+    for rows in by_series.values():
+        if len(rows) < 2:
+            continue
+        # The order the file lists them, which is baseline first and treatment second -- the same direction every
+        # paired table in this repository reads. Sorting by coordinate would label the segment with the negative of
+        # the movement it describes: `messageTokens` 30k -> 3k is -4.05% tokens, not +4.2%.
+        ordered = rows
+        ax.plot(
+            [row['promptTokensPerQuestion'] for row in ordered],
+            [row['accuracy'] for row in ordered],
+            color='#aab7b8',
+            linestyle='-',
+            linewidth=1.4,
+            zorder=2,
+        )
+        first, last = ordered[0], ordered[-1]
+        delta_tokens = (last['promptTokensPerQuestion'] / first['promptTokensPerQuestion'] - 1) * 100
+        delta_points = last['accuracy'] - first['accuracy']
+        # Placed to the right of the segment rather than on it: both endpoints already carry a label, and a third
+        # annotation between them printed over the lower point's own line.
+        ax.text(
+            max(row['promptTokensPerQuestion'] for row in ordered) * 1.12,
+            (first['accuracy'] + last['accuracy']) / 2 - 0.9,
+            f"{delta_tokens:+.1f}% tokens\n{delta_points:+.1f} points",
+            ha='left',
+            va='center',
+            fontsize=7.8,
+            color='#5d6d7e',
+            bbox={'boxstyle': 'round,pad=0.25', 'facecolor': 'white', 'edgecolor': '#e5e8e8', 'alpha': 0.85},
+            zorder=6,
+        )
 
     cortex_arm = next(row for row in data['rows'] if row['system'] == 'cortex-session')
     # The reference arm's two coordinates as a crosshair, because every claim on this panel is relative to it: below
     # the horizontal line is less accurate than Cortex's own window, to the right of the vertical one costs more.
     ax.axhline(cortex_arm['accuracy'], color='#7f8c8d', linestyle='--', linewidth=1)
     ax.axvline(cortex_arm['promptTokensPerQuestion'], color='#7f8c8d', linestyle='--', linewidth=1)
-    ax.text(
-        cortex_arm['promptTokensPerQuestion'] * 1.06,
-        50.2,
-        f"cortex-session budget: {cortex_arm['promptTokensPerQuestion']:,} tok/q",
-        fontsize=8,
-        color='#5d6d7e',
-        rotation=90,
-        va='bottom',
-    )
+    # The crosshair is explained in the footer rather than labelled on the line: rotated it ran through the reference
+    # point's own annotation, and horizontal along the bottom it ran under the footer box. A caption is worth having
+    # only where nothing else already occupies the space.
 
     for index, row in enumerate(data['rows']):
         filled = row['answerer'] == 'self'
@@ -368,8 +404,12 @@ def plot_matched_model(_data: dict, out: Path) -> None:
         # Two rows share one accuracy (the n=2 pair sits at 50%), and a fixed offset over one of them printed both
         # labels on the same line. Alternating the vertical offset by position within the tie is what keeps the
         # labels attached to their own point.
+        #
+        # A later member of a series is pushed below its own point for the same reason one level over: its baseline
+        # sits directly above it, so an upward label lands on the segment and on the baseline's label.
         tied = [other for other in data['rows'] if other['accuracy'] == row['accuracy']]
-        offset = 18 if len(tied) == 1 or tied.index(row) % 2 == 0 else -30
+        lowered = any(row in rows[1:] for rows in by_series.values())
+        offset = -34 if lowered else (18 if len(tied) == 1 or tied.index(row) % 2 == 0 else -30)
         ax.annotate(
             f"{row['system']}\n{row['accuracy']:.1f}% @ {row['promptTokensPerQuestion'] / 1000:,.0f}k tok/q (n={row['n']})",
             (row['promptTokensPerQuestion'], row['accuracy']),
@@ -390,14 +430,25 @@ def plot_matched_model(_data: dict, out: Path) -> None:
     ax.set_ylabel('accuracy under one shared judge (%)', fontsize=10)
     ax.grid(alpha=0.25, linestyle=':', which='both')
     ax.set_title(
-        'The same three systems, measured by this repository on one model\n'
+        'The same systems, measured by this repository on one model\n'
         'star = answers on its own generator, circle = retrieved context read by the shared reader',
         fontsize=11,
+    )
+    # Counted from the rows rather than written down: this caption said `n=2 for mem0 and memcog` after Mem0 had
+    # been re-run at n=30, and a footer that misstates the sample is the one label on a figure a reader takes as
+    # metadata rather than as a result.
+    arm_counts: dict[int, int] = {}
+    for row in data['rows']:
+        arm_counts[row['n']] = arm_counts.get(row['n'], 0) + 1
+    sample_line = '; '.join(
+        f"n={count} for {arms} arm{'s' if arms > 1 else ''}"
+        for count, arms in sorted(arm_counts.items(), reverse=True)
     )
     ax.text(
         0.99,
         0.02,
-        'n=30 for mastra and the two Cortex arms; n=2 for mem0 and memcog.\n'
+        f'{sample_line}.\n'
+        "Dashed crosshair: cortex-session's own coordinates — right of it costs more, below it scores less.\n"
         'Not the 500-question leaderboard: these rows price a mechanism, they do not rank a system.',
         transform=ax.transAxes,
         ha='right',
