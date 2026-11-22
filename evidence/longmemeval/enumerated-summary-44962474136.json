@@ -1,0 +1,3234 @@
+{
+  "schema": "cortex-readout-summary/1",
+  "generatedAt": "2026-11-22T01:40:35.394Z",
+  "revision": {
+    "sha": "562f406df4f8d54af9b1c7636f12945ea476048b",
+    "runId": "44962474136",
+    "runAttempt": "1",
+    "workflow": "Benchmark (cortex-memory A/B)"
+  },
+  "datasetFingerprint": "sha256:d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+  "config": {
+    "threshold": 0,
+    "retrievalThreshold": 0,
+    "sessionBudget": null,
+    "sourceTrust": 0.5,
+    "confidenceSignal": "none",
+    "promptContract": "evidence-blocks-unsourced",
+    "renderingRoutes": [
+      "abstention",
+      "multi-session",
+      "temporal",
+      "knowledge-update",
+      "assistant",
+      "flat"
+    ],
+    "promptAssembly": "instruction-first",
+    "assemblyRoutes": [
+      "multi-session"
+    ],
+    "ask": "enumerated",
+    "reviewPass": "bare",
+    "reviewBareDecline": true,
+    "replyRepair": "off",
+    "evidenceSource": "corpus",
+    "queryExpansion": "none",
+    "conflicts": false,
+    "semanticCarry": false,
+    "factTimeline": false,
+    "supersededRendering": "off",
+    "indexEmbedding": "injected",
+    "lexicalWeighting": "flat",
+    "sessionClock": "off",
+    "selfConsistency": "none",
+    "askRoutes": [
+      "multi-session",
+      "flat",
+      "temporal"
+    ],
+    "relevanceSignal": "self-index",
+    "relevanceTopK": 256,
+    "relevanceUnits": "turn",
+    "maxTurnChars": 400,
+    "maxPromptCharsByRoute": {
+      "multi-session": 48460,
+      "temporal": 24000,
+      "flat": 24000,
+      "knowledge-update": 24000,
+      "abstention": 24000,
+      "assistant": 24000
+    },
+    "effectivePromptChars": {
+      "multi-session": 48460,
+      "temporal": 24000,
+      "flat": 24000,
+      "knowledge-update": 24000,
+      "abstention": 24000,
+      "assistant": 24000
+    },
+    "maxTurnCharsRoutes": [
+      "multi-session",
+      "temporal"
+    ],
+    "turnCutMarker": "none",
+    "resolution": "raw",
+    "evidenceRoles": [
+      "user"
+    ],
+    "evidenceRolesRoutes": [
+      "multi-session",
+      "temporal"
+    ],
+    "embedding": {
+      "provider": "openai-compatible",
+      "model": "embedding-3",
+      "dimensions": 1024,
+      "preflight": "ok"
+    },
+    "reader": {
+      "providerId": "deepseek",
+      "model": "deepseek-chat",
+      "baseUrl": "https://api.deepseek.com/v1",
+      "endpoint": "matches",
+      "thinking": "enabled",
+      "thinkingRoutes": [
+        "multi-session",
+        "temporal"
+      ],
+      "temperature": 0,
+      "deadlineMs": 600000
+    },
+    "rerank": {
+      "provider": "none"
+    },
+    "judge": {
+      "providerId": "deepseek",
+      "model": "deepseek-chat",
+      "temperature": 0,
+      "source": "reader"
+    },
+    "goldAccount": "product-reported",
+    "selfIndex": {
+      "indexes": 2000,
+      "turns": 742080,
+      "embedCalls": 10173,
+      "embedTexts": 522281,
+      "memoHits": 219195,
+      "reuse": true,
+      "rerankCalls": 0,
+      "rerankDegraded": 0,
+      "embedDegraded": 0,
+      "queries": 2000
+    },
+    "admission": {
+      "threshold": 0,
+      "candidates": 987000,
+      "admitted": 987000,
+      "rejected": 0,
+      "min": 0.5,
+      "max": 0.5,
+      "mean": 0.5,
+      "distinct": 1,
+      "distinctSaturated": false
+    }
+  },
+  "baseline": {
+    "accuracy": 0.442,
+    "total": 500,
+    "correct": 221,
+    "abstentionRate": 0.488,
+    "perCapability": {
+      "IE": {
+        "total": 150,
+        "correct": 1,
+        "accuracy": 0.006666666666666667,
+        "abstained": 134
+      },
+      "MR": {
+        "total": 121,
+        "correct": 102,
+        "accuracy": 0.8429752066115702,
+        "abstained": 3
+      },
+      "KU": {
+        "total": 72,
+        "correct": 0,
+        "accuracy": 0,
+        "abstained": 57
+      },
+      "TR": {
+        "total": 127,
+        "correct": 88,
+        "accuracy": 0.6929133858267716,
+        "abstained": 20
+      },
+      "ABS": {
+        "total": 30,
+        "correct": 30,
+        "accuracy": 1,
+        "abstained": 30
+      }
+    }
+  },
+  "feature": {
+    "accuracy": 0.9,
+    "total": 500,
+    "correct": 450,
+    "abstentionRate": 0.062,
+    "perCapability": {
+      "IE": {
+        "total": 150,
+        "correct": 138,
+        "accuracy": 0.92,
+        "abstained": 1
+      },
+      "MR": {
+        "total": 121,
+        "correct": 94,
+        "accuracy": 0.7768595041322314,
+        "abstained": 0
+      },
+      "KU": {
+        "total": 72,
+        "correct": 67,
+        "accuracy": 0.9305555555555556,
+        "abstained": 1
+      },
+      "TR": {
+        "total": 127,
+        "correct": 122,
+        "accuracy": 0.9606299212598425,
+        "abstained": 0
+      },
+      "ABS": {
+        "total": 30,
+        "correct": 29,
+        "accuracy": 0.9666666666666667,
+        "abstained": 29
+      }
+    }
+  },
+  "ablation": {
+    "delta": 0.455,
+    "mcnemarPValue": 1.3070155383220021e-52,
+    "mcnemarSignificant": true,
+    "discordant": {
+      "baselineCorrectFeatureIncorrect": 18,
+      "baselineIncorrectFeatureCorrect": 247
+    },
+    "baselineAggregate": {
+      "min": 0.438,
+      "max": 0.446,
+      "avg": 0.442,
+      "median": 0.442
+    },
+    "featureAggregate": {
+      "min": 0.892,
+      "max": 0.9,
+      "avg": 0.897,
+      "median": 0.898
+    }
+  },
+  "roster": [
+    {
+      "questionId": "e47becba",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Business Administration"
+    },
+    {
+      "questionId": "118b2229",
+      "capability": "IE",
+      "correct": true,
+      "answer": "45 minutes each way"
+    },
+    {
+      "questionId": "51a45a95",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Target"
+    },
+    {
+      "questionId": "58bf7951",
+      "capability": "IE",
+      "correct": true,
+      "answer": "The Glass Menagerie"
+    },
+    {
+      "questionId": "1e043500",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Summer Vibes"
+    },
+    {
+      "questionId": "c5e8278d",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Johnson"
+    },
+    {
+      "questionId": "6ade9755",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Serenity Yoga"
+    },
+    {
+      "questionId": "6f9b354f",
+      "capability": "IE",
+      "correct": true,
+      "answer": "lighter shade of gray"
+    },
+    {
+      "questionId": "58ef2f1c",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Valentine's Day"
+    },
+    {
+      "questionId": "f8c5f88b",
+      "capability": "IE",
+      "correct": true,
+      "answer": "a sports store downtown"
+    },
+    {
+      "questionId": "5d3d2817",
+      "capability": "IE",
+      "correct": true,
+      "answer": "marketing specialist"
+    },
+    {
+      "questionId": "7527f7e2",
+      "capability": "IE",
+      "correct": true,
+      "answer": "$800"
+    },
+    {
+      "questionId": "c960da58",
+      "capability": "IE",
+      "correct": true,
+      "answer": "20"
+    },
+    {
+      "questionId": "3b6f954b",
+      "capability": "IE",
+      "correct": true,
+      "answer": "University of Melbourne"
+    },
+    {
+      "questionId": "726462e0",
+      "capability": "IE",
+      "correct": true,
+      "answer": "10%"
+    },
+    {
+      "questionId": "94f70d80",
+      "capability": "IE",
+      "correct": true,
+      "answer": "4 hours"
+    },
+    {
+      "questionId": "66f24dbb",
+      "capability": "IE",
+      "correct": true,
+      "answer": "a yellow dress and a pair of earrings to match"
+    },
+    {
+      "questionId": "ad7109d1",
+      "capability": "IE",
+      "correct": true,
+      "answer": "500 Mbps"
+    },
+    {
+      "questionId": "af8d2e46",
+      "capability": "IE",
+      "correct": true,
+      "answer": "7"
+    },
+    {
+      "questionId": "dccbc061",
+      "capability": "IE",
+      "correct": true,
+      "answer": "staunch atheist"
+    },
+    {
+      "questionId": "c8c3f81d",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Nike"
+    },
+    {
+      "questionId": "8ebdbe50",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Data Science"
+    },
+    {
+      "questionId": "6b168ec8",
+      "capability": "IE",
+      "correct": true,
+      "answer": "3"
+    },
+    {
+      "questionId": "75499fd8",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Golden Retriever"
+    },
+    {
+      "questionId": "21436231",
+      "capability": "IE",
+      "correct": true,
+      "answer": "12"
+    },
+    {
+      "questionId": "95bcc1c8",
+      "capability": "IE",
+      "correct": true,
+      "answer": "10"
+    },
+    {
+      "questionId": "0862e8bf",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Luna"
+    },
+    {
+      "questionId": "853b0a1d",
+      "capability": "IE",
+      "correct": true,
+      "answer": "18"
+    },
+    {
+      "questionId": "a06e4cfe",
+      "capability": "IE",
+      "correct": true,
+      "answer": "3:1"
+    },
+    {
+      "questionId": "37d43f65",
+      "capability": "IE",
+      "correct": true,
+      "answer": "16GB"
+    },
+    {
+      "questionId": "b86304ba",
+      "capability": "IE",
+      "correct": true,
+      "answer": "triple the amount paid"
+    },
+    {
+      "questionId": "d52b4f67",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Grand Ballroom"
+    },
+    {
+      "questionId": "25e5aa4f",
+      "capability": "IE",
+      "correct": true,
+      "answer": "UCLA"
+    },
+    {
+      "questionId": "caf9ead2",
+      "capability": "IE",
+      "correct": true,
+      "answer": "5 hours"
+    },
+    {
+      "questionId": "8550ddae",
+      "capability": "IE",
+      "correct": true,
+      "answer": "lavender gin fizz"
+    },
+    {
+      "questionId": "60d45044",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Japanese short-grain rice"
+    },
+    {
+      "questionId": "3f1e9474",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Sarah"
+    },
+    {
+      "questionId": "86b68151",
+      "capability": "IE",
+      "correct": true,
+      "answer": "IKEA"
+    },
+    {
+      "questionId": "577d4d32",
+      "capability": "IE",
+      "correct": true,
+      "answer": "7 pm"
+    },
+    {
+      "questionId": "ec81a493",
+      "capability": "IE",
+      "correct": true,
+      "answer": "500"
+    },
+    {
+      "questionId": "15745da0",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Three months"
+    },
+    {
+      "questionId": "e01b8e2f",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Hawaii"
+    },
+    {
+      "questionId": "bc8a6e93",
+      "capability": "IE",
+      "correct": true,
+      "answer": "lemon blueberry cake"
+    },
+    {
+      "questionId": "ccb36322",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Spotify"
+    },
+    {
+      "questionId": "001be529",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Over a year"
+    },
+    {
+      "questionId": "b320f3f8",
+      "capability": "IE",
+      "correct": true,
+      "answer": "rare blue Snaggletooth action figure"
+    },
+    {
+      "questionId": "19b5f2b3",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Two weeks"
+    },
+    {
+      "questionId": "4fd1909e",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Xfinity Center"
+    },
+    {
+      "questionId": "545bd2b5",
+      "capability": "IE",
+      "correct": true,
+      "answer": "2 hours"
+    },
+    {
+      "questionId": "8a137a7f",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Philips LED bulb"
+    },
+    {
+      "questionId": "76d63226",
+      "capability": "IE",
+      "correct": true,
+      "answer": "55-inch"
+    },
+    {
+      "questionId": "86f00804",
+      "capability": "IE",
+      "correct": true,
+      "answer": "The Seven Husbands of Evelyn Hugo"
+    },
+    {
+      "questionId": "8e9d538c",
+      "capability": "IE",
+      "correct": true,
+      "answer": "17"
+    },
+    {
+      "questionId": "311778f1",
+      "capability": "IE",
+      "correct": true,
+      "answer": "10 hours"
+    },
+    {
+      "questionId": "c19f7a0b",
+      "capability": "IE",
+      "correct": true,
+      "answer": "6:30 pm"
+    },
+    {
+      "questionId": "4100d0a0",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Irish and Italian"
+    },
+    {
+      "questionId": "29f2956b",
+      "capability": "IE",
+      "correct": true,
+      "answer": "30 minutes"
+    },
+    {
+      "questionId": "1faac195",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Denver"
+    },
+    {
+      "questionId": "faba32e5",
+      "capability": "IE",
+      "correct": true,
+      "answer": "24 hours"
+    },
+    {
+      "questionId": "f4f1d8a4",
+      "capability": "IE",
+      "correct": true,
+      "answer": "my sister"
+    },
+    {
+      "questionId": "c14c00dd",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Trader Joe's"
+    },
+    {
+      "questionId": "36580ce8",
+      "capability": "IE",
+      "correct": true,
+      "answer": "bronchitis"
+    },
+    {
+      "questionId": "3d86fd0a",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Coffee Shop (City)"
+    },
+    {
+      "questionId": "a82c026e",
+      "capability": "IE",
+      "correct": false,
+      "answer": "Dark Souls 3"
+    },
+    {
+      "questionId": "0862e8bf_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "15745da0_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "bc8a6e93_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "19b5f2b3_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "29f2956b_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "f4f1d8a4_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "0a995998",
+      "capability": "MR",
+      "correct": false,
+      "answer": "2"
+    },
+    {
+      "questionId": "6d550036",
+      "capability": "MR",
+      "correct": false,
+      "answer": "1"
+    },
+    {
+      "questionId": "gpt4_59c863d7",
+      "capability": "MR",
+      "correct": true,
+      "answer": "5"
+    },
+    {
+      "questionId": "b5ef892d",
+      "capability": "MR",
+      "correct": true,
+      "answer": "8"
+    },
+    {
+      "questionId": "e831120c",
+      "capability": "MR",
+      "correct": true,
+      "answer": "3.5"
+    },
+    {
+      "questionId": "3a704032",
+      "capability": "MR",
+      "correct": false,
+      "answer": "2"
+    },
+    {
+      "questionId": "gpt4_d84a3211",
+      "capability": "MR",
+      "correct": true,
+      "answer": "185"
+    },
+    {
+      "questionId": "aae3761f",
+      "capability": "MR",
+      "correct": true,
+      "answer": "15"
+    },
+    {
+      "questionId": "gpt4_f2262a51",
+      "capability": "MR",
+      "correct": true,
+      "answer": "3"
+    },
+    {
+      "questionId": "dd2973ad",
+      "capability": "MR",
+      "correct": true,
+      "answer": "2 AM"
+    },
+    {
+      "questionId": "c4a1ceb8",
+      "capability": "MR",
+      "correct": true,
+      "answer": "3"
+    },
+    {
+      "questionId": "gpt4_a56e767c",
+      "capability": "MR",
+      "correct": false,
+      "answer": "1"
+    },
+    {
+      "questionId": "6cb6f249",
+      "capability": "MR",
+      "correct": true,
+      "answer": "17"
+    },
+    {
+      "questionId": "46a3abf7",
+      "capability": "MR",
+      "correct": false,
+      "answer": "2"
+    },
+    {
+      "questionId": "36b9f61e",
+      "capability": "MR",
+      "correct": true,
+      "answer": "2500"
+    },
+    {
+      "questionId": "28dc39ac",
+      "capability": "MR",
+      "correct": true,
+      "answer": "140"
+    },
+    {
+      "questionId": "gpt4_2f8be40d",
+      "capability": "MR",
+      "correct": false,
+      "answer": "6"
+    },
+    {
+      "questionId": "2e6d26dc",
+      "capability": "MR",
+      "correct": true,
+      "answer": "5"
+    },
+    {
+      "questionId": "gpt4_15e38248",
+      "capability": "MR",
+      "correct": false,
+      "answer": "3"
+    },
+    {
+      "questionId": "88432d0a",
+      "capability": "MR",
+      "correct": false,
+      "answer": "5"
+    },
+    {
+      "questionId": "80ec1f4f",
+      "capability": "MR",
+      "correct": true,
+      "answer": "2"
+    },
+    {
+      "questionId": "d23cf73b",
+      "capability": "MR",
+      "correct": true,
+      "answer": "4"
+    },
+    {
+      "questionId": "gpt4_7fce9456",
+      "capability": "MR",
+      "correct": false,
+      "answer": "5"
+    },
+    {
+      "questionId": "d682f1a2",
+      "capability": "MR",
+      "correct": true,
+      "answer": "3"
+    },
+    {
+      "questionId": "7024f17c",
+      "capability": "MR",
+      "correct": true,
+      "answer": "0.5"
+    },
+    {
+      "questionId": "gpt4_5501fe77",
+      "capability": "MR",
+      "correct": true,
+      "answer": "TikTok"
+    },
+    {
+      "questionId": "gpt4_2ba83207",
+      "capability": "MR",
+      "correct": false,
+      "answer": "Walmart"
+    },
+    {
+      "questionId": "2318644b",
+      "capability": "MR",
+      "correct": true,
+      "answer": "270"
+    },
+    {
+      "questionId": "2ce6a0f2",
+      "capability": "MR",
+      "correct": false,
+      "answer": "2"
+    },
+    {
+      "questionId": "gpt4_d12ceb0e",
+      "capability": "MR",
+      "correct": true,
+      "answer": "59.6"
+    },
+    {
+      "questionId": "00ca467f",
+      "capability": "MR",
+      "correct": true,
+      "answer": "2"
+    },
+    {
+      "questionId": "b3c15d39",
+      "capability": "MR",
+      "correct": true,
+      "answer": "5"
+    },
+    {
+      "questionId": "gpt4_31ff4165",
+      "capability": "MR",
+      "correct": true,
+      "answer": "4"
+    },
+    {
+      "questionId": "eeda8a6d",
+      "capability": "MR",
+      "correct": true,
+      "answer": "17"
+    },
+    {
+      "questionId": "2788b940",
+      "capability": "MR",
+      "correct": true,
+      "answer": "Step 1\nAttend Zumba class on Tuesdays at 7:00 PM — 2023/05/20\nAttend Zumba class on Thursdays at 7:00 PM — 2023/05/20\nAttend BodyPump class on Mondays at 6:30 PM — 2023/05/20; 2023/05/30\nAttend Hip Hop Abs class on Saturdays at 10:00 AM — 2023/05/30\nAttend yoga class on Sundays at 6:00 PM — 2023/05/29; 2023/05/30\n\nStep 2\n5"
+    },
+    {
+      "questionId": "60bf93ed",
+      "capability": "MR",
+      "correct": false,
+      "answer": "Cannot be determined from the evidence."
+    },
+    {
+      "questionId": "9d25d4e0",
+      "capability": "MR",
+      "correct": true,
+      "answer": "3"
+    },
+    {
+      "questionId": "129d1232",
+      "capability": "MR",
+      "correct": true,
+      "answer": "5850"
+    },
+    {
+      "questionId": "60472f9c",
+      "capability": "MR",
+      "correct": true,
+      "answer": "2"
+    },
+    {
+      "questionId": "gpt4_194be4b3",
+      "capability": "MR",
+      "correct": true,
+      "answer": "4"
+    },
+    {
+      "questionId": "a9f6b44c",
+      "capability": "MR",
+      "correct": true,
+      "answer": "2"
+    },
+    {
+      "questionId": "d851d5ba",
+      "capability": "MR",
+      "correct": false,
+      "answer": "Step 1\n- 2023/03/20 (Mon) 04:17 — raised $1,000 for the local children’s hospital at a charity bake sale.\n- 2023/03/20 (Mon) 08:00 — raised $250 for a local food bank in the “Run for Hunger” charity event.\n- 2023/03/20 (Mon) 18:35 — raised $500 for the American Cancer Society in a charity fitness challenge.\n- 2023/03/20 (Mon) 19:19 — helped raise $2,000 for a local animal shelter.\n- 2023/03/20 (Mon) 22:05 — raised over $5,000 for the local music education program through a music benefit concert.\n\nStep 2\n8750"
+    },
+    {
+      "questionId": "5a7937c8",
+      "capability": "MR",
+      "correct": true,
+      "answer": "3"
+    },
+    {
+      "questionId": "gpt4_ab202e7f",
+      "capability": "MR",
+      "correct": false,
+      "answer": "4"
+    },
+    {
+      "questionId": "gpt4_e05b82a6",
+      "capability": "MR",
+      "correct": true,
+      "answer": "10"
+    },
+    {
+      "questionId": "gpt4_731e37d7",
+      "capability": "MR",
+      "correct": false,
+      "answer": "700"
+    },
+    {
+      "questionId": "edced276",
+      "capability": "MR",
+      "correct": true,
+      "answer": "15"
+    },
+    {
+      "questionId": "10d9b85a",
+      "capability": "MR",
+      "correct": true,
+      "answer": "3"
+    },
+    {
+      "questionId": "e3038f8c",
+      "capability": "MR",
+      "correct": true,
+      "answer": "99"
+    },
+    {
+      "questionId": "2b8f3739",
+      "capability": "MR",
+      "correct": false,
+      "answer": "375"
+    },
+    {
+      "questionId": "1a8a66a6",
+      "capability": "MR",
+      "correct": true,
+      "answer": "Step 1\nArchitectural Digest — currently have — stated 2023/04/01 04:47\nThe New Yorker — currently have — stated 2023/04/01 19:02\n\nStep 2\n2"
+    },
+    {
+      "questionId": "c2ac3c61",
+      "capability": "MR",
+      "correct": true,
+      "answer": "5"
+    },
+    {
+      "questionId": "bf659f65",
+      "capability": "MR",
+      "correct": false,
+      "answer": "2"
+    },
+    {
+      "questionId": "gpt4_372c3eed",
+      "capability": "MR",
+      "correct": false,
+      "answer": "8"
+    },
+    {
+      "questionId": "gpt4_2f91af09",
+      "capability": "MR",
+      "correct": false,
+      "answer": "22"
+    },
+    {
+      "questionId": "81507db6",
+      "capability": "MR",
+      "correct": true,
+      "answer": "3"
+    },
+    {
+      "questionId": "88432d0a_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "80ec1f4f_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "eeda8a6d_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "60bf93ed_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "edced276_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "gpt4_372c3eed_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "8a2466db",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Adobe Premiere Pro's official documentation and tutorials; YouTube channels like Premiere Bro, Video Copilot, and Adobe Creative Cloud; online courses on platforms like Udemy, LinkedIn Learning, and Skillshare; Premiere Pro communities and forums, such as Reddit's r/premierepro and Adobe's Premiere Pro forum."
+    },
+    {
+      "questionId": "06878be2",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Based on the evidence, accessories that would complement your Sony A7R IV photography setup include:\n\n- **Camera flashes**: Sony HVL-F60RM, Sony HVL-F45RM, Godox V1, Godox AD200, Profoto A1, or Nissin Di700A (all compatible with the Sony A7R IV).\n- **Flash cases/pouches**: Godox V1 Hard Case, Nanuk 915 Hard Case, Pelican 1060 Case, Think Tank Photo Flash Pouch, Lowepro Flash Pouch, or Vello Flash Pouch (to protect your flash).\n- **External battery packs**: for charging your Sony A7R IV and other devices on the go (though no specific models were named in the evidence).\n- **Camera bags**: from brands like Think Tank Photo, Lowepro, F-Stop Gear, Peak Design, or MindShift Gear, which are known for making high-quality bags compatible with Sony cameras."
+    },
+    {
+      "questionId": "75832dbd",
+      "capability": "IE",
+      "correct": false,
+      "answer": "The evidence contains requests for recommendations of research papers and articles on explainable AI, multi-modal image fusion, transfer learning, and domain adaptation in medical image analysis, but it does not contain any actual recent publications or conferences that could be recommended."
+    },
+    {
+      "questionId": "0edc2aef",
+      "capability": "IE",
+      "correct": false,
+      "answer": "The evidence above contains no information about hotels in Miami; it only provides Seattle hotel recommendations (such as The Edgewater Hotel, Four Seasons Hotel Seattle, The Alexis Hotel, Hyatt at Olive 8, Pan Pacific Seattle, W Seattle, and The Sheraton Seattle Hotel), so I cannot suggest a Miami hotel based on the evidence."
+    },
+    {
+      "questionId": "35a27287",
+      "capability": "IE",
+      "correct": true,
+      "answer": "I don't have access to your location, so I can't name specific events happening around you this weekend. To find cultural events in your area, try online event calendars like Eventbrite and Meetup (searching keywords such as \"language festival,\" \"cultural exchange,\" \"diversity celebration,\" or \"international festival\"), follow local cultural organizations, language schools, and community centers on social media, check local news and community newsletters, contact local language schools, cultural centers, community organizations, and embassies/consulates, and look for language festivals, cultural exchange programs, international festivals, World Language Day events, and heritage month celebrations."
+    },
+    {
+      "questionId": "32260d93",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Netflix stand-up comedy specials with strong storytelling: Hasan Minhaj: Homecoming King, Ali Wong: Hard Knock Wife, Mike Birbiglia: My Girlfriend's Boyfriend, Taylor Tomlinson: Quarter-Life Crisis, Maria Bamford: Lady Dynamite, Bo Burnham: Make Happy, Demetri Martin: Live (At the Time), Wanda Sykes: Not Normal, Hannah Gadsby: Nanette, and Brian Regan: Nunchucks and Flamethrowers."
+    },
+    {
+      "questionId": "195a1a1b",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Based on the evidence, here are some evening activities you can do:\n\n- Reading a book that's not too engaging or stimulating\n- Meditation using guided meditation apps like Headspace, Calm, or Insight Timer\n- Deep breathing exercises focusing on slow, deep breaths\n- Gentle yoga or stretching to relax your muscles\n- Listening to soothing music or nature sounds\n- Writing in a journal or reflecting on your day to clear your mind\n- Taking a leisurely walk\n- Swimming\n- Gardening\n- Outdoor yoga\n- Tai Chi or Qigong"
+    },
+    {
+      "questionId": "afdc33df",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Based on the evidence, here are tips relevant to keeping your kitchen clean and organized:\n\n- Clean your utensil holder regularly to remove food residue or debris and prevent bacteria growth (turn 7).\n- Organize utensils by purging duplicates, grouping similar items, using dividers, storing frequently used items front and center, utilizing vertical space, using small containers for small items, hanging utensils, and labeling sections (turn 7).\n- Regularly clean your granite countertop to prevent dirt and debris from accumulating and causing scratches; use coasters and pads under objects, always use a cutting board, and consider sealing the countertop (turn 9).\n- Avoid harsh chemicals, abrasive cleaners, or acidic substances on granite, and use soft, clean cloths (turn 9).\n- Perform regular maintenance such as cleaning and sealing granite countertops (turn 9).\n- Regularly inspect and maintain your faucet to prevent leaks (turn 11).\n- When hosting a painting party, use small plates and napkins to contain messes, have a designated \"painting only\" area, and choose mess-free foods and drinks (turn 19)."
+    },
+    {
+      "questionId": "caf03d32",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Based on the evidence, here's advice for getting better results with slow cooker recipes:\n\n**For yogurt specifically:**\n- Use a thermometer to monitor the milk temperature — heat it to 180°F–185°F (82°C–85°C) to kill unwanted bacteria and denature proteins, then cool to 110°F–120°F (43°C–49°C) before adding the starter culture. Without a thermometer, heat on low for 2–3 hours until it simmers, but results will be less consistent.\n- Use a low heat setting to prevent scorching or burning.\n- Incubate for 8–12 hours (or overnight) — the longer it incubates, the thicker and tangier the yogurt.\n- Wrap the slow cooker with a towel or blanket to maintain a consistent temperature during incubation.\n- For cashew-based yogurt, soak cashews at least 4 hours or overnight (rinsing and changing the water), blend with water (roughly 1:1 ratio, adjusting for thickness), blend about 2 minutes until smooth, and strain through cheesecloth or a nut milk bag. Chill at least 2 hours to thicken and set. Use a vegan yogurt starter or probiotic powder designed for plant-based yogurts.\n\n**General slow cooker tips (from the vegetarian/vegan recipe guidance):**\n- Use a variety of vegetables for texture, flavor, and nutrients.\n- Experiment with grains like quinoa, brown rice, and whole wheat pasta for fiber and texture.\n- Get creative with spices and seasonings for depth of flavor.\n- Choose low-sodium canned beans/tomatoes and rinse them to reduce salt.\n- Add a splash of vinegar or lemon juice to enhance flavors and aid digestion."
+    },
+    {
+      "questionId": "54026fce",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Here are a few suggestions to socialize with your colleagues while working from home:\n\n1. **Virtual Coffee Breaks**: Schedule regular informal video calls for casual chats, just like you would around the water cooler.\n\n2. **Online Team Activities**: Organize virtual games or team-building exercises, such as trivia or online escape rooms.\n\n3. **Collaborative Projects**: Work on cross-departmental projects or join working groups to increase interactions.\n\n4. **Social Channels**: Create or join informal chat groups on platforms like Slack or Microsoft Teams for non-work-related conversations.\n\n5. **Recognition and Celebrations**: Celebrate milestones, birthdays, or work anniversaries with virtual parties or shout-outs.\n\n6. **Interest-Based Groups**: Start or join groups based on shared interests, such as book clubs or fitness challenges.\n\nThese activities can help maintain and strengthen your connections with colleagues while working remotely."
+    },
+    {
+      "questionId": "06f04340",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Serve a meal using your homegrown basil and mint, such as Caprese Salad, Thai Basil Chicken, Pesto Pasta, Basil and Lemon Spaghetti, Indian-Style Basil Chutney, Mint Chutney, Minty Fresh Salad, Grilled Lamb with Mint Sauce, Minty Yogurt Sauce, Herby Lemonade, Middle Eastern-Style Salad, Basil and Mint Chimichurri, Thai-Style Basil and Mint Stir-Fry, or Basil and Mint Infused Water."
+    },
+    {
+      "questionId": "6b7dfb22",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Based on the evidence, here are ideas to find new inspiration for your paintings:\n\n- Look at flower paintings on Instagram for inspiration (turn 6).\n- Observe and study real flowers—their shape, structure, color, texture, and how light falls on them—and take photos from different angles to reference later (turn 7).\n- Surround yourself with inspirational elements in your studio space, such as hanging art pieces, prints, or quotes that motivate you, and add plants or a small music system to create a pleasant atmosphere (turn 12).\n- Get inspiration from social media and consider starting a 30-day painting challenge (turn 13).\n- Join a local art class or group to meet like-minded people while doing something you enjoy (turn 2)."
+    },
+    {
+      "questionId": "1a1907b4",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Based on the evidence, you were previously discussing summer cocktails that incorporate Hendrick's gin, specifically a Pimm's Cup with a Twist. The assistant recommended using a citrus-flavored simple syrup—such as grapefruit, lemon-ginger, or orange-blossom—to add depth, with Ruby Red Grapefruit simple syrup being highlighted for its pink hue and balanced flavor. Garnish suggestions included cucumber slices, grapefruit wedges, mint sprigs, edible flowers, and fresh fruit, and serving it in a Collins glass to showcase the layers and garnishes. So for your get-together, the Pimm's Cup with a Twist made with Hendrick's gin and a grapefruit simple syrup would be a fitting choice."
+    },
+    {
+      "questionId": "09d032c9",
+      "capability": "IE",
+      "correct": false,
+      "answer": "The evidence does not contain any tips about phone battery life."
+    },
+    {
+      "questionId": "38146c39",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Try pairing your cookies with complementary ingredients such as cinnamon, nutmeg, or cardamom; citrus zest; nuts like almonds, pecans, or hazelnuts; espresso or coffee; vanilla; cocoa powder or dark chocolate; dried fruits; coconut; ginger; or a pinch of flaky sea salt. You could also experiment with turbinado sugar for a richer caramel flavor, or swap in muscovado or demerara sugar (starting with 1-2 tablespoons and adjusting to taste) for a deeper molasses-like flavor."
+    },
+    {
+      "questionId": "d24813b1",
+      "capability": "IE",
+      "correct": true,
+      "answer": "For a small gathering with colleagues, you could bake a lemon lavender pound cake (using dried lavender buds, lemon zest, and juice, with a mix of granulated and brown sugar), a rich mocha-flavored chocolate cake with caramel ganache frosting, or chewy chocolate chip cookies (using a mix of white and brown sugar, room-temperature butter, not overmixing, not overbaking, and optionally adding honey, corn syrup, or Greek yogurt for extra chewiness)."
+    },
+    {
+      "questionId": "57f827a0",
+      "capability": "IE",
+      "correct": false,
+      "answer": "The evidence does not contain any tips specifically about rearranging bedroom furniture. The closest relevant items are general organization and placement advice: from the Wi-Fi troubleshooting reply (2023/05/21), move furniture or appliances away from signal paths and avoid placing devices behind furniture; and from the bathroom cabinet organization reply (2023/05/26), purge and declutter, categorize and group items, assign zones, use storage containers, maximize vertical space, keep frequently used items accessible, store heavy items below, and maintain the organization. No evidence addresses bedroom furniture rearrangement directly."
+    },
+    {
+      "questionId": "95228167",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Consider the differences between iconic models like the Fender Stratocaster and Gibson Les Paul (body shape and construction, neck and fingerboard, electronics, tone, playability, weight, and price), factor in your playing style and musical preferences (a versatile, brighter-toned Stratocaster for clean rhythms and leads versus a warmer, fuller, more sustainful Les Paul for heavier music), and ultimately try out both guitars before buying to see which one feels and sounds more like \"home\" to you."
+    },
+    {
+      "questionId": "505af2f5",
+      "capability": "IE",
+      "correct": true,
+      "answer": "The user has been making homemade flavored creamer with almond milk, vanilla extract, and honey, and asked for tips to make it healthier. The assistant recommended: choosing a healthier sweetener (stevia, monk fruit sweetener, or yacon syrup); using unsweetened, unflavored, organic almond milk (or making your own); reducing the amount of sweetener; adding spices like cinnamon, nutmeg, or cardamom for flavor; trying cashew milk or oat milk for creaminess; adding a pinch of salt to balance flavors and reduce sweetener; experimenting with flavor extracts like almond, coconut, or hazelnut; adding probiotic powder or yogurt; using a reusable container; and adding collagen peptides, protein powder, or MCT oil for extra nutrition."
+    },
+    {
+      "questionId": "75f70248",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Yes, it could be your living room—especially since you have a cat that sheds a lot. The evidence notes that dust, dander, and other allergens can accumulate in a living room, and recommends vacuuming with a HEPA filter, dusting with a damp cloth, grooming your cat, changing air filters, and reducing clutter to help with allergies. It also suggests air-purifying plants like spider plants or snake plants, and mentions keeping the cat out of the bedroom if someone has allergies."
+    },
+    {
+      "questionId": "d6233ab6",
+      "capability": "IE",
+      "correct": false,
+      "answer": "The evidence only mentions positive high school memories (debate team, AP economics) and old high school friends' plans after university; it contains no information about a high school reunion, so it does not support answering whether attending one would be a good idea."
+    },
+    {
+      "questionId": "1da05512",
+      "capability": "IE",
+      "correct": false,
+      "answer": "The evidence does not address whether to buy a NAS now or wait; it only advises comparing prices, checking reviews, and weighing budget, capacity, users, redundancy, and future expansion before deciding."
+    },
+    {
+      "questionId": "fca70973",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Based on the evidence, here are some suggestions for your next theme park weekend:\n\n- **Disneyland**: Halloween Time starting mid-September (festive decorations, themed food, special entertainment, Halloween-themed parade, 'Oogie Boogie Bash'), and Holiday Season from early November.\n- **Knott's Berry Farm**: Knott's Scary Farm in the fall (haunted mazes, scare zones, live entertainment), and Christmas Celebration from late November.\n- **Six Flags Magic Mountain**: Fright Fest from late September to early November (haunted mazes, scare zones, themed rides), and Holiday in the Park from late November.\n- **Universal Studios Hollywood**: Halloween Horror Nights from mid-September to early November (haunted houses, scare zones, thrilling rides), including a VIP Experience with a Behind-the-Scenes Tour covering makeup/special effects, maze design and construction, scare zone development, costume and prop design, and backstage areas; plus Grinchmas from late November.\n\nCheck the respective park websites for exact dates and additional details."
+    },
+    {
+      "questionId": "b6025781",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Based on the evidence, here are some meal prep recipe suggestions:\n\n- **Quinoa and roasted vegetables with a protein source** such as grilled chicken, pan-seared salmon, lentil or mushroom bolognese, roasted turkey breast, tofu, shrimp, chickpeas, grilled steak, edamame, or tempeh.\n- **Lentil bolognese with quinoa**, paired with sides/add-ins like roasted broccoli, Brussels sprouts with balsamic glaze, sweet potato wedges, sautéed greens, toasted pumpkin seeds, shaved Parmesan, feta, bell peppers, fresh herbs, artichoke hearts, or avocado.\n- **Roasted sweet potatoes** seasoned with options like rosemary/thyme/sage, chili powder/cumin/smoked paprika, lemon/garlic/oregano, brown sugar/smoked paprika/cayenne, garam masala/cumin/coriander, or lemon zest/rosemary.\n- **Homemade granola** customized with your preferred sweetness level, spices (cinnamon, nutmeg, cardamom, vanilla, cocoa), nuts and seeds, dried fruits, grains, coconut, dark chocolate chips, or cereal pieces.\n- **Mexican-inspired dishes** such as chicken fajitas, roasted vegetable quesadillas, grilled chicken tacos with mango salsa, or vegan black bean and sweet potato enchiladas.\n- **Sweet potato fries** with dipping sauces like spicy mayo or chipotle ranch dressing."
+    },
+    {
+      "questionId": "a89d7624",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Based on the evidence, here are some suggestions for your trip to Denver:\n\n**Music Venues:**\n- Red Rocks Park and Amphitheatre (iconic venue hosting rock, pop, jazz, and classical acts)\n- The Ogden Theatre (historic venue in LoDo for indie, rock, and electronic acts)\n- The Bluebird Theater (historic venue with diverse lineup)\n- The Fillmore Auditorium (iconic venue with rock to hip-hop)\n- Larimer Lounge (laid-back venue for discovering new talent)\n- Twist & Shout Records (legendary record store)\n- The hi-dive (punk, indie, and alternative music venue/bar)\n- The Marquis Theater (mid-sized venue for various genres)\n\n**Music Festivals:**\n- Grandoozy\n- Denver Folk Festival\n- Denver Jazz Festival\n- Westword Music Showcase\n- Riot Fest Denver (September)\n\n**BBQ near Red Rocks:**\n- GQue BBQ (Golden, ~10-15 min drive)\n- Dinosaur Bar-B-Que (Lakewood, ~20-25 min drive)\n- Moe's Original BBQ (Wheat Ridge, ~15-20 min drive)\n- Big B's Delicious BBQ (Arvada, ~20-25 min drive)\n- Wayne's Smoke Shack (Morrison, a few minutes away)\n\n**Restaurants/food near Red Rocks:**\n- The Ship Rock Grille (across the street)\n- The Village Tavern (~5-minute walk)\n- Morrison Inn (~10-minute walk)\n- Red Rocks Food Trucks (during concert season)\n- Concession stands at the venue\n- The Fort (~2 miles)\n- Bear Creek Tavern (~2.5 miles)"
+    },
+    {
+      "questionId": "b0479f84",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Here are some documentary recommendations from the evidence:\n\n**Nature and Wildlife:** Planet Earth, Blue Planet, March of the Penguins, Dynasties, Chasing Coral.\n\n**Adventure and Exploration:** The Last Lions, The Cave, The River Runs Red, Expedition Unknown, Running Wild with Bear Grylls.\n\n**True Crime and Mystery:** Tiger King: Murder, Mayhem and Madness, The Keepers, The Staircase, The Jinx: The Life and Deaths of Robert Durst, Abducted in Plain Sight.\n\n**Other Recommendations:** The Inventor: Out for Blood in Silicon Valley, Fyre: The Greatest Party That Never Happened, The Game Changers, The Family I Had, The Imposter."
+    },
+    {
+      "questionId": "1d4e3b97",
+      "capability": "IE",
+      "correct": false,
+      "answer": "The evidence does not contain any information explaining why a bike would perform better during Sunday group rides; it only covers hydration, bike computer setup, and safety tips."
+    },
+    {
+      "questionId": "07b6f563",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Based on the evidence, useful phone accessories mentioned include: screen protectors (from brands offering high-quality protectors for the iPhone 13 Pro), phone wallet cases (from brands like Nomad, Fossil, Bellroy, Incipio, Speck, Case-Mate, Tech21, UAG, Mophie, Spigen, and OtterBox), and portable power banks for charging on-the-go."
+    },
+    {
+      "questionId": "1c0ddc50",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Based on the evidence, here are activities you can do during your commute:\n\n**Productive options (from bike commute suggestions):**\n- Listen to audiobooks and podcasts (educational or engaging content via Audible, Scribd, or Apple Podcasts)\n- Language learning using apps like Duolingo, Babbel, or Rosetta Stone\n- Catch up on news, industry updates, or educational podcasts related to your field\n- Mental preparation: think about tasks, prioritize workload, and plan your day\n\n**Entertainment options:**\n- Music and playlists\n- Storytelling podcasts (e.g., \"How I Built This\" or \"Stuff You Should Know\")\n- Comedy and humor podcasts or audiobooks\n- Nature sounds, calming sounds, or guided meditation\n\n**Podcast listening schedule (for a 40-minute commute each way):**\n- Create a playlist of episodes to switch between easily\n- Alternate between podcasts on different days (e.g., Hardcore History Mon/Tue, Lore Wed/Thu, The Dollop Fri)\n- Choose episodes around 30-60 minutes long\n- Binge-listen to engaging episodes or series\n- Take breaks and mix in different podcast types\n- Match podcast tone to your mood (lighthearted vs. in-depth)\n\n**Safety note:** Keep volume low enough to be aware of surroundings, and avoid earbuds that block hearing."
+    },
+    {
+      "questionId": "0a34ad58",
+      "capability": "IE",
+      "correct": false,
+      "answer": "Based on the evidence, here are helpful tips for getting around Tokyo:\n\n- Get a Suica or Pasmo prepaid IC card, which makes traveling around Tokyo more convenient and cost-effective. Touch your card on the reader at the ticket gate when entering and exiting stations.\n- Use a transit app or Google Maps to plan your route, accounting for transfers and checking train/bus schedules.\n- If you're unsure about the fare or need assistance, ask station staff or a local for help.\n- Keep an eye on your Suica card and belongings, as crowded places like the fish market can be busy.\n- The Suica card can be used on most public transportation in Tokyo and surrounding areas, including trains and buses.\n- For specific routes: from Shinjuku to Tsukiji Fish Market, take the JR Yamanote Line to Shimbashi, transfer to the Tokyo Metro Ginza Line to Tsukijishijo (about 30–40 minutes, ¥420–450); from Narita Airport to Shinjuku, options include the JR Narita Express (60–70 minutes, ¥3,200–3,500) or Keisei Skyliner with a transfer at Ueno (50–60 minutes, ¥2,500–3,000); for Nikko, take the JR Tohoku Shinkansen to Utsunomiya and transfer to the JR Nikko Line, using your Suica card for these segments and local buses or taxis."
+    },
+    {
+      "questionId": "d3ab962e",
+      "capability": "MR",
+      "correct": true,
+      "answer": "8"
+    },
+    {
+      "questionId": "2311e44b",
+      "capability": "MR",
+      "correct": true,
+      "answer": "190"
+    },
+    {
+      "questionId": "cc06de0d",
+      "capability": "MR",
+      "correct": true,
+      "answer": "6"
+    },
+    {
+      "questionId": "a11281a2",
+      "capability": "MR",
+      "correct": true,
+      "answer": "100"
+    },
+    {
+      "questionId": "4f54b7c9",
+      "capability": "MR",
+      "correct": true,
+      "answer": "5"
+    },
+    {
+      "questionId": "85fa3a3f",
+      "capability": "MR",
+      "correct": true,
+      "answer": "50"
+    },
+    {
+      "questionId": "9aaed6a3",
+      "capability": "MR",
+      "correct": true,
+      "answer": "$0.75"
+    },
+    {
+      "questionId": "1f2b8d4f",
+      "capability": "MR",
+      "correct": true,
+      "answer": "750"
+    },
+    {
+      "questionId": "e6041065",
+      "capability": "MR",
+      "correct": true,
+      "answer": "40%"
+    },
+    {
+      "questionId": "51c32626",
+      "capability": "MR",
+      "correct": true,
+      "answer": "February 1st"
+    },
+    {
+      "questionId": "d905b33f",
+      "capability": "MR",
+      "correct": false,
+      "answer": "Cannot be determined from the evidence; no discounted price or discount percentage for the book is provided."
+    },
+    {
+      "questionId": "7405e8b1",
+      "capability": "MR",
+      "correct": true,
+      "answer": "Yes — 40% is higher than 20%."
+    },
+    {
+      "questionId": "f35224e0",
+      "capability": "MR",
+      "correct": true,
+      "answer": "27"
+    },
+    {
+      "questionId": "6456829e",
+      "capability": "MR",
+      "correct": true,
+      "answer": "8"
+    },
+    {
+      "questionId": "a4996e51",
+      "capability": "MR",
+      "correct": true,
+      "answer": "50"
+    },
+    {
+      "questionId": "3c1045c8",
+      "capability": "MR",
+      "correct": true,
+      "answer": "2.5"
+    },
+    {
+      "questionId": "60036106",
+      "capability": "MR",
+      "correct": true,
+      "answer": "Step 1\n- Facebook ad campaign reached around 2,000 people — 2023/05/29\n- Instagram influencer collaboration promoted my product to her 10,000 followers — 2023/05/29\n\nStep 2\n12000"
+    },
+    {
+      "questionId": "681a1674",
+      "capability": "MR",
+      "correct": true,
+      "answer": "2"
+    },
+    {
+      "questionId": "e25c3b8d",
+      "capability": "MR",
+      "correct": true,
+      "answer": "300"
+    },
+    {
+      "questionId": "4adc0475",
+      "capability": "MR",
+      "correct": true,
+      "answer": "5"
+    },
+    {
+      "questionId": "4bc144e2",
+      "capability": "MR",
+      "correct": true,
+      "answer": "65"
+    },
+    {
+      "questionId": "ef66a6e5",
+      "capability": "MR",
+      "correct": true,
+      "answer": "2\n\n2"
+    },
+    {
+      "questionId": "5025383b",
+      "capability": "MR",
+      "correct": true,
+      "answer": "Photography and cooking."
+    },
+    {
+      "questionId": "a1cc6108",
+      "capability": "MR",
+      "correct": false,
+      "answer": "Cannot be determined from the evidence."
+    },
+    {
+      "questionId": "9ee3ecd6",
+      "capability": "MR",
+      "correct": false,
+      "answer": "300"
+    },
+    {
+      "questionId": "3fdac837",
+      "capability": "MR",
+      "correct": true,
+      "answer": "12"
+    },
+    {
+      "questionId": "91b15a6e",
+      "capability": "MR",
+      "correct": true,
+      "answer": "5150"
+    },
+    {
+      "questionId": "27016adc",
+      "capability": "MR",
+      "correct": true,
+      "answer": "10%"
+    },
+    {
+      "questionId": "720133ac",
+      "capability": "MR",
+      "correct": true,
+      "answer": "75"
+    },
+    {
+      "questionId": "77eafa52",
+      "capability": "MR",
+      "correct": true,
+      "answer": "300"
+    },
+    {
+      "questionId": "8979f9ec",
+      "capability": "MR",
+      "correct": true,
+      "answer": "8"
+    },
+    {
+      "questionId": "0100672e",
+      "capability": "MR",
+      "correct": true,
+      "answer": "12"
+    },
+    {
+      "questionId": "a96c20ee",
+      "capability": "MR",
+      "correct": true,
+      "answer": "Harvard University"
+    },
+    {
+      "questionId": "92a0aa75",
+      "capability": "MR",
+      "correct": true,
+      "answer": "1 year 5 months"
+    },
+    {
+      "questionId": "3fe836c9",
+      "capability": "MR",
+      "correct": true,
+      "answer": "25000"
+    },
+    {
+      "questionId": "1c549ce4",
+      "capability": "MR",
+      "correct": true,
+      "answer": "140"
+    },
+    {
+      "questionId": "6c49646a",
+      "capability": "MR",
+      "correct": true,
+      "answer": "3000"
+    },
+    {
+      "questionId": "1192316e",
+      "capability": "MR",
+      "correct": true,
+      "answer": "90"
+    },
+    {
+      "questionId": "0ea62687",
+      "capability": "MR",
+      "correct": true,
+      "answer": "2"
+    },
+    {
+      "questionId": "67e0d0f2",
+      "capability": "MR",
+      "correct": true,
+      "answer": "20"
+    },
+    {
+      "questionId": "bb7c3b45",
+      "capability": "MR",
+      "correct": true,
+      "answer": "300"
+    },
+    {
+      "questionId": "ba358f49",
+      "capability": "MR",
+      "correct": true,
+      "answer": "33"
+    },
+    {
+      "questionId": "61f8c8f8",
+      "capability": "MR",
+      "correct": true,
+      "answer": "10"
+    },
+    {
+      "questionId": "60159905",
+      "capability": "MR",
+      "correct": true,
+      "answer": "3"
+    },
+    {
+      "questionId": "ef9cf60a",
+      "capability": "MR",
+      "correct": true,
+      "answer": "300"
+    },
+    {
+      "questionId": "73d42213",
+      "capability": "MR",
+      "correct": true,
+      "answer": "9:00 AM"
+    },
+    {
+      "questionId": "bc149d6b",
+      "capability": "MR",
+      "correct": true,
+      "answer": "70"
+    },
+    {
+      "questionId": "099778bb",
+      "capability": "MR",
+      "correct": true,
+      "answer": "20%"
+    },
+    {
+      "questionId": "09ba9854",
+      "capability": "MR",
+      "correct": true,
+      "answer": "50"
+    },
+    {
+      "questionId": "d6062bb9",
+      "capability": "MR",
+      "correct": false,
+      "answer": "1456"
+    },
+    {
+      "questionId": "157a136e",
+      "capability": "MR",
+      "correct": true,
+      "answer": "43"
+    },
+    {
+      "questionId": "c18a7dc8",
+      "capability": "MR",
+      "correct": false,
+      "answer": "10"
+    },
+    {
+      "questionId": "a3332713",
+      "capability": "MR",
+      "correct": true,
+      "answer": "200"
+    },
+    {
+      "questionId": "55241a1f",
+      "capability": "MR",
+      "correct": true,
+      "answer": "33"
+    },
+    {
+      "questionId": "a08a253f",
+      "capability": "MR",
+      "correct": false,
+      "answer": "3"
+    },
+    {
+      "questionId": "f0e564bc",
+      "capability": "MR",
+      "correct": true,
+      "answer": "1300"
+    },
+    {
+      "questionId": "078150f1",
+      "capability": "MR",
+      "correct": true,
+      "answer": "50"
+    },
+    {
+      "questionId": "8cf4d046",
+      "capability": "MR",
+      "correct": true,
+      "answer": "3.83"
+    },
+    {
+      "questionId": "a346bb18",
+      "capability": "MR",
+      "correct": true,
+      "answer": "12"
+    },
+    {
+      "questionId": "37f165cf",
+      "capability": "MR",
+      "correct": false,
+      "answer": "Cannot be determined from the provided evidence."
+    },
+    {
+      "questionId": "8e91e7d9",
+      "capability": "MR",
+      "correct": true,
+      "answer": "4"
+    },
+    {
+      "questionId": "87f22b4a",
+      "capability": "MR",
+      "correct": true,
+      "answer": "120"
+    },
+    {
+      "questionId": "e56a43b9",
+      "capability": "MR",
+      "correct": true,
+      "answer": "5"
+    },
+    {
+      "questionId": "efc3f7c2",
+      "capability": "MR",
+      "correct": true,
+      "answer": "30"
+    },
+    {
+      "questionId": "21d02d0d",
+      "capability": "MR",
+      "correct": false,
+      "answer": "1"
+    },
+    {
+      "questionId": "2311e44b_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "6456829e_abs",
+      "capability": "ABS",
+      "correct": false,
+      "answer": "5 tomato plants"
+    },
+    {
+      "questionId": "e5ba910e_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "a96c20ee_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "ba358f49_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "09ba9854_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "gpt4_59149c77",
+      "capability": "TR",
+      "correct": true,
+      "answer": "7 days (MoMA visit: 2023-01-08; “Ancient Civilizations” exhibit at the Met: 2023-01-15)."
+    },
+    {
+      "questionId": "gpt4_f49edff3",
+      "capability": "TR",
+      "correct": true,
+      "answer": "1. Helped my friend prepare the nursery — 2023/02/05  \n2. Helped my cousin pick out baby shower items — 2023/02/10  \n3. Ordered a customized phone case for my friend’s birthday — 2023/02/20"
+    },
+    {
+      "questionId": "71017276",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You received the crystal chandelier from your aunt on **2023/03/04**, which was **4 weeks ago** relative to **2023/04/01**."
+    },
+    {
+      "questionId": "b46e15ed",
+      "capability": "TR",
+      "correct": true,
+      "answer": "2 full months have passed. The consecutive charity events were on **2023/02/14** and **2023/02/15**; as of **2023/04/18**, it had been **2 months and 3 days** since the second event."
+    },
+    {
+      "questionId": "gpt4_fa19884c",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The keyboard-playing day was **2023/03/25**, and the bluegrass discovery day was **2023/03/31**. That is **6 days** later."
+    },
+    {
+      "questionId": "0bc8ad92",
+      "capability": "TR",
+      "correct": true,
+      "answer": "5 months and 3 days have passed (last museum visit with a friend was on 2022/10/22; as of 2023/03/25)."
+    },
+    {
+      "questionId": "af082822",
+      "capability": "TR",
+      "correct": true,
+      "answer": "2 weeks ago — on November 17, 2022."
+    },
+    {
+      "questionId": "gpt4_4929293a",
+      "capability": "TR",
+      "correct": true,
+      "answer": "Michael’s engagement party happened first, on 2023/05/06, before your cousin’s wedding on 2023/06/15."
+    },
+    {
+      "questionId": "gpt4_b5700ca9",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You attended the Maundy Thursday service at the Episcopal Church on **2023/04/06**, which was **4 days ago** relative to 2023/04/10."
+    },
+    {
+      "questionId": "9a707b81",
+      "capability": "TR",
+      "correct": false,
+      "answer": "You attended the baking class at a local culinary school on **2022-03-20**, which was **26 days ago** as of 2022-04-15.\n\nYou made your friend’s birthday cake on **2022-04-10**, which was **5 days ago**. These are separate events in the evidence."
+    },
+    {
+      "questionId": "gpt4_1d4ab0c9",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You started watering your herb garden on **2023-03-22** and harvested your first batch of fresh herbs on **2023-04-15**.\n\n**24 days passed** between those dates."
+    },
+    {
+      "questionId": "gpt4_e072b769",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You started using Ibotta on **2023/04/16**. From **2023/05/06**, that was **20 days ago**, or **about 3 weeks ago** (2 weeks and 6 days)."
+    },
+    {
+      "questionId": "0db4c65d",
+      "capability": "TR",
+      "correct": true,
+      "answer": "18 days passed (finished reading on 2022/12/28; attended the event on 2023/01/15)."
+    },
+    {
+      "questionId": "gpt4_1d80365e",
+      "capability": "TR",
+      "correct": true,
+      "answer": "3 days (started May 15, 2023, and got back May 17, 2023)."
+    },
+    {
+      "questionId": "gpt4_7f6b06db",
+      "capability": "TR",
+      "correct": true,
+      "answer": "Earliest to latest:\n1. **2023/03/10** – Day hike to Muir Woods National Monument with your family.\n2. **2023/04/20** – Road trip with friends to Big Sur and Monterey.\n3. **2023/05/15** – Solo camping trip to Yosemite National Park (started that day)."
+    },
+    {
+      "questionId": "gpt4_6dc9b45b",
+      "capability": "TR",
+      "correct": true,
+      "answer": "About 4 months ago — your SIFF attendance is dated to 2021-06-01, and the question was asked on 2021-10-02."
+    },
+    {
+      "questionId": "gpt4_8279ba02",
+      "capability": "TR",
+      "correct": true,
+      "answer": "10 days ago (on 2023/03/15)."
+    },
+    {
+      "questionId": "gpt4_18c2b244",
+      "capability": "TR",
+      "correct": true,
+      "answer": "1. Used a Buy One Get One Free coupon on Luvs diapers at Walmart — 2023/04/01  \n2. Redeemed $12 cashback for a $10 Amazon gift card from Ibotta — 2023/04/10  \n3. Signed up for the ShopRite rewards program — 2023/04/15"
+    },
+    {
+      "questionId": "gpt4_a1b77f9c",
+      "capability": "TR",
+      "correct": true,
+      "answer": "- **The Nightingale**: started 2022/01/01, finished 2022/01/15 → **2 weeks**\n- **Sapiens: A Brief History of Humankind**: started 2022/02/01, finished 2022/03/01 → **4 weeks**\n- **The Power**: started 2022/03/06, finished 2022/03/20 → **2 weeks**\n\n**Total = 2 + 4 + 2 = 8 weeks.**"
+    },
+    {
+      "questionId": "gpt4_1916e0ea",
+      "capability": "TR",
+      "correct": true,
+      "answer": "54 days (2023/01/05 to 2023/02/28)."
+    },
+    {
+      "questionId": "gpt4_7a0daae1",
+      "capability": "TR",
+      "correct": true,
+      "answer": "1 week passed. The tennis racket was bought on 2023/03/10 and received on 2023/03/17."
+    },
+    {
+      "questionId": "gpt4_468eb063",
+      "capability": "TR",
+      "correct": true,
+      "answer": "9 days ago — you met Emma on 2023/04/11."
+    },
+    {
+      "questionId": "gpt4_7abb270c",
+      "capability": "TR",
+      "correct": false,
+      "answer": "Earliest to latest:\n\n1. Science Museum — 2023-01-15  \n2. Metropolitan Museum of Art — 2023-02-10  \n3. Museum of History — 2023-02-15  \n4. Modern Art Gallery — 2023-02-17  \n5. Modern Art Museum — 2023-02-20  \n6. Natural History Museum — 2023-03-04"
+    },
+    {
+      "questionId": "gpt4_1e4a8aeb",
+      "capability": "TR",
+      "correct": true,
+      "answer": "6 days (April 15, 2023 to April 21, 2023)."
+    },
+    {
+      "questionId": "gpt4_4fc4f797",
+      "capability": "TR",
+      "correct": true,
+      "answer": "38 days — from **2023-03-17** (when you mentioned receiving feedback from judges about the suspension being too soft) to **2023-04-24** (the “tomorrow” after your 2023-04-23 message saying you’d test the new suspension setup)."
+    },
+    {
+      "questionId": "4dfccbf7",
+      "capability": "TR",
+      "correct": true,
+      "answer": "24 days had passed. Ukulele lessons started on 2023/02/01, and the guitar was taken to the guitar tech for servicing on 2023/02/25."
+    },
+    {
+      "questionId": "gpt4_61e13b3c",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The last Farmers’ Market sale was on **2023/02/26**.  \nThe Spring Fling Market was on **2023/03/20** (“yesterday” relative to the 2023/03/21 message).  \n\nThat is **22 days**, or **3 weeks and 1 day** (about **3 weeks**) between them."
+    },
+    {
+      "questionId": "gpt4_45189cb4",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The order was:\n\n1. **Lakers vs. Chicago Bulls NBA game** — watched on **Jan 5, 2023**.\n2. **Georgia vs. Alabama College Football National Championship** — watched on **Jan 14, 2023**.\n3. **Kansas City Chiefs vs. Buffalo Bills NFL Divisional Round game** — watched on the weekend of **Jan 21–22, 2023** (“last weekend” as of the Jan 22 session)."
+    },
+    {
+      "questionId": "2ebe6c90",
+      "capability": "TR",
+      "correct": true,
+      "answer": "It took **21 days** — from **January 10, 2023** to **January 31, 2023**."
+    },
+    {
+      "questionId": "gpt4_e061b84f",
+      "capability": "TR",
+      "correct": true,
+      "answer": "Earliest to latest: Spring Sprint Triathlon (2023/06/02) → Midsummer 5K Run (2023/06/10) → charity soccer tournament (referenced on 2023/06/17)."
+    },
+    {
+      "questionId": "370a8ff4",
+      "capability": "TR",
+      "correct": false,
+      "answer": "Recovered from the flu on **2023/01/19** and went on the 10th outdoor jog on **2023/04/10**. That is **81 days**, or **11 weeks and 4 days** (about **11.6 weeks**), later."
+    },
+    {
+      "questionId": "gpt4_d6585ce8",
+      "capability": "TR",
+      "correct": true,
+      "answer": "From earliest to latest, the concerts/musical events in the past two months were:\n\n1. Billie Eilish concert at Wells Fargo Center, Philadelphia — 2023/03/18  \n2. Free outdoor concert series in the park — 2023/03/25  \n3. Music festival in Brooklyn (where Glass Animals was seen live) — reported just returned on 2023/04/01  \n4. Jazz night at a local bar — 2023/04/08  \n5. Queen + Adam Lambert at Prudential Center, Newark — reported just saw them live on 2023/04/15"
+    },
+    {
+      "questionId": "gpt4_4ef30696",
+      "capability": "TR",
+      "correct": true,
+      "answer": "1 day (finished ‘The Nightingale’ on 2022/01/15 and started ‘The Hitchhiker’s Guide to the Galaxy’ on 2022/01/16)."
+    },
+    {
+      "questionId": "gpt4_ec93e27f",
+      "capability": "TR",
+      "correct": true,
+      "answer": "A train, most recently on March 3, 2023."
+    },
+    {
+      "questionId": "6e984301",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You started sculpting classes on **2023-02-11** and got your own set of sculpting tools on **2023-03-04**, which is **3 weeks** later."
+    },
+    {
+      "questionId": "8077ef71",
+      "capability": "TR",
+      "correct": true,
+      "answer": "26 days ago — on 2022/03/09."
+    },
+    {
+      "questionId": "gpt4_f420262c",
+      "capability": "TR",
+      "correct": true,
+      "answer": "Earliest to latest: **JetBlue → Delta → United Airlines → American Airlines**.  \nAmerican Airlines appears for the later NY–LA flight on 2023-02-10 and the LAX–JFK flight before 2023-02-14."
+    },
+    {
+      "questionId": "gpt4_8e165409",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The spider plant was repotted on **2023/03/04**, and the cuttings were given to Mrs. Johnson on **2023/03/18**. That is **14 days** apart."
+    },
+    {
+      "questionId": "gpt4_74aed68e",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The spark plugs were replaced on 2023/02/14, and the Turbocharged Tuesdays event was on 2023/03/15. Therefore, **29 days** passed between them."
+    },
+    {
+      "questionId": "bcbe585f",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You attended the bird watching workshop on **2023/04/01**. From **2023/05/01**, that is **4 weeks and 2 days ago** (about **4.3 weeks ago**)."
+    },
+    {
+      "questionId": "gpt4_21adecb5",
+      "capability": "TR",
+      "correct": true,
+      "answer": "Approximately 6 months passed—specifically 5 months and 28 days—between completion of the undergraduate degree on/around 2022/11/17 and submission of the master’s thesis on 2023/05/15."
+    },
+    {
+      "questionId": "5e1b23de",
+      "capability": "TR",
+      "correct": true,
+      "answer": "3 months ago, on 2023/11/01."
+    },
+    {
+      "questionId": "gpt4_98f46fc6",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The charity bake sale came first: it was on 2023/03/15, while the charity gala was “tonight” on 2023/03/28."
+    },
+    {
+      "questionId": "gpt4_af6db32f",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You watched the Super Bowl on 2023/02/12. From that date to 2023/03/01 is **17 days ago**."
+    },
+    {
+      "questionId": "eac54adc",
+      "capability": "TR",
+      "correct": true,
+      "answer": "I launched my website on **2023/02/10** and signed a contract with my first client on **2023/03/01**. That was **19 days later**."
+    },
+    {
+      "questionId": "gpt4_7ddcf75f",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You went on the whitewater rafting trip **3 days ago**, on **2023/06/17 (Saturday)**."
+    },
+    {
+      "questionId": "gpt4_a2d1d1f6",
+      "capability": "TR",
+      "correct": true,
+      "answer": "3 days ago, on 2023/04/15."
+    },
+    {
+      "questionId": "gpt4_85da3956",
+      "capability": "TR",
+      "correct": true,
+      "answer": "3 weeks ago (around July 15, 2023)."
+    },
+    {
+      "questionId": "gpt4_b0863698",
+      "capability": "TR",
+      "correct": true,
+      "answer": "7 days ago — on 2023/03/19."
+    },
+    {
+      "questionId": "gpt4_68e94287",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The vegan chili recipe post happened first, on 2023/03/09 (“yesterday” relative to 2023/03/10). The #PlankChallenge participation happened later, on 2023/03/15 (“today” at that time)."
+    },
+    {
+      "questionId": "gpt4_e414231e",
+      "capability": "TR",
+      "correct": true,
+      "answer": "4 days passed. I fixed my mountain bike on 2023/03/15, and I decided to upgrade my road bike’s pedals on 2023/03/19."
+    },
+    {
+      "questionId": "gpt4_7ca326fa",
+      "capability": "TR",
+      "correct": true,
+      "answer": "Emma graduated first (May 27, 2022), Rachel graduated second (around June 22, 2022), and Alex graduated third (about July 1, 2022)."
+    },
+    {
+      "questionId": "gpt4_7bc6cf22",
+      "capability": "TR",
+      "correct": true,
+      "answer": "12 days ago (on 2023-03-20)."
+    },
+    {
+      "questionId": "2ebe6c92",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You finished **“The Nightingale” by Kristin Hannah** on **2023/01/31**, which was a week before **2023/02/07**."
+    },
+    {
+      "questionId": "gpt4_e061b84g",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The company’s annual charity soccer tournament."
+    },
+    {
+      "questionId": "71017277",
+      "capability": "TR",
+      "correct": true,
+      "answer": "my aunt"
+    },
+    {
+      "questionId": "b46e15ee",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You participated in the **“Walk for Hunger” charity event** on **2023/03/19**, walking 5 kilometers with colleagues to raise money for the local food bank."
+    },
+    {
+      "questionId": "gpt4_d6585ce9",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You went with your parents to see Queen with Adam Lambert at the Prudential Center on 2023-04-15."
+    },
+    {
+      "questionId": "gpt4_1e4a8aec",
+      "capability": "TR",
+      "correct": true,
+      "answer": "On 2023/04/21, you planted 12 new tomato saplings."
+    },
+    {
+      "questionId": "gpt4_f420262d",
+      "capability": "TR",
+      "correct": true,
+      "answer": "American Airlines."
+    },
+    {
+      "questionId": "gpt4_59149c78",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The event was held at the Metropolitan Museum of Art."
+    },
+    {
+      "questionId": "gpt4_e414231f",
+      "capability": "TR",
+      "correct": true,
+      "answer": "Your road bike — on 2023/03/19 (the past weekend), you were upgrading it to Shimano Ultegra clipless pedals. The mountain bike flat tire was fixed earlier, on 2023/03/15."
+    },
+    {
+      "questionId": "gpt4_4929293b",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You participated as a bridesmaid in your cousin’s wedding. Resolved date for “a week ago”: 2023-06-15."
+    },
+    {
+      "questionId": "gpt4_468eb064",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You met with Emma, a freelance writer, over lunch on Tuesday, 2023/04/11."
+    },
+    {
+      "questionId": "gpt4_fa19884d",
+      "capability": "TR",
+      "correct": true,
+      "answer": "A bluegrass band that features a banjo player (the specific artist name is not stated in the evidence)."
+    },
+    {
+      "questionId": "9a707b82",
+      "capability": "TR",
+      "correct": true,
+      "answer": "A chocolate cake for your friend’s birthday party."
+    },
+    {
+      "questionId": "eac54add",
+      "capability": "TR",
+      "correct": false,
+      "answer": "You mentioned that you were **wrapping up the Johnson account**, with a deadline in two weeks and a need for a smooth transition."
+    },
+    {
+      "questionId": "4dfccbf8",
+      "capability": "TR",
+      "correct": true,
+      "answer": "On Wednesday, 2023/02/01, you started taking ukulele lessons with your friend Rachel."
+    },
+    {
+      "questionId": "0bc8ad93",
+      "capability": "TR",
+      "correct": true,
+      "answer": "Two months before 2023/03/11 resolves to around 2023/01/11. On that date you mentioned a lecture at the History Museum, but no friend was mentioned; the evidence does not establish that you visited with a friend."
+    },
+    {
+      "questionId": "6e984302",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You bought a set of sculpting tools: a modeling tool set, a wire cutter, and a sculpting mat.\n\nResolved date for “four weeks ago” from 2023/04/01: **2023/03/04**."
+    },
+    {
+      "questionId": "gpt4_8279ba03",
+      "capability": "TR",
+      "correct": false,
+      "answer": "Cannot be determined from the evidence; no kitchen appliance purchase is mentioned."
+    },
+    {
+      "questionId": "gpt4_b5700ca0",
+      "capability": "TR",
+      "correct": true,
+      "answer": "At the Episcopal Church (Maundy Thursday service on 2023/04/06)."
+    },
+    {
+      "questionId": "gpt4_68e94288",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You participated in the social media challenge **#PlankChallenge** on **2023/03/15 (Wed)**, which was 5 days before 2023/03/20."
+    },
+    {
+      "questionId": "gpt4_2655b836",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The first issue after the first service was a GPS system problem on 3/22; the dealership replaced the entire system."
+    },
+    {
+      "questionId": "gpt4_2487a7cb",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The **“Data Analysis using Python” webinar** was attended first.\n\n- “Data Analysis using Python” webinar: **two months before 2023/05/24 = approximately 2023/03/24**\n- “Effective Time Management” workshop: **last Saturday before 2023/05/24 = 2023/05/20**\n\nSo the webinar occurred before the workshop."
+    },
+    {
+      "questionId": "gpt4_76048e76",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The bike — it was taken in for repairs in mid-February, while the car was washed on February 27."
+    },
+    {
+      "questionId": "gpt4_2312f94c",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You got the **Samsung Galaxy S22 first** on **February 20, 2023**, before the **Dell XPS 13**, which arrived on **February 25, 2023**."
+    },
+    {
+      "questionId": "0bb5a684",
+      "capability": "TR",
+      "correct": true,
+      "answer": "I attended the workshop on **January 10, 2023**, and the team meeting was on **January 17, 2023** — so it was **7 days before** the meeting."
+    },
+    {
+      "questionId": "08f4fc43",
+      "capability": "TR",
+      "correct": true,
+      "answer": "30 days passed between the Sunday mass at St. Mary’s Church on January 2nd and the Ash Wednesday service at the cathedral on February 1st."
+    },
+    {
+      "questionId": "2c63a862",
+      "capability": "TR",
+      "correct": true,
+      "answer": "14 days (from 2022-02-15, when you started working with Rachel, to 2022-03-01, when you saw the house you loved)."
+    },
+    {
+      "questionId": "gpt4_385a5000",
+      "capability": "TR",
+      "correct": true,
+      "answer": "Tomatoes were started first: the tomatoes had been started indoors since February 20, 2023, while the marigold seeds arrived on March 3, 2023, and were described as “just started” on March 10, 2023."
+    },
+    {
+      "questionId": "2a1811e2",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The Holi celebration was on **February 26, 2023**, and the Sunday mass at St. Mary’s Church was on **March 19, 2023**. That is **21 days** apart."
+    },
+    {
+      "questionId": "bbf86515",
+      "capability": "TR",
+      "correct": true,
+      "answer": "4 days before (Turbocharged Tuesdays: June 14; Rack Fest: June 18)."
+    },
+    {
+      "questionId": "gpt4_5dcc0aab",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You cleaned your white Adidas sneakers last month (April 2023)."
+    },
+    {
+      "questionId": "gpt4_0b2f1d21",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The stand mixer malfunction happened first. The stand mixer was taken to a repair shop “last month” (April 2023), while the coffee maker was purchased “about three weeks ago” (around 2023/05/04)."
+    },
+    {
+      "questionId": "f0853d11",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The 'Walk for Hunger' event was on 2023-02-21, and the 'Coastal Cleanup' event was on 2023-03-07. **14 days had passed between them.**"
+    },
+    {
+      "questionId": "gpt4_6ed717ea",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The training pads for Luna were purchased first—about a month before 2023/05/29 (approximately 2023/04/29)—while Max’s dog bed was purchased about three weeks before 2023/05/29 (approximately 2023/05/08)."
+    },
+    {
+      "questionId": "gpt4_70e84552",
+      "capability": "TR",
+      "correct": true,
+      "answer": "Fixing the fence first. It was done about three weeks before 2023/05/25 (May 4, 2023), while the goats’ hooves were trimmed two weeks before 2023/05/25 (May 11, 2023)."
+    },
+    {
+      "questionId": "a3838d2b",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You participated in **4 charity events before the “Run for the Cure” event** (which was on **October 15**):\n\n1. Dance for a Cause — May 1  \n2. Walk for Wildlife — June  \n3. Charity golf tournament — July 17  \n4. Food for Thought charity gala — September 25"
+    },
+    {
+      "questionId": "gpt4_93159ced",
+      "capability": "TR",
+      "correct": true,
+      "answer": "About 4 years and 9 months (9 years professionally minus about 4 years and 3 months at NovaTech)."
+    },
+    {
+      "questionId": "gpt4_2d58bcd6",
+      "capability": "TR",
+      "correct": true,
+      "answer": "**The Hate U Give** was finished first.\n\n- **The Hate U Give**: finished “a few days before” a book club meeting “two weeks ago” from 2023/05/30, so around **May 12–13, 2023**.\n- **The Nightingale**: finished “last weekend” before 2023/05/30, so around **May 27–28, 2023**.\n\nTherefore, **The Hate U Give** was read first."
+    },
+    {
+      "questionId": "gpt4_65aabe59",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The smart thermostat was set up first: about a month before 2023/05/25 (around 2023/04/25), while the mesh network system was upgraded 3 weeks before 2023/05/25 (around 2023/05/04)."
+    },
+    {
+      "questionId": "982b5123",
+      "capability": "TR",
+      "correct": true,
+      "answer": "5 months ago — around 2022/12/21."
+    },
+    {
+      "questionId": "b9cfe692",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You took **5.5 weeks combined** — **2.5 weeks** for *The Seven Husbands of Evelyn Hugo* plus **3 weeks** for *The Nightingale*."
+    },
+    {
+      "questionId": "gpt4_4edbafa2",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You attended the first BBQ event in June on **June 3, 2023** (the 3rd of June)."
+    },
+    {
+      "questionId": "c8090214",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You attended the Holiday Market on **2023/11/17**, one week before Black Friday. You bought the iPhone 13 Pro on **Black Friday, 2023/11/24**. That is **7 days** later."
+    },
+    {
+      "questionId": "gpt4_483dd43c",
+      "capability": "TR",
+      "correct": true,
+      "answer": "**Game of Thrones** — you started it about a month before 2023/05/29 (around late April 2023), whereas you started *The Crown*’s third season about 14 days before finishing it (around 2023/05/14)."
+    },
+    {
+      "questionId": "e4e14d04",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You had been a member for about **two weeks**—roughly **14 days**. You joined around **May 7, 2023** (three weeks before May 28), and attended the meetup around **May 21, 2023** (“last week”)."
+    },
+    {
+      "questionId": "c9f37c46",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You had been watching stand-up comedy specials regularly for **about two months** when you attended the open mic night.\n\n- Started watching regularly: **about three months before 2023/05/20**, around **February 2023**\n- Attended open mic: **“last month,” around April 2023**\n- So at the open mic, it had been **about two months**."
+    },
+    {
+      "questionId": "gpt4_2c50253f",
+      "capability": "TR",
+      "correct": true,
+      "answer": "6:45 AM — 15 minutes earlier than the 7:00 AM wake-up time."
+    },
+    {
+      "questionId": "dcfa8644",
+      "capability": "TR",
+      "correct": true,
+      "answer": "14 days — the Adidas running shoes were bought on January 10, 2023, and the Converse shoelace broke on January 24, 2023."
+    },
+    {
+      "questionId": "gpt4_b4a80587",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The arrival of the new prime lens happened first. It was acquired “a month ago” relative to 2023/05/23, around **2023/04/23**, while the road trip to the coast happened “last week” relative to 2023/05/23, around **2023/05/16**."
+    },
+    {
+      "questionId": "gpt4_9a159967",
+      "capability": "TR",
+      "correct": true,
+      "answer": "United Airlines."
+    },
+    {
+      "questionId": "cc6d1ec1",
+      "capability": "TR",
+      "correct": true,
+      "answer": "About two months. (The workshop was about a month before 2023/05/21, around 2023/04/21, and you had been bird watching for about three months as of 2023/05/21.)"
+    },
+    {
+      "questionId": "gpt4_8c8961ae",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The solo trip to Thailand was first — “last year” resolves to 2022, before the Europe family trip, which was “last month” (April 2023)."
+    },
+    {
+      "questionId": "gpt4_d9af6064",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The new router first — it was obtained/set up on January 15th, before the smart thermostat was set up on February 10th."
+    },
+    {
+      "questionId": "gpt4_7de946e7",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The persistent cough came first. The cough had been ongoing for about three weeks as of 2023-02-28 (starting around 2023-02-07), while the skin tag removal was on 2023-02-22."
+    },
+    {
+      "questionId": "d01c6aa8",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You were about **27 years old** when you moved to the United States, based on being **32 years old** and having lived in the U.S. for the **past five years** as of **2023/05/27**."
+    },
+    {
+      "questionId": "993da5e2",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The new area rug was acquired about a month before 2023/05/26 (around 2023/04/26), and the living room furniture was rearranged three weeks before 2023/05/26 (around 2023/05/05). So the rug had been in use for about **one week (roughly 9 days)** when the furniture was rearranged."
+    },
+    {
+      "questionId": "a3045048",
+      "capability": "TR",
+      "correct": true,
+      "answer": "7 days before — ordered on April 15, 2022, for her best friend’s birthday party on April 22, 2022."
+    },
+    {
+      "questionId": "gpt4_d31cdae3",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The family road trip across the American Southwest came first. It was described as “a few years ago” relative to 2023/05/22, while the solo trip to Europe was described as “last summer,” i.e. summer 2022."
+    },
+    {
+      "questionId": "gpt4_cd90e484",
+      "capability": "TR",
+      "correct": true,
+      "answer": "2 weeks"
+    },
+    {
+      "questionId": "gpt4_88806d6e",
+      "capability": "TR",
+      "correct": true,
+      "answer": "Tom. You met Mark and Sarah on a beach trip about a month before 2023/05/28 (around late April 2023), while you met Tom “a few months ago,” which is earlier."
+    },
+    {
+      "questionId": "gpt4_4cd9eba1",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You had been accepted for **1 week** when you started attending the pre-departure orientation sessions: accepted on **March 20, 2023**, and attending since **March 27, 2023**."
+    },
+    {
+      "questionId": "gpt4_93f6379c",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You joined **“Page Turners” first**.\n\n- **Page Turners:** joined “last week,” resolved to the prior week before **2023/05/25** (**2023/05/15–2023/05/21**).\n- **Marketing Professionals:** joined “yesterday,” resolved to **2023/05/24**."
+    },
+    {
+      "questionId": "b29f3365",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You had been taking guitar lessons for about **4 weeks** when you bought the new guitar amp.\n\nUsing the 2023/05/25 date: you had been taking weekly lessons with Alex for **six weeks** as of that day, and you bought the amp **two weeks ago** from that same date. So at the time of purchase, you had been taking lessons for about **six weeks minus two weeks = four weeks**."
+    },
+    {
+      "questionId": "gpt4_2f56ae70",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You started using **Disney+** most recently — its free trial began **last month, in April 2023**."
+    },
+    {
+      "questionId": "6613b389",
+      "capability": "TR",
+      "correct": true,
+      "answer": "Rachel got engaged on **May 15, 2023**. Your anniversary is **July 22, 2023**. That is **2 months and 7 days before** your anniversary, or **about 2 months before**."
+    },
+    {
+      "questionId": "gpt4_78cf46a3",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The narrator received the new phone case first, around **2023/04/26** (“about a month ago”), before losing the phone charger around **2023/05/12** (“about two weeks ago”)."
+    },
+    {
+      "questionId": "gpt4_0a05b494",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You met the woman/jam maker at the farmer’s market first. The jam maker was met about **2023/05/13** (“two weeks ago on a Saturday morning” relative to 2023/05/23), while the tourist from Australia was met **2023/05/18** (“last Thursday”)."
+    },
+    {
+      "questionId": "gpt4_1a1dc16d",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The meeting with Rachel happened first: April 10, 2023, before the pride parade on May 1, 2023."
+    },
+    {
+      "questionId": "gpt4_2f584639",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The customized photo album for your mom was bought first: it was ordered two weeks before 2023-05-30, around **2023-05-16**, while the necklace for your sister was bought **last weekend** (the weekend of **2023-05-27/28**)."
+    },
+    {
+      "questionId": "gpt4_213fd887",
+      "capability": "TR",
+      "correct": true,
+      "answer": "You participated first in the **recreational volleyball league**. It began about **2 months before 2023/05/24**, around **2023/03/24**, while the charity 5K run was about **1 month before 2023/05/24**, around **2023/04/24**."
+    },
+    {
+      "questionId": "gpt4_5438fa52",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The start of your Spanish classes happened first: they had been ongoing for about three months as of 2023-05-27, so they began around 2023-02-27. The cultural festival was attended “yesterday,” on 2023-05-26."
+    },
+    {
+      "questionId": "gpt4_c27434e8",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The **Japanese Zero fighter plane model** was started first.\n\n- Japanese Zero: started “about a mon[th ago]” relative to **2023/05/29**, so approximately **late April 2023** (around **2023-04-29**).\n- Ferrari 288 GTO: started “about three weeks ago on a Sunday afternoon” relative to **2023/05/29**, so approximately **early May 2023** (around **2023-05-07/08**).\n\nTherefore, the **Japanese Zero fighter plane model** was started first."
+    },
+    {
+      "questionId": "gpt4_fe651585",
+      "capability": "TR",
+      "correct": true,
+      "answer": "Alex became a parent first: Alex adopted a baby girl in January 2023, while Rachel’s twins Jackson and Julia were born on February 12, 2023."
+    },
+    {
+      "questionId": "8c18457d",
+      "capability": "TR",
+      "correct": true,
+      "answer": "The gift for your brother’s graduation was dated **2023-03-08**, and the birthday gift for your best friend was dated **2023-03-15**.  \n\n**7 days** had passed between those two dates."
+    },
+    {
+      "questionId": "gpt4_70e84552_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "gpt4_93159ced_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "982b5123_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "c8090214_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "gpt4_c27434e8_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "gpt4_fe651585_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "6a1eabeb",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Based on the evidence, your personal best time in the charity 5K run was **25:50** (as stated in the most recent evidence on 2023/05/30). This is a later value than the earlier 27:12 mentioned on 2023/05/23."
+    },
+    {
+      "questionId": "6aeb4375",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Based on the evidence, the most recent statement is from [2023/09/30 (Sat) 15:06], where the user says: \"I've tried four different ones so far.\" Earlier, on [2023/08/11 (Fri) 09:09], the user said \"I've tried three different ones recently.\"\n\nSince the question asks how many Korean restaurants the user has tried (current/most recent value), the answer is:\n\n**Four**"
+    },
+    {
+      "questionId": "830ce83f",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Based on the evidence, Rachel moved to **Chicago** (mentioned on 2023/05/24), but later evidence from 2023/05/27 states she \"just moved back to the suburbs again.\" Since the question asks where she moved to after her recent relocation (most recent value), the answer is:\n\n**the suburbs**"
+    },
+    {
+      "questionId": "852ce960",
+      "capability": "KU",
+      "correct": false,
+      "answer": "Based on the evidence, you were pre-approved for **$350,000** from Wells Fargo (mentioned in the conversation dated 2023/08/11). \n\nNote: In a later message dated 2023/11/30, you mentioned being pre-approved for $400,000, but that appears to be a misremembering, as the assistant in that same exchange noted it had no record of the prior pre-approval. The documented pre-approval amount from Wells Fargo was $350,000."
+    },
+    {
+      "questionId": "945e3d21",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Three times a week"
+    },
+    {
+      "questionId": "d7c942c3",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Yes."
+    },
+    {
+      "questionId": "71315a70",
+      "capability": "KU",
+      "correct": true,
+      "answer": "10-12 hours"
+    },
+    {
+      "questionId": "89941a93",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Based on the evidence, you currently own **four bikes**.\n\n- In the 2023/02/22 conversation, you mentioned having **three bikes** (road, mountain, and commuter).\n- In the 2023/10/10 conversation, the assistant congratulates you on a **new hybrid bike** and notes that \"having four bikes will definitely add an extra layer of complexity to your trip.\"\n\nSince the question asks for the current/most recent value, the answer is **four**."
+    },
+    {
+      "questionId": "ce6d2d27",
+      "capability": "KU",
+      "correct": false,
+      "answer": "Thursday"
+    },
+    {
+      "questionId": "9ea5eabc",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Paris"
+    },
+    {
+      "questionId": "07741c44",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Under my bed"
+    },
+    {
+      "questionId": "a1eacc2a",
+      "capability": "KU",
+      "correct": true,
+      "answer": "7"
+    },
+    {
+      "questionId": "184da446",
+      "capability": "KU",
+      "correct": true,
+      "answer": "220 pages"
+    },
+    {
+      "questionId": "031748ae",
+      "capability": "KU",
+      "correct": true,
+      "answer": "When you just started your new role as Senior Software Engineer, you led a team of 4 engineers. Now, you lead a team of five engineers."
+    },
+    {
+      "questionId": "4d6b87c8",
+      "capability": "KU",
+      "correct": true,
+      "answer": "25"
+    },
+    {
+      "questionId": "0f05491a",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Based on the most recent evidence (2023/07/30), you need **120 stars** to reach the Gold level on your Starbucks Rewards app. (Earlier in the conversation, the assistant stated 300 stars, then 400 stars, then 125 stars, but the user corrected it to 120 stars in the latest exchange, which the assistant acknowledged.)"
+    },
+    {
+      "questionId": "08e075c7",
+      "capability": "KU",
+      "correct": true,
+      "answer": "9 months"
+    },
+    {
+      "questionId": "f9e8c073",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Based on the evidence, you attended **five sessions** of the bereavement support group. This is stated in the most recent evidence (2023/10/30), where you say: \"I remember attending five sessions and finding it really helpful in processing my emotions.\" An earlier message (2023/05/11) mentioned three sessions, but the later value is five."
+    },
+    {
+      "questionId": "41698283",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Based on the evidence, the most recent lens purchase mentioned is the **Canon EF 70-200mm f/2.8L IS III USM lens** (mentioned in evidence 11, dated 2023/05/19, and referenced again in evidence 14, dated 2023/08/30). Earlier, the user mentioned getting a new 50mm prime lens (evidence 2, dated 2023/03/11), but the 70-200mm is the more recent purchase."
+    },
+    {
+      "questionId": "2698e78f",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Based on the evidence, there are two different values stated for how often you see Dr. Smith:\n\n- In evidence [2023/04/03 (Mon) 14:18], you said: \"I have a therapy session with Dr. Smith coming up soon - it's every two weeks.\"\n- In evidence [2023/11/03 (Fri) 19:56], you said: \"speaking of boundaries, I see Dr. Smith every week.\"\n\nSince the question asks for the current/most recent value, the answer is: **Every week** (the earlier value was every two weeks)."
+    },
+    {
+      "questionId": "b6019101",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Based on the evidence, you mentioned watching **5 MCU films** in the last 3 months (stated on 2023/05/29). This is the most recent value, as an earlier message (2023/05/20) mentioned watching 4 MCU films in the last 3 months."
+    },
+    {
+      "questionId": "45dc21b6",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Based on the evidence, the most recent statement about how many of Emma's recipes the user has tried is in evidence 22 (dated 2023/05/30), where the user says: \"I've tried out 3 of Emma's recipes so far.\"\n\nEarlier, in evidence 9 (dated 2023/05/29), the user said they had \"already tried out two of them.\"\n\nSince the question asks for the current/most recent value, the answer is:\n\n**3**"
+    },
+    {
+      "questionId": "5a4f22c0",
+      "capability": "KU",
+      "correct": true,
+      "answer": "TechCorp"
+    },
+    {
+      "questionId": "6071bd76",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Based on the evidence, you switched to **less** water per tablespoon of coffee.\n\n- Earlier (2023/02/11): 1 tablespoon of coffee for every **6 ounces** of water.\n- Later (2023/06/30): 1 tablespoon of coffee for every **5 ounces** of water.\n\nSo the water amount decreased from 6 ounces to 5 ounces per tablespoon."
+    },
+    {
+      "questionId": "e493bb7c",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Based on the evidence, the painting \"Ethereal Dreams\" by Emma Taylor was first mentioned as hanging above the living room sofa (2023/07/11), but later the user states it was moved above their bed in the bedroom (2023/10/30). Since the question asks where it is **currently** hanging, the most recent value is:\n\n**Above the user's bed in their bedroom.**"
+    },
+    {
+      "questionId": "618f13b2",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Based on the evidence, you have worn your new black Converse Chuck Taylor All Star sneakers **six times**.\n\nThe evidence shows an earlier mention of wearing them \"four times already\" (2023/05/30 22:16), which was later updated to \"six times now\" (2023/05/30 17:45). Since the question asks for the current/most recent value, the answer is six times."
+    },
+    {
+      "questionId": "72e3ee87",
+      "capability": "KU",
+      "correct": true,
+      "answer": "50 episodes"
+    },
+    {
+      "questionId": "c4ea545c",
+      "capability": "KU",
+      "correct": false,
+      "answer": null
+    },
+    {
+      "questionId": "01493427",
+      "capability": "KU",
+      "correct": true,
+      "answer": "25"
+    },
+    {
+      "questionId": "6a27ffc2",
+      "capability": "KU",
+      "correct": true,
+      "answer": "The most recent evidence (2023/05/26) states the user has completed **30 videos** of Corey Schafer's Python series. Earlier evidence (2023/05/24) mentioned 20 videos, but that was later updated to 30."
+    },
+    {
+      "questionId": "2133c1b5",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Based on the evidence, you mentioned living in Harajuku for **3 months** in the most recent relevant statement [2023/10/15 (Sun) 20:50], where you said: \"I've been living in Harajuku for 3 months now.\" An earlier statement [2023/04/11 (Tue) 08:03] said it had been \"a month now,\" but the later value is 3 months."
+    },
+    {
+      "questionId": "18bc8abd",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Kansas City Masterpiece BBQ sauce"
+    },
+    {
+      "questionId": "db467c8c",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Nine months"
+    },
+    {
+      "questionId": "7a87bd0c",
+      "capability": "KU",
+      "correct": true,
+      "answer": "4 weeks"
+    },
+    {
+      "questionId": "e61a7584",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Based on the evidence, you stated on 2023/11/30 that you've had Luna for about 9 months. Earlier, on 2023/08/11, you said you'd had her for about 6 months. Since the question asks how long you have had her (current/most recent), the answer is:\n\nAbout 9 months."
+    },
+    {
+      "questionId": "1cea1afa",
+      "capability": "KU",
+      "correct": true,
+      "answer": "600"
+    },
+    {
+      "questionId": "ed4ddc30",
+      "capability": "KU",
+      "correct": true,
+      "answer": "20 dozen"
+    },
+    {
+      "questionId": "8fb83627",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Based on the evidence, the most recent statement about the number of National Geographic issues finished is from [2023/07/15 (Sat) 22:42], where the user says: \"I've finished five issues so far.\" Earlier, on [2023/04/20 (Thu) 21:08], the user had said they finished three issues and were on their fourth. Since the question asks for the current/most recent value, the answer is:\n\n**Five issues**"
+    },
+    {
+      "questionId": "b01defab",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Yes."
+    },
+    {
+      "questionId": "22d2cb42",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Based on the evidence, you got your guitar serviced at the music shop on Main St called \"Rhythm Central.\" In evidence 13, you mention your friend told you about \"Rhythm Central\" on Main St having a good reputation for guitar servicing. In evidence 20, you refer to \"the music shop on Main St where I got my guitar serviced.\""
+    },
+    {
+      "questionId": "0e4e4c46",
+      "capability": "KU",
+      "correct": true,
+      "answer": "132 points"
+    },
+    {
+      "questionId": "4b24c848",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Based on the evidence, the most recent statement about how many tops you've bought from H&M is from [2023/09/30 (Sat) 06:40], where you said: \"I've already got five tops from H&M so far.\" Earlier, on [2023/08/11 (Fri) 03:18], you had said you'd \"already bought three tops from H&M.\"\n\nSince the question asks how many tops you have bought \"so far\" (current/most recent value), the answer is:\n\n**Five tops.**"
+    },
+    {
+      "questionId": "7e974930",
+      "capability": "KU",
+      "correct": true,
+      "answer": "$420"
+    },
+    {
+      "questionId": "603deb26",
+      "capability": "KU",
+      "correct": true,
+      "answer": "10 times"
+    },
+    {
+      "questionId": "59524333",
+      "capability": "KU",
+      "correct": true,
+      "answer": "6:00 pm"
+    },
+    {
+      "questionId": "5831f84d",
+      "capability": "KU",
+      "correct": true,
+      "answer": "15"
+    },
+    {
+      "questionId": "eace081b",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Oahu"
+    },
+    {
+      "questionId": "affe2881",
+      "capability": "KU",
+      "correct": true,
+      "answer": "32"
+    },
+    {
+      "questionId": "50635ada",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Based on the evidence, the user's previous frequent flyer status before Premier Gold was **Premier Silver** (mentioned on 2022/09/16, when they hit 20,000 miles). They later reached Premier Gold status (mentioned on 2023/05/30)."
+    },
+    {
+      "questionId": "e66b632c",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Based on the evidence, your previous personal best time for the charity 5K run was **27 minutes and 45 seconds** (stated on 2023/04/11). This was later updated to **26 minutes and 30 seconds** (stated on 2023/07/30). Since the question asks for the *previous* personal best time, the answer is:\n\n**27 minutes and 45 seconds**"
+    },
+    {
+      "questionId": "0ddfec37",
+      "capability": "KU",
+      "correct": true,
+      "answer": "15"
+    },
+    {
+      "questionId": "f685340e",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Based on the evidence:\n\n- **Previously:** In the conversation dated 2023/03/11, the user mentions \"my own weekly tennis sessions with friends,\" and later says \"I'm planning to play tennis with my friends this Sunday at the local park.\" This indicates weekly play.\n\n- **Now (most recent):** In the conversation dated 2023/07/30, the user says \"I'm planning to play tennis with my friends at the local park this Sunday, like we do every other week.\" This indicates every other week.\n\n**Answer:** Previously, I played tennis with my friends weekly (every week). Now, I play every other week."
+    },
+    {
+      "questionId": "cc5ded98",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Based on the evidence, you initially dedicated about **one hour** each day to coding exercises (mentioned on 2023/05/20). Later, on 2023/05/29, you stated you had been dedicating about **two hours** each day. Since the question asks about your current/most recent practice, the answer is:\n\n**Two hours each day.**"
+    },
+    {
+      "questionId": "dfde3500",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Wednesday"
+    },
+    {
+      "questionId": "69fee5aa",
+      "capability": "KU",
+      "correct": false,
+      "answer": "37"
+    },
+    {
+      "questionId": "7401057b",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Based on the evidence, the user states on 2023/05/30: \"I've accumulated enough points for two free night's stays at any Hilton property.\" This is the most recent statement of the value (earlier, on 2023/05/29, the user said they had enough for a single free night's stay).\n\n**Two free night's stays.**"
+    },
+    {
+      "questionId": "cf22b7bf",
+      "capability": "KU",
+      "correct": true,
+      "answer": "10 pounds"
+    },
+    {
+      "questionId": "a2f3aa27",
+      "capability": "KU",
+      "correct": true,
+      "answer": "1250 followers (as stated on 2023/05/25); later that same day you mentioned you thought you were close to 1300, but that was not confirmed."
+    },
+    {
+      "questionId": "c7dc5443",
+      "capability": "KU",
+      "correct": true,
+      "answer": "The evidence shows two records for the recreational volleyball league:\n\n- On 2023/06/16, the user said the team was **3-2**.\n- On 2023/06/30, the user said the team (the Net Ninjas) was doing well with a **5-2** record.\n\nSince the question asks for the current record, the most recent value is **5-2**."
+    },
+    {
+      "questionId": "06db6396",
+      "capability": "KU",
+      "correct": true,
+      "answer": "5"
+    },
+    {
+      "questionId": "3ba21379",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Ford F-150 pickup truck"
+    },
+    {
+      "questionId": "9bbe84a2",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Level 100"
+    },
+    {
+      "questionId": "10e09553",
+      "capability": "KU",
+      "correct": true,
+      "answer": "7"
+    },
+    {
+      "questionId": "dad224aa",
+      "capability": "KU",
+      "correct": true,
+      "answer": "7:30 am"
+    },
+    {
+      "questionId": "ba61f0b9",
+      "capability": "KU",
+      "correct": true,
+      "answer": "6"
+    },
+    {
+      "questionId": "42ec0761",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Yes, you have a spare screwdriver. In the evidence dated 2023/08/15, you said: \"I actually have a spare screwdriver that I picked up when I organized my computer desk a while back, so I'm all set there.\""
+    },
+    {
+      "questionId": "5c40ec5b",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Based on the evidence, you have met up with Alex from Germany **twice**.\n\n- In the [2023/09/30] user message (evidence 14), you state: \"we've met up twice already.\"\n- In the [2023/09/30] user message (evidence 17), you state: \"we've met up twice before.\"\n\nThe latest evidence consistent with the question states twice."
+    },
+    {
+      "questionId": "c6853660",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Based on the evidence, the most recent change to the morning coffee limit was an **increase** — from one cup to two cups.\n\n- On 2023/05/25, the user said they had \"cut back to just one cup in the morning.\"\n- On 2023/05/26, the user said, \"I'm thinking of changing my morning coffee limit to two cups,\" and later confirmed, \"I have increased the limit to two cups.\"\n\nSo the most recent change was an **increase**."
+    },
+    {
+      "questionId": "26bdc477",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Five trips"
+    },
+    {
+      "questionId": "0977f2af",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Based on the evidence, before getting the Air Fryer, you invested in an **Instant Pot**. This is mentioned in the user's message on 2023/05/21: \"I'm actually thinking of using my new Instant Pot to make some of these soups and stews.\" The Air Fryer is mentioned later that same day: \"I'm actually thinking of using the Air Fryer I got yesterday.\""
+    },
+    {
+      "questionId": "6aeb4375_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "031748ae_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "2698e78f_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "2133c1b5_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "0ddfec37_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "f685340e_abs",
+      "capability": "ABS",
+      "correct": true,
+      "answer": null
+    },
+    {
+      "questionId": "89941a94",
+      "capability": "KU",
+      "correct": true,
+      "answer": "Yes. Before the gravel bike, in addition to the mountain bike and commuter bike, you had a road bike. Evidence 3 says you had a road bike along with your mountain bike and commuter bike, and evidence 5 says you currently had three bikes: road, mountain, and commuter."
+    },
+    {
+      "questionId": "07741c45",
+      "capability": "KU",
+      "correct": false,
+      "answer": "Under my bed"
+    },
+    {
+      "questionId": "7161e7e2",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Based on the evidence in turn 11, Admon was assigned to the **8 am - 4 pm (Day Shift)** on Sunday."
+    },
+    {
+      "questionId": "c4f10528",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Miss Bee Providore"
+    },
+    {
+      "questionId": "89527b6b",
+      "capability": "IE",
+      "correct": true,
+      "answer": "blue"
+    },
+    {
+      "questionId": "e9327a54",
+      "capability": "IE",
+      "correct": true,
+      "answer": "The Sugar Factory"
+    },
+    {
+      "questionId": "4c36ccef",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Roscioli"
+    },
+    {
+      "questionId": "6ae235be",
+      "capability": "IE",
+      "correct": true,
+      "answer": "The Lake Charles Refinery uses atmospheric distillation, fluid catalytic cracking (FCC), alkylation, and hydrotreating."
+    },
+    {
+      "questionId": "7e00a6cb",
+      "capability": "IE",
+      "correct": true,
+      "answer": "International Budget Hostel"
+    },
+    {
+      "questionId": "1903aded",
+      "capability": "IE",
+      "correct": false,
+      "answer": "The evidence does not contain a list of work-from-home jobs for seniors, so the 7th job cannot be identified."
+    },
+    {
+      "questionId": "ceb54acb",
+      "capability": "IE",
+      "correct": true,
+      "answer": "The other four options were: sexual fixations, problematic sexual behaviors, sexual impulsivity, and compulsive sexuality."
+    },
+    {
+      "questionId": "f523d9fe",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Doc Martin"
+    },
+    {
+      "questionId": "0e5e2d1a",
+      "capability": "IE",
+      "correct": true,
+      "answer": "38 subjects"
+    },
+    {
+      "questionId": "fea54f57",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Evolution"
+    },
+    {
+      "questionId": "cc539528",
+      "capability": "IE",
+      "correct": true,
+      "answer": "The back-end programming languages recommended were Ruby, Python, or PHP."
+    },
+    {
+      "questionId": "dc439ea3",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Hoop Dance"
+    },
+    {
+      "questionId": "18dcd5a5",
+      "capability": "IE",
+      "correct": true,
+      "answer": "4"
+    },
+    {
+      "questionId": "488d3006",
+      "capability": "IE",
+      "correct": true,
+      "answer": "GR-90"
+    },
+    {
+      "questionId": "58470ed2",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Borges said, \"The Library is a sphere whose exact center is any one of its hexagons and whose circumference is inaccessible.\""
+    },
+    {
+      "questionId": "8cf51dda",
+      "capability": "IE",
+      "correct": true,
+      "answer": "The three objectives outlined were:\n\n1. To identify molecular subtypes of endometrial cancer using a combination of genomic and transcriptomic approaches.\n2. To investigate the clinical and biological significance of the identified molecular subtypes, including their association with patient outcomes and response to therapy.\n3. To develop biomarkers for the early detection and prognosis of endometrial cancer based on the identified molecular subtypes."
+    },
+    {
+      "questionId": "1d4da289",
+      "capability": "IE",
+      "correct": true,
+      "answer": "The assistant mentioned two-factor authentication methods such as biometric authentication or one-time passwords (OTP)."
+    },
+    {
+      "questionId": "8464fc84",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Roscioli"
+    },
+    {
+      "questionId": "8aef76bc",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Mod Podge or another sealant"
+    },
+    {
+      "questionId": "71a3fd6b",
+      "capability": "IE",
+      "correct": true,
+      "answer": "+49 (0) 62 32 / 14 23 - 0"
+    },
+    {
+      "questionId": "2bf43736",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Chapter 4 of Book 1, titled \"Vocal Prayer and Meditation.\""
+    },
+    {
+      "questionId": "70b3e69b",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Manolo García"
+    },
+    {
+      "questionId": "8752c811",
+      "capability": "IE",
+      "correct": false,
+      "answer": "27. Soliloquy (e.g., dramatic, introspective, etc.)"
+    },
+    {
+      "questionId": "3249768e",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Absinthe"
+    },
+    {
+      "questionId": "1b9b7252",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Mindful.org"
+    },
+    {
+      "questionId": "1568498a",
+      "capability": "IE",
+      "correct": true,
+      "answer": "28. Kg3"
+    },
+    {
+      "questionId": "6222b6eb",
+      "capability": "IE",
+      "correct": true,
+      "answer": "6S is implemented in the SIAC/_GEE tool."
+    },
+    {
+      "questionId": "e8a79c70",
+      "capability": "IE",
+      "correct": true,
+      "answer": "2-3 eggs"
+    },
+    {
+      "questionId": "d596882b",
+      "capability": "IE",
+      "correct": true,
+      "answer": "By Chloe"
+    },
+    {
+      "questionId": "e3fc4d6e",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Dr. Arati Prabhakar"
+    },
+    {
+      "questionId": "51b23612",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Nu, pogodi!"
+    },
+    {
+      "questionId": "3e321797",
+      "capability": "IE",
+      "correct": true,
+      "answer": "10 minutes"
+    },
+    {
+      "questionId": "e982271f",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Revolution Hall"
+    },
+    {
+      "questionId": "352ab8bd",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Approximately 20%."
+    },
+    {
+      "questionId": "fca762bc",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Memrise"
+    },
+    {
+      "questionId": "7a8d0b71",
+      "capability": "IE",
+      "correct": true,
+      "answer": "$2,000"
+    },
+    {
+      "questionId": "a40e080f",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Patagonia and Southwest Airlines"
+    },
+    {
+      "questionId": "8b9d4367",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Jaipur Rugs"
+    },
+    {
+      "questionId": "5809eb10",
+      "capability": "IE",
+      "correct": true,
+      "answer": "2014"
+    },
+    {
+      "questionId": "41275add",
+      "capability": "IE",
+      "correct": true,
+      "answer": "The Mayo Clinic video recommended was \"How to Sit Properly at a Desk to Avoid Back Pain\": <https://www.youtube.com/watch?v=UfOvNlX9Hh0>"
+    },
+    {
+      "questionId": "4388e9dd",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Andy was wearing an untidy, stained white shirt."
+    },
+    {
+      "questionId": "4baee567",
+      "capability": "IE",
+      "correct": true,
+      "answer": "12"
+    },
+    {
+      "questionId": "561fabcd",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Fissionator"
+    },
+    {
+      "questionId": "b759caee",
+      "capability": "IE",
+      "correct": true,
+      "answer": "@jessica/_poole/_jewellery"
+    },
+    {
+      "questionId": "ac031881",
+      "capability": "IE",
+      "correct": true,
+      "answer": "LIV"
+    },
+    {
+      "questionId": "28bcfaac",
+      "capability": "IE",
+      "correct": true,
+      "answer": "MusicTheory.net"
+    },
+    {
+      "questionId": "16c90bf4",
+      "capability": "IE",
+      "correct": true,
+      "answer": "A pilsner or lager would work well."
+    },
+    {
+      "questionId": "c8f1aeed",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Pennsylvania"
+    },
+    {
+      "questionId": "eaca4986",
+      "capability": "IE",
+      "correct": true,
+      "answer": "C D E F G A B A G F E D C"
+    },
+    {
+      "questionId": "c7cf7dfd",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Nostalgia"
+    },
+    {
+      "questionId": "e48988bc",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Patagonia"
+    },
+    {
+      "questionId": "1de5cff2",
+      "capability": "IE",
+      "correct": true,
+      "answer": "Veja"
+    },
+    {
+      "questionId": "65240037",
+      "capability": "IE",
+      "correct": true,
+      "answer": "The recommended ratio is 1:10 (a few drops of tea tree oil mixed with a carrier oil such as coconut oil, jojoba oil, or almond oil)."
+    },
+    {
+      "questionId": "778164c6",
+      "capability": "IE",
+      "correct": false,
+      "answer": null
+    }
+  ]
+}
