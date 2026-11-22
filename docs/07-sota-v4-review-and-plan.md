@@ -3643,7 +3643,7 @@ timeline: 30 dozen [2023/03/12 -> now]
 
 ### 39.4 三张图，因为三个单位不能同轴
 
-`docs/figures/` 新建，数据是 `landscape.json`（每行带宽口径与来源），渲染是 `tools/render-landscape.py`。
+`docs/figures/` 新建，数据是 `landscape.json`（每行带宽口径与来源），渲染是 `docs/figures/plot-landscape.py`。
 
 | 图 | 读者拿它做什么 |
 | --- | --- |

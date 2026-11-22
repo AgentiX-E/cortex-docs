@@ -1,12 +1,16 @@
 # Figures
 
-Three figures, one data file, one renderer. Every number in the pictures comes from `landscape.json`, which
-carries a `source` and a measurement unit per row — the point of drawing them at all is that a reader can go
-back and check.
+Five figures, two data files, one renderer. Every number in the pictures comes from `landscape.json` or
+`matched-model.json`, which carry a `source` and a measurement unit per row — the point of drawing them at all is
+that a reader can go back and check.
 
 ```bash
-python3 tools/render-landscape.py          # rewrites all three into this directory
+python3 docs/figures/plot-landscape.py     # rewrites all five into this directory
 ```
+
+`landscape.json` holds published rows: a vendor's or a paper's own figure under its own answer model. `matched-model.json`
+holds the rows this repository measured itself, one dispatch per system, and is kept separate on purpose — mixing the
+two in one file would make a figure caption have to explain which half of a plotted point came from whom.
 
 ## Why three and not one
 
@@ -33,6 +37,7 @@ document that discusses it says so in words.
 | `fig-longmemeval-accuracy-ranking.png` | accuracy, grouped by answering reader | the same memory system spans 90.2 to 98.4 as the reader changes |
 | `fig-longmemeval-cost-per-query.png` | tokens per query | "most accurate" and "cheapest" are different winners, and cortex is neither |
 | `fig-longmemeval-room-axis.png` | room (characters) × `MR` accuracy, and room × prompt tokens per question | the room axis of the registered arm: 16 short questions become 1, accuracy moves 0.4 points, tokens move 21% |
+| `fig-longmemeval-matched-model.png` | prompt tokens the system caused to be read (log) × accuracy | the three competitors as **this repository** measured them: one model for the system and the reader, one judge, one sample. Drawn from `matched-model.json`, whose rows carry `n` — two of them are n=2 |
 
 ## Three rules the renderer follows, and the defects behind them
 

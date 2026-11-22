@@ -1499,7 +1499,7 @@ Step 1 — Enumerate every item matching the question's EXACT action, one per li
 
 #### 1.22.0 三张图：位置、排行、成本
 
-本节的三张图由 `tools/render-landscape.py` 从 `docs/figures/landscape.json` 渲染，每一行数据带自己的来源
+本节的三张图由 `docs/figures/plot-landscape.py` 从 `docs/figures/landscape.json` 渲染，每一行数据带自己的来源
 与口径（见 `docs/figures/README.md`）。它们回答三个不同的问题，因此是三张而不是一张：
 
 | 图 | 轴 | 它回答什么 |

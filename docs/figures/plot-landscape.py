@@ -37,6 +37,8 @@ import matplotlib.pyplot as plt  # noqa: E402  (backend must be chosen before py
 
 HERE = Path(__file__).resolve().parent
 LANDSCAPE = HERE / 'landscape.json'
+#: The matched-model runs: same harness, same reader id, same judge, one dispatch per system.
+MATCHED = HERE / 'matched-model.json'
 
 #: The two classes the reader needs separated, and the colour each one gets.
 #:
@@ -47,6 +49,7 @@ TYPE_COLOUR = {
     'open-source': '#1f6fb4',
     'closed-cloud': '#c0392b',
     'unstated': '#7f8c8d',
+    'cortex': '#d4ac0d',
 }
 TYPE_MARKER = {
     'open-source': 'o',
@@ -318,6 +321,96 @@ def plot_claim_vs_measurement(data: dict, out: Path) -> None:
     plt.close(fig)
 
 
+def plot_matched_model(_data: dict, out: Path) -> None:
+    """The competitors as *this repository* measured them, on one model, one judge and one sample.
+
+    Every other figure here compares published numbers, and a published number is a claim about a system plus a
+    reader plus a judge. This panel removes two of the three: the system is the same binary, the model is
+    `deepseek-chat` for both the system's own calls and the reader, and the judge and sample are one run's. What is
+    left is the mechanism's price, which is the only axis a copy/don't-copy decision can use.
+
+    The two coordinates are (prompt tokens the system caused to be read, accuracy). The token axis is the *system*
+    total: what the reader read plus what the system spent producing it. For Mem0 those two halves differ by three
+    orders of magnitude -- 359 tokens handed over, 577k spent extracting -- and a panel that plotted only the first
+    would place the most expensive arm here at the cheap end of the axis, which is also exactly how a vendor's
+    "context per question" figure reads.
+    """
+    data = json.loads(MATCHED.read_text(encoding='utf-8'))
+    fig, ax = plt.subplots(figsize=(11, 7))
+
+    cortex_arm = next(row for row in data['rows'] if row['system'] == 'cortex-session')
+    # The reference arm's two coordinates as a crosshair, because every claim on this panel is relative to it: below
+    # the horizontal line is less accurate than Cortex's own window, to the right of the vertical one costs more.
+    ax.axhline(cortex_arm['accuracy'], color='#7f8c8d', linestyle='--', linewidth=1)
+    ax.axvline(cortex_arm['promptTokensPerQuestion'], color='#7f8c8d', linestyle='--', linewidth=1)
+    ax.text(
+        cortex_arm['promptTokensPerQuestion'] * 1.06,
+        50.2,
+        f"cortex-session budget: {cortex_arm['promptTokensPerQuestion']:,} tok/q",
+        fontsize=8,
+        color='#5d6d7e',
+        rotation=90,
+        va='bottom',
+    )
+
+    for index, row in enumerate(data['rows']):
+        filled = row['answerer'] == 'self'
+        ax.scatter(
+            row['promptTokensPerQuestion'],
+            row['accuracy'],
+            s=260 if row['type'] == 'cortex' else 200,
+            marker='*' if filled else 'o',
+            color=TYPE_COLOUR.get(row['type'], '#7f8c8d'),
+            edgecolors='black',
+            linewidths=1.2,
+            zorder=4,
+        )
+        # Two rows share one accuracy (the n=2 pair sits at 50%), and a fixed offset over one of them printed both
+        # labels on the same line. Alternating the vertical offset by position within the tie is what keeps the
+        # labels attached to their own point.
+        tied = [other for other in data['rows'] if other['accuracy'] == row['accuracy']]
+        offset = 18 if len(tied) == 1 or tied.index(row) % 2 == 0 else -30
+        ax.annotate(
+            f"{row['system']}\n{row['accuracy']:.1f}% @ {row['promptTokensPerQuestion'] / 1000:,.0f}k tok/q (n={row['n']})",
+            (row['promptTokensPerQuestion'], row['accuracy']),
+            textcoords='offset points',
+            xytext=(0, offset),
+            ha='center',
+            fontsize=8.2,
+            zorder=5,
+        )
+
+    ax.set_xscale('log')
+    ax.set_xlim(1_500, 4_000_000)
+    ax.set_ylim(44, 78)
+    # Plain numbers on a log axis: `10^5` makes a reader convert, and the whole point of this panel is that the
+    # ratios between the coordinates are the finding.
+    ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda value, _pos: f'{value:,.0f}'))
+    ax.set_xlabel('prompt tokens the system caused to be read, per question (log)', fontsize=10)
+    ax.set_ylabel('accuracy under one shared judge (%)', fontsize=10)
+    ax.grid(alpha=0.25, linestyle=':', which='both')
+    ax.set_title(
+        'The same three systems, measured by this repository on one model\n'
+        'star = answers on its own generator, circle = retrieved context read by the shared reader',
+        fontsize=11,
+    )
+    ax.text(
+        0.99,
+        0.02,
+        'n=30 for mastra and the two Cortex arms; n=2 for mem0 and memcog.\n'
+        'Not the 500-question leaderboard: these rows price a mechanism, they do not rank a system.',
+        transform=ax.transAxes,
+        ha='right',
+        va='bottom',
+        fontsize=7.6,
+        color='#5d6d7e',
+        bbox={'boxstyle': 'round,pad=0.4', 'facecolor': 'white', 'edgecolor': '#d5dbdb', 'alpha': 0.9},
+    )
+    fig.tight_layout()
+    fig.savefig(out, dpi=160)
+    plt.close(fig)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--check', action='store_true', help='exit 1 if a figure would change')
@@ -329,6 +422,7 @@ def main(argv: list[str] | None = None) -> int:
         args.out_dir / 'fig-longmemeval-accuracy-vs-cost.png': plot_accuracy_vs_cost,
         args.out_dir / 'fig-longmemeval-accuracy-ranking.png': plot_ranking,
         args.out_dir / 'fig-longmemeval-claim-vs-measurement.png': plot_claim_vs_measurement,
+        args.out_dir / 'fig-longmemeval-matched-model.png': plot_matched_model,
     }
     return _render(data, targets, check=args.check)
 
