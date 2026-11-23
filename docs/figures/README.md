@@ -37,6 +37,7 @@ document that discusses it says so in words.
 | `fig-longmemeval-accuracy-ranking.png` | accuracy, grouped by answering reader | the same memory system spans 90.2 to 98.4 as the reader changes |
 | `fig-longmemeval-cost-per-query.png` | tokens per query | "most accurate" and "cheapest" are different winners, and cortex is neither |
 | `fig-longmemeval-room-axis.png` | room (characters) × `MR` accuracy, and room × prompt tokens per question | the room axis of the registered arm: 16 short questions become 1, accuracy moves 0.4 points, tokens move 21% |
+| `fig-longmemeval-same-ruler.png` | left: tokens per query (log) × accuracy, with the re-graded point beside its published one; right: the gap decomposed by what each reading holds fixed | **the gap after the judge is held fixed**: their 500 answers under this repository's judge read 95.80% against their published 95.60% (`p = 1.0000`), so the instrument is not the difference and the remaining −4.60 points (`p = 0.0018`) is. Drawn from `landscape.json` plus the dispatch in `PREREGISTRATION-COMPETITOR-REGRADE.md` §10 |
 | `fig-longmemeval-matched-model.png` | prompt tokens the system caused to be read (log) × accuracy | the three competitors as **this repository** measured them: one model for the system and the reader, one judge, one sample. Drawn from `matched-model.json`, whose rows carry `n` — two of them are n=2 |
 
 ## Three rules the renderer follows, and the defects behind them

@@ -2,7 +2,7 @@
  "dataset": "LongMemEval-S",
  "questions": 500,
  "asOf": "2026-11-20",
- "note": "Every competitor row is that vendor or paper’s own published figure under its own answer model and judge; only the cortex row is measured by this repository, and its two coordinates come from one artifact (`costEfficiency.accuracy` 0.9125 and `.promptTokensPerQuestion` 7447.783, run 44017278305). Rows without a token count did not publish one. Self-reported accuracy is not comparable across rows -- the answer model alone moves Mastra from 84.23 to 94.87 -- which is why the cost axis is plotted rather than trusted alone. Re-checked 2026-11-20.",
+ "note": "Every competitor row is that vendor or paper’s own published figure under its own answer model and judge; only the cortex row is measured by this repository, and its two coordinates come from one artifact (`feature.metrics.correct` 456 of 500 and `.promptTokensPerQuestion` 7447.783, run 44017278305). The accuracy is the per-question count and **not** `costEfficiency.accuracy` 0.9125: that field divides 1,825 correct verdicts by 2,000 (four passes), while every competitor row here is a single pass over 500 questions (§172.5). Rows without a token count did not publish one. Self-reported accuracy is not comparable across rows -- the answer model alone moves Mastra from 84.23 to 94.87 -- which is why the cost axis is plotted rather than trusted alone. Re-checked 2026-11-20.",
  "overall": [
   {
    "system": "Recallium",
@@ -37,7 +37,7 @@
    "accuracy": 95.6,
    "type": "closed-cloud",
    "tokensPerQuery": 7400,
-   "source": "vendor page 2026-10-28, 478/500, per-question run data public (05-competitor-analysis.md 1.22.2)",
+   "source": "vendor page 2026-10-28, 478/500, per-question run data public (05-competitor-analysis.md 1.22.2); re-graded 2026-11-23 under this repository's judge (deepseek-chat, official per-question-type prompts): 479/500 = 95.80%, +0.20 points against the published 95.60%, p = 1.0000 -- the instrument is not the difference (docs/PREREGISTRATION-COMPETITOR-REGRADE.md section 10)",
    "costNote": "memory tokens / question"
   },
   {
@@ -106,10 +106,10 @@
   {
    "system": "cortex",
    "reader": "DeepSeek (deepseek-chat)",
-   "accuracy": 91.25,
+   "accuracy": 91.2,
    "type": "open-source",
    "tokensPerQuery": 7448,
-   "source": "run 44017278305 (`S16`), 500 questions x 4 passes, official judge prompts, registered configuration; accuracy is `costEfficiency.accuracy` 0.9125 and the cost is `costEfficiency.promptTokensPerQuestion` 7447.783 -- one run, one pair",
+   "source": "run 44017278305 (`S16`), 500 questions, official judge prompts, registered configuration; accuracy is `feature.metrics.correct` 456/500 -- a single pass over 500 questions, the denominator every competitor row here uses -- and the cost is `costEfficiency.promptTokensPerQuestion` 7447.783. `costEfficiency.accuracy` 0.9125 is 1,825/2,000 over four passes and is not the comparable figure",
    "costNote": "prompt tokens per question, from the same artifact as the accuracy"
   },
   {
@@ -234,9 +234,9 @@
    },
    {
     "system": "cortex",
-    "claim": 91.25,
+    "claim": 91.2,
     "measured": [],
-    "claimSource": "this repository, 500 questions, DeepSeek reader + LLM judge",
+    "claimSource": "this repository, 500 questions, DeepSeek reader + LLM judge; 456/500 per question",
     "note": "no independent re-run exists; the claim is ours and the harness is ours"
    }
   ]
