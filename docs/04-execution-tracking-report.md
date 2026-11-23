@@ -32960,3 +32960,89 @@ Chromium 报 0"。理由写在探针头注释里：**一条随构建翻转的检
    46 个手册示例全部直读工具输出。方向正确：本轮**没有新增任何产品承诺**，只把既有能力在另一个
    分区里量了一遍，并把用户手册缺的那一段补上。机制正确：声明的分区性由两个方向共同证明（同名池
    两个 context 都 acquire；同一 context 第二个标签被拒），任一方向单独成立都不够。
+
+---
+
+## §169 清单上最后两项的前提，一项被代码否掉、一项被网络挡住
+
+> 本轮读物：`packages/cortex-memory/src/semantic-facts.ts:394`、`memory.ts:2524`、
+> `packages/cortex-eval/src/bench-memory-arm.ts:6067`，以及 GitHub API 上
+> `maximem-ai/eval_benchmark_runs_output` 的目录与 manifest。**零模型调用。**
+
+### 169.1 一句话
+
+`H2`/`factTimeline` 的 6% 触达**不是缺陷，是评测集构造的产物**——所以它的正确定价不是"在 LongMemEval
+上派发 ¥11"，而是"随一个语料连续的评测集一起做"；而 ③ 的"重判不重跑"前提**在源端成立、在沙箱里取不动**，
+需要一次 Runner 取数。
+
+### 169.2 6% 是写进代码的设计，不是量出来的意外
+
+`updateAppliesTo` 的判据是**锚句子串**，不是相似度：
+
+```ts
+export function updateAppliesTo(update: SemanticUpdate, contents: readonly string[]): boolean {
+  return contents.some((content) => content.includes(update.anchor));
+}
+```
+
+它的 docblock 把理由写死了：*"a softer test would let an update about one corpus reach a question about
+another — which on a benchmark is exactly a cross-question leak."* 而 `#updatesFor` 的两道门（开关 +
+锚点）之后紧跟一句判断：
+
+> a benchmark whose questions each bring their own corpus reaches nothing, **by construction rather than
+> by a hope about the data**.
+
+也就是说：LongMemEval 每题自带语料，所以"上一题学到的事实"在下一题里**按设计**不该出现——出现才是串题。
+6%（144 题里 27 个窗口、5 个单元）不是机制没生效，而是**机制正确地没生效**，剩下的 27 个是语料里真的
+有重复锚句的那部分。
+
+### 169.3 触达有一个正式读数，不是文档里的手算
+
+自我审查时确认了这条链没有断：
+
+| 环节 | 位置 |
+| --- | --- |
+| 产品侧计数 | `CortexMemory.semanticCarryCensus()`（`memory.ts:1374`），`matched` = "窗口仍携带被授权的记录"的题数 |
+| 评估侧读取 | `bench-memory-arm.ts:6067` 通过可选方法读它，缺失则字段不出现在产物里 |
+| 报告侧落盘 | `report.ts:1607` 把六个计数写进 arm 产物 |
+
+所以"6%"可以由产物复算，而不是由谁记得。这一点值得单独写，因为 §164.4 里那个 8.33 点的分母
+（"人群的 6%"）正是这条链的输出。
+
+### 169.4 8.33 点是替换值，不是期望
+
+`MEASURE-FAILURE-STABILITY.md` §4 的 8.33 点是**六个替换值**换在 27 个窗口上的分数，它的分母是
+**已经触达的窗口**；把 8.33 当成 headline 期望，等于把"触达率 6%"和"命中率 100%"乘错。若在
+LongMemEval 上派发 H2，能移动的上界是 `8.33 × 6%` 这个量级，落在 ±3.21 点判官带里。
+
+**复活的正确条件**：不是"再派发一次"，而是**换一个语料连续的评测集**。LoCoMo 正是这种构造（同一对
+说话人、多 session、事实会跨会话更新），在它上面 `updateAppliesTo` 的触达会由构造从 6% 抬到另一个
+量级——那时 H2 的消融才有分母。所以 H2 与 LoCoMo 接入是**同一件事的两个半**，不该分开报价。
+
+### 169.5 ③ 的前提：源端有，沙箱取不动
+
+上一节说"③ 保留，regrade 不 rerun ≈¥1–2"。本轮去核实"答案是否真的在盘上"，结果分两半：
+
+| 问题 | 答案 | 依据 |
+| --- | --- | --- |
+| Synap 公开了逐题记录吗 | **是**。`results/longmemeval/question_records_gemini-3.8-flash.json`，**23,685,907 B**，500 题约 47 KB/题 | GitHub tree API |
+| 里面有答案文本吗 | **推断是**：47 KB/题 只可能是证据块 + 答案 + 判定，不可能只有对错。**未直读**，因为文件取不下来 | 同上 + `manifest_gemini-3.8-flash.json` 的 `records_file` 字段 |
+| 沙箱能取到吗 | **不能**。`git/blobs` raw 读到 5,474,158 B 时 `IncompleteRead`（还差 18.2 MB）；改 `Range: bytes=0-6000` 直接超时 124 | 本轮两次尝试 |
+| 那"重判"成立吗 | **成立，但需要一次 Runner 取数**。Runner 有网络，23.7 MB 是秒级；沙箱没有 | —— |
+
+顺带确认了两个此前未记的事实：Synap 的判官提示词是 **LongMemEval 官方 `evaluate_qa.py` 的按题型
+yes/no 提示**，而 cortex 用的 `deepseek-chat` 判官——**两者不是同一把尺**，这才是"−4.35 点"必须
+重判才能比较的根本原因。同一份 manifest 还写明回答模型的 prompt 是 *"chunks with metadata,
+current-date section on"*，即它把当前日期作为一节给模型——**H2 想做的事，对方一直在做**。
+
+### 169.6 这一轮之后，剩余路径只剩三项，其中一项有明确前置
+
+| 项 | 时间 | 金钱 | 前置 |
+| --- | --- | --- | --- |
+| ③ Synap 500 条答案级重判 | 20 分钟（Runner） | **¥1–2** | **先把 23.7 MB 取进 Runner**（沙箱取不动） |
+| ① `H2` 消融 | 与 ⑤ 同一轮 | **¥0 额外** | **LoCoMo 接入**（语料连续才有分母） |
+| ⑤ LoCoMo 接入 | 2 轮 | ≈¥8 | 数据获取（沙箱到 HuggingFace 不通，同样走 Runner） |
+
+三条里有两条卡在同一件事上：**沙箱的出口取不动大文件**——`git/blobs` 读 23.7 MB 在 5.4 MB 处截断，
+`Range` 请求 100 秒无应答，而沙箱到 HuggingFace 此前两次超时。这不是产品问题，但它决定了**下一轮的
+正确形态是一次 Runner 侧的数据准备作业**，而不是再派发一次模型调用。
