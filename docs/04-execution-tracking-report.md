@@ -32398,3 +32398,166 @@ runtime 或原生驱动——仍然在两个数量级之外。预算改到 `1152
 本轮声称的只有一件事——**一个按构造就该拒绝的替换，现在会被拒绝，而它的拒绝是具名的、可计数的、
 零模型调用的**。剩下的是同一份账上早就写着的问题：这个 pass 在发布它的那个配置里是关着的，所以它修好的
 东西还进不了 91.25%。
+
+---
+
+## §165 第二个标签页一直在偷偷拥有第二个数据库
+
+> 读物：本轮**不需要任何派发**——缺陷在代码里，测量在浏览器里，证据是 8 条具名检查。
+> 花费 **0 CNY**，两引擎中的 Chromium 一引擎（Firefox 的 BiDi 创建不出第二个 context，见 §162.4）。
+> 位置来自我自己文档里那张"没被测到的东西"清单：`MEASURE-BROWSER-PERSISTENCE.md` 第 118 行写着
+> **"multi-tab concurrency, private browsing, quota exhaustion — none is exercised by either probe"**。
+> 用户第 9 条要求"优先产品成熟度与完成度"，而这一条是**唯一还没被任何探针碰过的产品行为**。
+
+### 165.1 用户做的事，和产品做的事
+
+打开应用。在第二个标签页里再打开一次。
+
+第一个标签页握着 `/cortex.sqlite3` 的 OPFS access handle；第二个标签页的 SAH pool 安装失败，报
+`Access Handles cannot be created if there is another open Access Handle or Writable stream associated
+with the same file`。而 `openBrowserStorage` 对**所有**理由一视同仁：换个 tier 再试。于是第二个标签页
+落到 IndexedDB。
+
+| 标签页 | tier | 行写到哪里 |
+| --- | --- | --- |
+| 第一个 | `opfs` | 源 OPFS 池里的 `/cortex.sqlite3` |
+| 第二个 | `idb` | 同一个源的 IndexedDB，**另一个地方** |
+
+两个标签页都能用，各自单独看都没错。用户的记忆被劈成两半，而唯一说出这件事的字段是
+`refused[0].reason`——一句属于 sqlite-wasm 的话，没有任何调用方有规则去读它。**这正是本 campaign
+在证据侧抓到过三次、在产品侧抓到过四次的那个形状：不产出错误，只产出沉默。**
+
+### 165.2 为什么不能靠"识别那句话"
+
+`opfs-worker.ts` 已经拒绝检查错误文本，而且写了理由：从"handle 异步释放"里恢复的那个重试不看消息
+内容，因为措辞属于 sqlite-wasm、会随版本漂移。在这里加一个分类器是同一个错误往上挪一层，而且它会是
+一个**决定要不要创建第二个数据库**的字符串分类器。
+
+所以问题**在任何 tier 打开之前**问，用平台自己的设施。
+
+### 165.3 机制
+
+`navigator.locks.request(name, { ifAvailable: true }, callback)`：锁在 callback 返回的 promise
+悬挂期间被持有，名字被别人占着时 callback 收到 `null`，标签页消失时平台自动释放——正好是一个写入者
+的生命周期。三种答案，因为两种会说谎：
+
+| `writer` | 含义 |
+| --- | --- |
+| `{ acquired: true, mechanism: 'web-locks' }` | 本上下文持有这个源 |
+| `{ acquired: false, mechanism: 'web-locks' }` | 别人持有——只在 `onSecondTab: 'allow'` 下可达 |
+| `{ acquired: true, mechanism: 'none' }` | 无法提问：这个平台没有 `navigator.locks` |
+
+`onSecondTab` 默认 `'refuse'`，抛 `BrowserStorageBusy`，**在任何 tier 打开之前**。于是第二个标签页
+既不花那四次安装的重试预算，也不需要解释任何错误。`allow` 则继续，并报 `acquired: false`——这是它
+真正拿到的东西的诚实描述：第二个数据库，不是第二个视图。
+
+释放挂在 `storage.close()` 上，不是另给一个 `release()`：一个生命周期两个结束方式是多余的那个结束方式
+会被人忘掉，而被忘掉的后果是**一个已经不再使用数据库的标签页继续声称这个源**，下一个标签页因此被一个
+什么都不做的标签页拒绝。顺序也是承重的：**先关内层，再释放**——反过来会让第二个标签页在第一个还在写
+的时候拿到这个源，同一个缺陷换了符号。
+
+### 165.4 读数：8 条检查，两个 Chromium 目标，一个 profile，一个源
+
+| # | 检查 | 结果 |
+| ---: | --- | --- |
+| 1 | tab 1 打开 OPFS 并声称这个源 | `opfs` / `acquired: true` / `web-locks` |
+| 2 | tab 1 写下后来者必须找到的那一行 | `marker` |
+| 3 | tab 2 被**按名字**拒绝，且没有碰任何 tier | `BrowserStorageBusy`，`pool: 'cortex'` |
+| 4 | 拒绝里点名了池名和能改变行为的选项 | 消息含 `"cortex"` 与 `onSecondTab` |
+| 5 | tab 2 用 `allow` 继续，并报"共享的源" | `acquired: false` |
+| 6 | **被放行的标签页看不到第一个标签页的行** | `read: null`，tier `idb` |
+| 7 | tab 1 关闭时释放这个源 | `closed: true` |
+| 8 | tab 2 随后打开 OPFS 并读到 tab 1 的行 | `opfs`，`read.v === 42` |
+
+第 6 条是让"拒绝"这件事站得住的那一条：**分歧是被测出来的，不是被警告出来的**。第 8 条是让"释放"
+成真的那一条：没有它，"拒绝"和"释放"看起来会一样成功。
+
+### 165.5 这次读数在本轮自己的代码里抓到的 bug
+
+第一次运行的输出是 `mechanism: 'none'`——在一个**有** Web Locks 的 Chromium 里。
+
+`claimWriter` 用 `'locks' in args` 区分"字段不存在"和"字段存在且为 `undefined`"，而
+`openBrowserStorage` 总是把它拿到的字段**传进去**。于是平台从没被问过，每个标签页都成功声称，第二个
+标签页没有被任何东西拒绝——然后照旧落进 IndexedDB，和修复前一模一样。
+
+**Node 测试抓不到它**：每一个要么显式递一个 manager，要么干脆不带这个 key 调 `claimWriter`。没被覆盖
+的接缝正是**两个模块之间的接线**，只有真浏览器跨过去才看得见。`??` 换掉了 `in`，选项的文档现在说的是
+"`undefined` 表示去问平台"，而不是"这里没有平台"。
+
+这是本轮第二次由读数推翻自己的实现（第一次是 §164.5 的分路由提案）。区别在于这一次读数是**新写的**，
+而它存在的理由就是抓这种东西。
+
+### 165.6 决策为什么搬了家，以及覆盖率这件事
+
+`opfs.ts` 被排除在 Node 覆盖率之外，`vitest.config.ts` 里的理由是对的：Node 里没有 `Worker`、OPFS、
+IndexedDB，加一个 shim 只是在断言 shim。但这一轮加的**策略**一样都不需要——claim、拒绝或继续、按序
+试 tier、全失败后释放——把它留在那里，等于**把测试写进一个排除项**，那是"我们覆盖不了"的一个变体，
+真话是"我们把它放进了不测量的文件"。
+
+所以按**可测性**而不是按口味拆：`src/browser/open-policy.ts` 拿决策并把 tier 打开器当参数收，
+`opfs.ts` 留平台胶水。前者 **100 / 100 / 100 / 100**，`cortex-storage` 整包从
+99.34 / 100 / 97.80 / 100 变成 **100 / 100 / 100 / 100**。
+
+拆的过程里还删掉一个不可达函数：`let release = () => undefined` 在 `Promise` 执行器同步赋值之后
+永远是死的，函数覆盖率把它报了出来。这正是 §164 里 `parts[0] ?? ''` 那一条的同一个形状——**不可达的
+分支要删掉而不是覆盖掉**。
+
+### 165.7 两处被门禁拦下的副产品
+
+**打包预算。** `./opfs` 这个 subpath 从 3,813 涨到 **4,606 B gzip（+20.8%）**，远超 2% 的容差。
+先取读数再动数字：minify 后 12,374 B，gzip 4,606 B，其中 claim 机制约 800 B——浏览器用户在这个
+subpath 上下载量的 **17%**，换掉的是一个此前不可见的故障模式。基线按测量重设，代价（2% 容差现在坐在
+更大的基数上）写进护栏注释，而不是被一个没人重算的数字吸收。同一份 diff 里 `./sqlite` 有 +20 B 的
+漂移**没有被顺手吸收**——baseline 吸收一个解释不了的 +20，正是这个文件存在的理由。
+
+**导出普查。** 四个新导出（`BrowserStorageBusy`、`ClaimedBrowserStorage`、`OpenOutcome`、
+`WriterClaim`）被报成 orphan。它们落在既有的 `browser-storage-surface` 分组里，那个分组写的话正好
+适用：这些符号的调用方是**页面里的应用**，而普查按设计不数非测试调用者，仓位里唯一的行使者是
+`test/browser/*.mjs`。分组计数 14 → 18，总数按实时读数重算。
+
+### 165.8 这一轮不声称什么
+
+- **不是多标签特性。** 没有跨标签同步，没有 claim 之外的 leader election，也没有 `onSecondTab: 'wait'`
+  ——一个把首屏卡在另一个标签页生命周期上的页面，看起来就是卡死的页面。claim 让第二个写入者**可见**，
+  它不让两个写入者安全。
+- **不在 Firefox 上测。** Firefox 132 的 BiDi 创建不出第二个 browsing context（§162.4 的挂死），
+  所以两标签只能在 Chromium 上驱动。claim 是平台级的（`navigator.locks`，Firefox 自 96 起有），但那
+  是关于 API 的事实，不是关于本产品在那个引擎上的读数。
+- **不是配额测量。** 配额耗尽与隐私浏览**仍然**没有任何探针碰过，它们留在边界清单里，而不是被悄悄
+  划掉。
+- **不改变任何准确率读数。** 这一轮没有派发、没有模型调用、没有 token。
+
+### 165.9 完成度、可发布信号、SOTA 差距
+
+| 项 | 本轮值 |
+| --- | --- |
+| 能力账本 | **28 行 = 19 product + 9 instrument**，0 blocked，0 gap |
+| 产品完成度 | 分母取声明的 product 行：**19/19**。本轮**不新增能力行**——single-writer claim 是 `cortex-storage` 打开路径内部的一个判定，不是新能力；把它记成第 20 行会把一次正确性修复谎报成一次能力交付 |
+| 可发布信号 | **仍未触发**，但浏览器轴现在只剩三条明确的边界（Firefox 两标签、配额、隐私浏览），不再有"没测过"的第四种状态 |
+| 与 SOTA 的量化差距 | 注册臂 **91.25% @ 7,448 tok/题** 对 **Maximem Synap 95.6% @ ~7.4K**：**−4.35 点**，落在 ±3.21 点 judge 带内 → **不可判定** |
+| cortex 是否 SOTA | **不是**。成本轴领先一个数量级，准确率轴落后且落在噪声带内 |
+| 本轮真正的增量 | 一个**此前会静默分裂用户数据**的路径变成具名拒绝；以及一次由新读数推翻自己实现的记录 |
+
+### 165.10 六个必答问题（本轮口径）
+
+1. **测评集与排行榜完备性**：不变——LongMemEval-S 在用，LoCoMo/MSC 未接（沙箱到 HuggingFace 的网络
+   不通，本轮实测 `curl` 两次超时，这条路径要等 Runner 或本地数据落地）。本轮不动这一轴。
+2. **竞品穷举**：不变（Mastra / Mem0 / MemCog 已测；Letta / Zep / Memobase / MemOS / Cognee 未测；
+   Synap 闭源）。
+3. **同一张图**：`docs/figures/fig-longmemeval-accuracy-vs-cost.png`（主图）、
+   `fig-longmemeval-matched-model.png`（同 LLM 匹配）、`fig-longmemeval-accuracy-ranking.png`（排行）。
+   本轮不改变任何准确率读数，所以三张图沿用。
+4. **是否穷尽领军竞品可借鉴价值**：没有。本轮新增的是一条**产品侧**结论而非竞品结论：多标签是浏览器
+   存储层的公共问题，而 Mem0 / Mastra 在这个点上的做法值得按其真实代码核一遍（它们各自用
+   IndexedDB / 无持久层），这条挂在下一轮的竞品报告里，而不是现在猜。
+5. **剩余路径**：① `H2` 日期属性（队首，但 §164.4 已说明它要骑的 `semanticCarry` 触达只有 6%）；
+   ② `--offset` 分片让配对检验有功效（≈¥40、1 迭代）；③ Synap 500 条答案级重判（≈¥1–2、20 分钟）；
+   ④ MemCog 导航接口 + 消融（≈¥25、2–3 迭代）；⑤ LoCoMo 接入（≈¥8，需网络）；⑥ Firefox 两标签
+   （需要一个能创建第二个 context 的 Firefox 构建，属于工具链边界）；⑦ 配额耗尽与隐私浏览
+   （可用 CDP 的 `Storage.overrideQuota` 触发，≈1 迭代、0 CNY）。
+6. **自我审查**：本轮"通过"的来源是**被自己的读数打回**——第一次探针运行报 `mechanism: 'none'`，
+   直接暴露了我自己写的接线 bug；覆盖率把 `let release = () => undefined` 报成不可达（确实不可达）；
+   打包预算和导出普查各拦下一次。机制正确性的证据是第 6 与第 8 条检查同时成立：**分歧存在**（所以
+   拒绝有理由）且**释放成真**（所以拒绝不是永久的）。仍未验证的一处写在这里：`navigator.locks` 在
+   隐私浏览或跨源 iframe 里的行为本轮没有测，而 `mechanism: 'none'` 的分支只由 Node 的假 manager
+   行使过——那是一个关于平台的事实，不是关于本产品的读数。
