@@ -32047,3 +32047,139 @@ ok    /tmp/fresh-bundle-run.json  agrees with …/bundle-run.json:        4 chec
 一个变量定义了没人设置、一个读数没有任何比较器、一个引擎没有任何作业。这类缺陷的共同点是不产出错误，
 只产出**沉默**：套件绿、文件说 24/24、工作流全绿。要发现它，只能逐个问"这个东西谁在读"，而本轮的三个
 答案都是"没人"。
+
+---
+
+## 163. 把四个文件的修补换成一个问题：每份提交的读数，什么让它的字节重新变成事实
+
+### 163.1 一句话结论
+
+前四轮修的是**四份具体读数**（`bundle-run.json` 无人比较且被 CI 覆盖、`last-run-firefox.json` 没有作业
+在跑、`guard:browser` 拿两份提交文件互相比、`CORTEX_RESULTS_BUNDLE` 定义了没人设置），每一次都是**读出来的**。
+四次同类缺陷都靠读发现，本身就是"第五次读不出来"的证据。本轮把问题改成对**全体**提问：仓库里
+**23 份**提交的读数，各自靠什么重新变成事实？三种合法答案，每种带一条能被机器检查的性质，缺一项就红。
+
+第一次运行就抓到一份：`mr-roster-38953157688.json` 被提交是为了让 §13.40 的表能在没有 artifact store 的
+情况下被重新推导，而**没有任何测试读它**——全仓库唯一的提及是 `tools/classify-raw-outputs.py` 里的一句注释。
+
+### 163.2 三种答案，各自的义务
+
+| kind | 行里必须写 | 何时判红 | 本轮数量 |
+| ---- | ---------- | -------- | -------: |
+| `recomputed` | 作业名 + 工作流文件 | 作业不存在 / 该作业的步骤没点到这个文件 / 该作业**从未点到 checkout 之外的路径** | 4 |
+| `one-shot` | 被测量那批字节的 SHA-256 | 文件现在的哈希不等于记录值 | 10 |
+| `input` | 一句理由，且必须**有代码点名它** | 没有任何 `.ts`/`.mjs`/`.py` 提到这个文件名 | 9 |
+
+第二行的"从未点到 checkout 之外的路径"是这个门禁里最锋利的一条：它把 `readings-in-place.mjs` 那条
+"读数在原地被重算就等于自证"的性质，从"套件跑完之后查 `git status`"提前到了"读记录的时候"。一个作业
+只认领文件、不认领第二份输出位置，就是明知故犯。
+
+第三行是我唯一给 `input` 加义务的地方。`input` 是三种里唯一**真值由别人承载**的，也正因如此它是唯一能
+变成"橡皮图章"的。义务是：有代码点名这个文件——这正是"套件每次 push 都重读它"在文字上成立时的样子。
+**第一次跑，它就红了一份。**
+
+### 163.3 抓到的那一份：为了重新推导一张表而提交，却没人推导
+
+| 事实 | 证据 |
+| ---- | ---- |
+| `tools/__tests__/fixtures/mr-roster-38953157688.json` 121 问、63 错 | 直接统计 |
+| 全仓库对文件名的引用：**0 处代码** | `git grep -F mr-roster-38953157688 -- '*.ts' '*.mjs' '*.py'` 为空；只有 `classify-raw-outputs.py:250` 的一句注释提到 run id |
+| 文档里它的数字是要紧的 | `PREREGISTRATION-CORTEX-MEMORY-ARM.md` §13.40 记 `33/30/0/0/0/0` |
+| 用提交的 roster 重算，得到同一组数 | `{'abstention': 33, 'plan_output': 30}` |
+
+修法不是删文件，是**让文件干活**：新增
+`test_the_third_roster_reproduces_13_40`，断言 `_census('38953157688') == {'abstention': 33, 'plan_output': 30}`，
+并新增一个字面量元组 `ROSTERS` 把这一组测试依赖的四份 roster 名字写下来——因为 `_census` 用 f-string
+拼路径，正是"文件名在树里从没出现过"的原因，删掉一份 fixture 以前只会让测试跳过，现在会红。
+
+这一条的副产品是一个真实的论证：`38953157688` 的 63 个错答案里，除了 `abstention 33` 全部是
+`plan_output 30`，其余五种形状**都是 0**。所以把 plan output 折进 `numeric_mismatch` 的分类法会把 63 个
+答案全部叫成"数字不一致"——这不是风格偏好，是这一份 roster 单独就能给出的反证。
+
+顺带删掉 `packages/cortex-eval/test/mr-census/.json`：**0 字节**，shell 重定向在名字变量为空时留下的形状，
+被任何东西解析都会立刻暴露，但它已经躺了三个快照。
+
+### 163.4 第二个静默分母：三条断言各自会 `continue`
+
+`assemble-reach-gate.test.ts` 的三条断言（类型块有字段、条件展开里转发、门禁字面量可解析）都以
+`if (option === null) continue;` 结尾。也就是说：**一条 `gate` 字面量若不提 `options.<name>`，它被三条
+断言全部跳过，而三条都绿。** 这正是它自己文档里写的"读代码让它通过了前两次"。
+
+| 判据 | 改前 | 改后 |
+| ---- | ---- | ---- |
+| gated 行数 | 7 | 7 |
+| 被真正检查的行数 | **6**（第 5 行被跳过，无人知道） | **6 + 1 条显式豁免** |
+| 新增一条无法解析的 gated 行 | 静默通过 | 红，报 `expected [ 'a new mechanism', …(1) ] to deeply equal [ 'inline superseded rendering' ]` |
+
+豁免的唯一一条是 `inline superseded rendering`：它的门禁是 `rendering === 'off'`，而 `memory.ts:3159`
+把 `const rendering = this.#options.supersededRendering` 绑在上一行——字面量点的是局部变量，选项名在
+前一行。豁免表**双向检查**：多出一条无法解析的行会红；豁免表里的行消失也会红（豁免活得比自己的行久，
+是门禁悄悄收窄的常见方式）。变异验证已做：临时加入一条 `gate: "someLocal === 'on'"` 的行，该断言红。
+
+### 163.5 本轮改了什么
+
+| 文件 | 改动 |
+| ---- | ---- |
+| `tools/readings-census.mjs` | 新增。人口来自 `git ls-files`（提交了才算证据）；三种 kind 各一条判据；`recomputed` 用自带的 job 块解析器读工作流（不引 YAML 依赖——`js-yaml` 今天只是传递依赖，hoisting 假设是门禁开始莫名失败的方式），注释行被剥掉（"注释里点到路径"正是 §162 那个不存在的比较步骤的形状）；`--check` 同时比对生成的文档 |
+| `tools/committed-readings.json` | 新增。23 行，`why` 是可读的那一列 |
+| `tools/__tests__/test_readings_census.py` | 新增 **19** 测试，全部跑在 `git init` 出来的真仓库上；每个用例只改一个文件，断言的是**句子**而不只是退出码：零字节、被改过的 one-shot（两个哈希前缀都要打出来）、不存在的作业（要把现有作业名列出来）、只在注释里点到、作业从不写 `/tmp`、recomputed 行不许带哈希、kind 越界、理由太短、两行同一文件、行指向不存在的文件、非仓库、文档过期、`--write` 幂等 |
+| `docs/COMMITTED-READINGS.md` | 新增。由 `--write` 生成，`--check` 比对 |
+| `docs/MEASURE-BROWSER-PERSISTENCE.md` | 新增"The set, not only these four"一节：四份浏览器读数是 23 份里的 4 份 `recomputed`，其余 19 份的理由逐条列在生成文档里 |
+| `packages/cortex-memory/src/__tests__/assemble-reach-gate.test.ts` | 新增分母断言 + 双向豁免表（3 → **4** 测试） |
+| `tools/__tests__/test_classify_raw_outputs.py` | 新增第三份 roster 的复现测试与 `ROSTERS` 字面量（61 → **62** 测试） |
+| `package.json` | `readings:check` / `readings:write`，并接进 `pnpm check`（`guard:ci` 复核 8 门禁在 `verify.yml` 里都有作业） |
+| `packages/cortex-eval/test/mr-census/.json` | 删除（0 字节） |
+
+**没有做，而且是故意的**：给 `review-page/probe.mjs` 与 parity 的 `run.mjs` 加 `CORTEX_RESULTS` 覆盖。
+两份探针现在都原地写 `last-run.json`，加一个没有调用方的环境变量就是 `CORTEX_RESULTS_BUNDLE` 再来一次——
+为了某个目的定义、从未被设置。所以它们被如实登记为 `one-shot`，并在 `why` 里写清"探针约 11 秒能重跑，
+但它原地写，所以重跑只会替换证据而不是被比较；这一行变成 `recomputed` 的那天，是那个探针接受输出路径的那天"。
+
+### 163.6 验收
+
+| 判据 | 读数 |
+| ---- | ---- |
+| `pnpm check` | **exit 0**（全链路：build → test:tools → 8 门禁 → lint → typecheck → manual:check → census/ledger/registration/arm-config/token → test → coverage → reuse/erasure/corpus/readings → acceptance → docs:crosscheck → format） |
+| `tools/__tests__` | **3,351 passed, 19 skipped**, 254 subtests（上轮 3,331） |
+| `readings:check` | `ok 23 committed readings, each says what re-derives it: 4 recomputed, 10 one-shot, 9 input` |
+| 覆盖率门禁 | 199 文件 × 4 维全部达标；`cortex-core` 分支 98.42%（最低），`cortex-memory` 99.89/99.75/100/100，`cortex-ai`/`cortex-storage` 四维 100.00 |
+| `docs:crosscheck` | 74/79 marker 验过，170 份文档扫描 |
+| `guard:ci` | 8 门禁在 `verify.yml` 里都有作业 |
+| dependabot | 两仓库 0 PR / 0 alert |
+| shell 插值守卫 | 44 片段干净（含 126 个 workflow run 块） |
+
+### 163.7 完成度、可发布信号、SOTA 差距，以及"19/28"这个分数到底在数什么
+
+| 项 | 本轮值 |
+| --- | --- |
+| 能力账本 | **28 行 = 19 product + 9 instrument**，0 blocked，0 gap，7 项在开关后面，边界 55 个导出 |
+| 产品完成度 | 若分母是**声明的 product 行**：**19/19**。若照旧写 19/28，那个 9 是 instrument——按定义永远不可能是 product。本轮不改变任何一边，但要停止把 9 当成欠债：积压不在"未完成的能力"，而在"未验证的声明" |
+| 可发布信号 | **仍未触发** |
+| 与 SOTA 的量化差距 | 注册臂 **91.25% @ 7,448 tok/题** 对 **Maximem Synap 95.6% @ ~7.4K**：**−4.35 点**，落在 ±3.21 点 judge 带内 → 不可判定 |
+| cortex 是否 SOTA | **不是**。成本轴领先一个数量级，准确率轴落后且落在噪声带内 |
+| 本轮真正的增量 | "每一份提交的读数都说得出自己怎么被重算，说不出就红"——这句话此前不存在；而且它第一次运行就删除了一份 0 字节的 `​.json`、复活了一份两个月没人读的 roster |
+
+### 163.8 六个必答问题（本轮口径）
+
+1. **测评集与排行榜完备性**：不变——LongMemEval-S 在用，LoCoMo/MSC 未接；第三方榜仍无一同时固定 LLM、
+   固定 judge、公开逐题记录。本轮不动这一轴。
+2. **竞品穷举**：不变（Mastra/Mem0/MemCog 已测；Letta/Zep/Memobase/MemOS/Cognee 未测；Synap 闭源）。
+3. **同一张图**：`docs/figures/fig-longmemeval-matched-model.png`。产品臂仍不进图——两轴要求 500 题注册配置，
+   产品臂只有 100 题单轮。
+4. **可借鉴价值是否穷尽**：没有。本轮无新竞品结论，做的是自家证据接线——但接线的结果是一条可以直接用的
+   论证（§163.3 末尾：`plan_output` 必须独立成桶，否则 63 个答案全被叫成数字不一致）。
+5. **剩余路径**：`MR` 聚合候选抽取（**下一个**，未实现、未登记）；Synap 500 条答案级重判（≈¥1–2、20 分钟）；
+   MemCog 导航接口 + 消融（2–3 迭代、≈¥25）；LoCoMo 接入（≈¥8）；`--offset` 分片让配对检验有功效（≈¥40）。
+6. **自我审查**：本轮的"通过"全部来自**打回来的东西**——`input` 义务第一次跑就红了一份 roster；分母断言
+   用变异证过会红；`--check` 的文档比对逼我把日期列从生成文档里删掉（日期会在触碰该文件的那次提交上变化，
+   所以那一列永远无法与树一致）；`pnpm check` 全链路 exit 0。仍然存疑一处已写进工具注释：`input` 的检查
+   **故意是弱的**——它只问"有没有代码点名这个文件"，注释能满足、f-string 拼出的路径不满足。它抓到了孤儿，
+   但抓不到"被注释提到、实际没人打开"的文件；更强的问法（有没有测试真的打开它）字符串搜索答不了。
+
+### 163.9 为什么这一轮值得做，而不是"又一份门禁"
+
+因为这一轮第一次让"证据"这个类别有了**闭合的总体**。此前每一份读数的真实性都靠**某个人曾经想过它**；
+现在 23 份里每一份都落在三种可检查的形态之一，而总体由索引给出，不由我的记忆给出。这和 §162 里
+"一个存在但没被任何东西调用的机制"是同一个形状，只是层次更高：**一个存在但没被任何东西核对的证据集**。
+它的失败方式仍然是沉默——文件都在，数字都对，工作流全绿——所以只能靠问"这份东西谁在读"，而本轮把这个问题
+写成了 19 个测试。
