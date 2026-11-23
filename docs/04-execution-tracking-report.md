@@ -31564,3 +31564,39 @@ embedder 计数，得到 0——那不是缺陷，是产品的懒嵌入。测试
 
 本轮**没有**改变任何准确率数字，也不假装改变。它改变的是这句话的可验证性：此前"cortex 比这三家都好"是一个**跨管线推断**，
 现在它可以是一次**同管线测量**——只差一次派发。
+
+### 159.8 第一次派发没拿到数字，拿到两个缺陷——两个都不会在分数里显形
+
+run `45089801550` 是收据，两处都属于接线而不是臂本身：
+
+**代理被 `sut` 独占门控。** 计量代理那一步只在有 system under test 时启动，于是 `product=cortex-product` 且
+`sut=''` 的派发把它跳过了，而 `SUT_LLM_BASE_URL` 仍然指向它的端口——产品行的 chat 调用于是打进了一个没人监听的
+socket。代理不是竞品的便利设施，**它就是产品行的成本列**，所以 `product != ''` 加入条件。
+
+**进度包装器用了继承而不是委托。** `withProgress` 用 `Object.create(provider, {...})` 造包装：包装对象的原型是
+实例，于是被转发方法里的 `this` 是**包装对象**，而 JS 的私有字段检查看的是接收者——`reset()` 因此抛
+`Receiver must be an instance of class CortexProductProvider`，而且是在语料已经嵌入、第一题的钱已经花掉**之后**。
+这个技巧在"所有被包装的 provider 都是普通对象"时是对的，恰好驱动都是普通对象、产品不是。
+
+修法：包装器搬到 `tools/progress-wrap.mjs` 并改为**委托**（持有 provider 并转发，`this` 就是真对象）；两个值成员用
+getter 而不是拷贝，因为构造时读 `usage` 报的是建库花费、不含任何作答——正是让一条臂显得便宜的那个方向。
+
+守护测试 `test_progress_wrap.py` 写在**形状**而不是症状上：带 `#private` 的 provider 走 `ingest`、`answer`、两次
+`reset`、一次 `search`，断言计数在移动之后仍是活的、自答臂仍有 `search`、进程内 provider 没有被凭空造出 driver
+manifest。失败一行可复现：`Object.create` 一个产品 provider，调用 `reset`。
+
+这件事对本轮读法的两个影响：这次派发在死之前花掉了一次 embedding 与一题的模型调用，而产物**说得出**它死在哪一题
+——那是 `45002769709` 买回来的进度行；而这两处缺陷都不会在分数里显形，一个会打印成本零，另一个什么都不会打印。
+
+### 159.9 重派发的预注册判据（写在这里，先于结果）
+
+run `45090697310`（`questions=30`、`read_questions=30`、`read_prompts=con`、`read_arms=lexical-reference,cortex-product`、
+`product=cortex-product`、`sut=''`）读回后按三条判：
+
+| 判据 | 若成立 | 若不成立 |
+| --- | --- | --- |
+| 产品臂 own prompt tok/题在 **5.2k–9.7k**（7,448 的 ±30%） | 装配与 500 题那次同形 | 装配不同——先查 `assembleMemory` 的字段解析，不改判据 |
+| 产品臂准确率 **≥ 75%**（91.25 − 2σ，30 题 σ≈9） | 发货臂的优势在 30 题上依然成立 | 与 500 题读数冲突，须查样本分层与 judge 通道 |
+| 产品臂 vs `lexical-reference` 配对 **p < 0.05** | 30 题就够分辨两者 | 需 `--offset` 分片扩到 100+ 题才有功效（预算 ≈¥40） |
+
+三个判据都只比对**同一次调用**里的两行，不跨管线。
