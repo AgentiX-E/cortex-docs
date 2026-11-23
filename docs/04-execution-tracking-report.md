@@ -31470,3 +31470,97 @@ transcript（约 480 轮、约 117k），小调用是 Observer 压缩未观察�
   而是把宽度变成**可观测的 census 字段**并让装配根从注册臂取值，于是下一个人不需要记得。
 - **仍未闭合的一环**：`cortex-eval` 的 91.25% 与 `competitor-harness` 的表仍是两条管线出的两份产物。P0 第 1 项的
   目的就是把它们合成一条，否则"评估侧证明的能力"永远需要一次人工搬运才能变成"产品侧的数字"。
+
+## 159. 把产品臂接进竞品 harness：那条错掉的对照，现在只差一个 `--product`
+
+> 上一轮结束时写下的判词是：**"该不该抄某个机制"这个问题，我一直是对着错误的对照组问的；修法不是再派发一次，
+> 而是把产品臂接进同一个 harness。** 本轮做的就是这件事，并且它是本轮唯一不需要等任何工作流的主线。
+
+### 159.1 缺口是结构性的，不是少派发一次
+
+竞品 harness 通过 `MemoryProvider` 量一个系统：`ingest`、`search`、每题一次作答。产品是一个库，而且**它的装配
+本身就是被测量的东西**——走 `--sut` 的进程边界（driver）就必须重新实现 `assembleMemory`，而"重新实现被测量的机制"
+正是这个比较器存在的理由所要避免的缺陷。
+
+所以产品以**同进程 provider** 的形式进来，新增三部分：
+
+| 位置 | 是什么 | 为什么在那里 |
+| --- | --- | --- |
+| `packages/cortex-memory/src/product-provider.ts` | `CortexProductProvider`：`ingest` → `remember`、`answer` → `askStored`、`reset` → 重建装配 | 产品包不能依赖 `cortex-storage`，所以存储用工厂注入；`cortex-eval` 可以依赖产品，反之不行 |
+| `tools/competitor-product.mjs` | 从环境造三件东西：走代理的 chat 客户端、直连的 Zhipu embedder、`SqliteStorage` 工厂 | chat 必须走计量代理（否则成本列读成零），embedding 代理不转发，两件事分两条通道 |
+| `.github/workflows/competitor-retrieval.yml` | 新输入 `product`（默认空），只在 `con` 阅读阶段传 `--product` | 产品自答，阅读 prompt 到不了它；三个阶段都跑 = 同一笔钱花三次、同一个数印三次 |
+
+### 159.2 三个决定，每一个都能被推翻
+
+| 决定 | 反面是什么 | 证据 |
+| --- | --- | --- |
+| `answerer: self`，`search` 返回空 | 配共享 reader：要么跳过产品的渲染（一个没人发的系统），要么付两次模型钱 | 与 Mastra/MemCog 的行同形同因；`product-provider.test.ts` 断言 `search` 不调模型 |
+| 装配**不点名任何字段** | 显式传注册值：那样测试只会同意一个"已经停止应用注册值"的组装根 | 断言是**字节相等**：适配器与直连 `assembleMemory` 渲染出同一个 prompt |
+| `reset` 保留 embedding 缓存 | 每题新建缓存：embedding 账单乘以题数，且不再是那个被测的臂 | 注册臂的 `selfIndex.memoHits: 212,020` 对 `embedCalls: 10,325`，跨题复用是这臂的一部分 |
+
+还有一件测试逼出来的事实：**索引是在第一次检索时嵌入语料，不是在 `ingest` 时**。第一版测试在 `ingest` 后读
+embedder 计数，得到 0——那不是缺陷，是产品的懒嵌入。测试因此改成"先问一次再读计数"，否则它会对着零断言并通过。
+
+### 159.3 两条拒绝，都是测出来的
+
+| 缺什么 | 会发生什么 | 测试 |
+| --- | --- | --- |
+| `SUT_LLM_BASE_URL` | 直连厂商，成本列读成零——表里最贵的一行显示免费 | `test_competitor_product.py`（断言退出码与**理由文本**） |
+| `ZHIPU_API_KEY` | 退化成词法系统，却顶着注册臂的名字打印 | 同上，加 `test_product_arm_wiring.py` |
+
+第二个测试是本轮最值得留下的那个：它用一个同时扮演 chat 与 embeddings 的替身，断言三件事——每次 chat 请求都带
+`X-Sut-Label: cortex-product/answer`、语料确实被嵌入、答案是产品的解析（`Answer: Porto` → `Porto`）而不是原始补全。
+这三件在任何一个 91% 的读数里都看不出来，但没有它们那张表就不可读。
+
+### 159.4 覆盖率与门禁
+
+| 维度 | 数 |
+| --- | --- |
+| `product-provider.ts` 覆盖率 | **100 / 100 / 100 / 100**（语句/分支/函数/行） |
+| `cortex-memory` 整包 | 99.89 / 99.74 / 100 / 100，125 文件 1,722 测试全绿 |
+| 新增测试 | 7 条 vitest（产品包）+ 2 条 pytest（失败路径）+ 1 条 pytest（端到端接线） |
+| 文档交叉校验 | 74/79 marker 通过（与上一轮一致），169 份文档扫描 |
+
+### 159.5 六个必答问题（本轮口径）
+
+1. **测评集与排行榜完备性**：不变——LongMemEval-S 在用，LoCoMo/MSC 未接，第三方榜仍无一同时固定 LLM、固定 judge、
+   公开逐题记录。本轮没有新增测评集，新增的是"同一条管线能同时量产品和竞品"。
+2. **竞品穷举**：不变（Mastra/Mem0/MemCog 已测；Letta/Zep/Memobase/MemOS/Cognee 未测；Synap 闭源）。
+3. **同一张图**：`docs/figures/fig-longmemeval-matched-model.png`。产品臂这一行要等派发之后才进图——现在进图就是
+   把"推断"画成"测量"。
+4. **是否穷尽可借鉴价值**：没有；三条判据不变（抄 MemCog 导航接口；抄答案**之前**的压缩；不抄 Mem0 抽取）。
+   本轮的价值是让"抄了之后到底有没有用"这个问题第一次变得**可测**——因为对照组终于是发货臂。
+5. **剩余路径**：下一项就是派发 `product` 行（30 题，≈¥2–4），拿回它与三个竞品在同一批题上的差；其余不变
+   （Synap 重判 ¥1–2、MemCog 导航 ≈¥25、LoCoMo ≈¥8、`--offset` 分片 ≈¥40）。
+6. **自我审查**：本轮唯一的"计算"是覆盖率与测试计数，均直读工具输出；方向正确的证据是**测试逼出了懒嵌入这个事实**
+   ——第一版断言对着零并通过，改成"先问再读计数"才真实。机制正确：`--product` 只在 `con` 阶段，理由写在 workflow
+   输入说明里，可被下一次派发复核。
+
+### 159.6 门禁抓到的两件事，都不是我事先想到的
+
+**第一件：手册的示例会被编译。** `docs/USER-MANUAL.md` 的每个 ```ts 围栏都会被 `tools/manual-examples.mjs`
+真的编译，所以一段"示意性"的代码（`llm`、`embedder`、`sessions` 未声明）是构建失败而不是排版瑕疵。修法不是删示例，
+而是把它写成可编译的：两个"只有你的部署能提供"的量用 `declare const` 声明，其余照常。顺带记下一条纪律：**不要对
+`USER-MANUAL.md` 跑 `prettier --write`**——`format` 脚本只检查 `'**/*.ts'`，而 prettier 的 md 打印器会重排所有表格，
+把依赖精确锚点（`| \`now\` | \`number\` |`）的三条测试全部打断。我第一次跑就撞上了，`git checkout` 恢复后按原格式插入。
+
+**第二件：新导出被判为 orphan。** `CortexProductProviderOptions` 没有包外调用方（每个调用点都写字面量对象、让推断
+命名类型），`export-census` 因此拒绝本轮。裁决与既有的 `CortexSessionProviderOptions` 一致：登记进
+`tools/export-census-baseline.json` 并在账本的 `note` 里写下理由，而不是为了让门禁闭嘴去 un-export 一个公开的
+选项类型。账本因此只多一行（类本身有 `tools/competitor-product.mjs` 这个非测试调用方），本轮实测
+**1285 导出 / 795 有调用方 / 490 orphan**。
+
+这两件事合起来说明一件事：本仓库的门禁不是"跑一遍确认没坏"，它会**具体地**说出哪一行不是它以为的样子。
+
+### 159.7 完成度、可发布信号、SOTA 差距
+
+| 项 | 本轮值 |
+| --- | --- |
+| 产品完成度 | **19/28**（7 项有门禁），0 blocked，0 gap；instrument 9 项 |
+| 可发布信号 | **未触发**——本轮没有新增产品能力项，新增的是"产品可被外部 harness 量到"这条通路 |
+| 能力账本 | 28 行、边界 55 个导出（新增一组 `the-competitor-table-s-own-adapter`，理由是"评测器的把手"而**不是**部署会调用的能力） |
+| 与 SOTA 的量化差距 | 发货臂 **91.25% @ 7,448 prompt tok/题**（122.50 分/百万 token）对 Synap **95.6% @ ~7.4K**：**−4.35 点**，落在本仓库实测 judge 敏感带 **±3.21 点**内 → **不可判定**。自报档 ContextStream 96.8%（Wilson 94.9–98.0）与 Recallium 98.4% 明确更高 |
+| cortex 是否 SOTA | **不是**。准确率轴落后 4.35 点（不可判定区间内），成本轴领先一个数量级；SOTA 竞品名：**Maximem Synap**（95.6%，闭源云服务） |
+
+本轮**没有**改变任何准确率数字，也不假装改变。它改变的是这句话的可验证性：此前"cortex 比这三家都好"是一个**跨管线推断**，
+现在它可以是一次**同管线测量**——只差一次派发。

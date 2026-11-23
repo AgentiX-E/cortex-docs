@@ -416,3 +416,40 @@ cortex 自己的臂没法搬到 Mastra 的信封里——每题 112k token 是�
 这个比较仍说不了的一件事：`cortex-memory` 在这三十道上会不会读到 91.25%。30 题的抽样误差约 ±9 点，而发货臂对
 `cortex-session` 的优势是 28 点。这个差距大到能挺过重抽样，但它是一个推断、不是一次测量，而 §12.2 那个修法——一条
 harness、一本账、一个样本——仍然是把推断变成测量的唯一办法。
+
+### 13.7 那条错掉的对照，现在只差一个 `--product`
+
+§12.2 与 §13.6 都停在同一个缺口上：真正重要的那一行——装配好的产品，91.25% @ 7,448 token——由 `cortex-eval`
+的臂产出，而表里每一行由 `tools/competitor-harness.mjs` 产出。两条管线、两个抽样器、两本成本账，中间是一个推断。
+
+那个缺口是**结构性的**，不是少派发一次。竞品 harness 通过 `MemoryProvider` 量一个系统：`ingest`、`search`、每题
+一次作答。而产品是一个库，**它的装配本身就是被测量的东西**，所以走 `--sut` 的进程边界（driver）就必须重新实现
+`assembleMemory`——而重新实现正是这个比较器存在的理由所要避免的那个缺陷。
+
+于是产品作为**同一进程内的一个 provider** 进来：
+
+```
+node tools/competitor-harness.mjs --data data/longmemeval_s_cleaned.json \
+  --questions 30 --limit 10 --read --product cortex-product
+```
+
+那一行里有三个决定可见，且没有一个是默认值：
+
+| 决定 | 为什么 |
+| --- | --- |
+| `answerer: self` | 产品的检索与作答是一次行为。`search` 返回空，产物里就这么写；Mastra 与 MemCog 的行同形同因。给这条臂配共享 reader，要么跳过产品的渲染，要么让它付两次钱 |
+| chat 走计量代理、embedding 直连 | 代理只转发 chat completions，所以 token 列是代理的数，标签 `cortex-product/answer`；embedding 账单留在产品本来就上报它的地方（`indexCost()` / `selfIndex`）。一条通道一行字，而不是一个把"哪一半被计费"藏起来的和 |
+| 只跑一个阅读阶段 | 产品自己写答案，dispatch 与 dispatch2 阶段管理的 reader prompt 到不了它。三个阶段都跑就是同一笔钱花三次、同一个数印三次——run 45011905117 的重复 ingest 缺陷，上升一层 |
+
+两件接线**拒绝**做的事，都是测出来的而不是写出来的：
+
+| 拒绝 | 为什么不是警告 | 测试 |
+| --- | --- | --- |
+| 缺 `SUT_LLM_BASE_URL` | 这条臂会直连厂商，成本列读成零 | `test_competitor_product.py` |
+| 缺 `ZHIPU_API_KEY` | 装配会退化成词法系统，却顶着注册臂的名字打印 | 同上，加 `test_product_arm_wiring.py` |
+
+第二个测试是让"计量"这个说法**不用模型也能查**的那个：一个同时扮演两个端点的替身记录每一次请求，断言是——
+每次 chat 调用都带标签头、语料确实被嵌入过、答案是产品的解析结果（`Answer: Porto` → `Porto`）而不是原始补全。
+
+这张表因此改变了什么：产品那一行现在可以与竞品**在同一次调用里**量——同一个样本、同一个 judge、一本账。它没有把
+数字变成 91.25%——那个读数是 500 题 × 四轮，而这一行在有人派发之前是三十题。它去掉的是"两者根本无法比较"的原因。
