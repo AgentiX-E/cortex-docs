@@ -31904,3 +31904,146 @@ present-but-undefined 读成"已分类"）。
 
 `MR` 剩下的 14.5 题/轮（121 − 106.5）因此不能再归因于"证据被切"。它们的形状——121 题、33 道四轮全错——
 是 `MEASURE-MR-CEILING.md` 说的 membership 失败，而聚合候选抽取是那条线上唯一没被证否过的一族。
+
+---
+
+## 162. 浏览器轴：三份提交的读数，此前只有两份在被比较，而其中一份的比较对象是另一份读数
+
+### 162.1 一句话结论
+
+`§10.2` 的 gate 1/2 靠**提交的读数**成立，而三份读数里：`bundle-run.json` **没有被任何东西比较过**
+（更糟的是 CI 每次运行都会**覆盖**它，所以一次"与提交读数不一致"的运行会先替换掉它本该不一致的那份证据）；
+`last-run-firefox.json` **在整个仓库的工作流里从未被重跑过**（gate 2 的"第二个引擎"全部内容就是这一个文件）；
+而 `guard:browser` 在 `pnpm check` 里打印的那句 `the committed reading still describes this tree`，是拿**两个
+提交文件互相比**得出的，没有启动任何浏览器。本轮把三处接上：CI 多一条比较、多一个 Firefox 作业、
+判定句改成点名它读过的两个文件。
+
+### 162.2 三处未接线的证据
+
+| # | 声称 | 实际情况 | 证据 |
+| - | ---- | -------- | ---- |
+| 1 | bundle 读数有 committed-vs-fresh 比较 | `CORTEX_RESULTS_BUNDLE` 在 `bundle-probe.mjs:46` **定义**，全仓库**从未被设置**；CI 的 `pnpm test:browser` 于是走默认路径，直接写 `packages/cortex-storage/test/browser/bundle-run.json`（提交的读数），随后 artifact 上传的正是这份被覆盖过的文件 | `git grep CORTEX_RESULTS_BUNDLE` = 1 处定义、0 处赋值；`bundle-probe.mjs:42-44` 的注释描述了一个并不存在的步骤（"the CI comparison would then report 24 checks against 4"） |
+| 2 | gate 2 的第二个引擎是活的 | `git grep firefox .github/workflows` **为空**；`last-run-firefox.json` 只能在有人手动跑时更新 | 工作流全文检索；该文件唯一的消费者是 `pnpm guard:browser` |
+| 3 | `guard:browser` 在校验这棵树 | 它把 `last-run-firefox.json` 当作 `--fresh` 传入，比较的是**两份提交读数** | `package.json:40`；工具自身的判定句 |
+
+第 3 条不是无害的措辞：工具的 docstring 开头写着它要回答的问题（"is it an old run someone kept?"），
+而它在本地唯一被调用的形态恰好**答不了这个问题**——两份文件可以一样旧。判定句现在打印
+`…/last-run-firefox.json agrees with …/last-run.json: 24 checks, …`，读者从这一行就能看出没有浏览器参与。
+
+### 162.3 要读一份读数，得先知道它把判据记在哪：两种形状，各两处
+
+工具原本只认 `phases.write.tier` 和 `summary.digestMatches`。`bundle-run.json` 里这两个都**不存在**——
+bundle 套件只启动一次浏览器，没有"重启阶段"可以承载摘要比较，于是它把 tier 记在 `facts.tier`、
+把"写进去的摘要 == 读回来的摘要"记成 `facts.roundTrip.written == .read` 两个数字。
+
+所以第一次把 bundle 读数喂给工具，它报的是 `this run did not read back the digest it wrote`——**在一份
+摘要完全正确的读数上**。这和 §161.6 是同一类错误：不是读数错，是读的人只认一种形状。修法是把两条判据
+都改成声明式（`TIER_PATHS` / `DIGEST_PROOFS`），而不是"没有 `phases` 就跳过判据"——后者会把这三份读数里
+唯一证明"往返真的是往返"的性质从 bundle 那份上删掉。
+
+### 162.4 Firefox 132：`browsingContext.create` 永不作答，而这在 CI 里表现为"作业超时"而不是"原因"
+
+要让 gate 2 变成每个 push 都重跑的作业，先得让套件能在可安装的 Firefox 上跑起来。
+`npx --yes playwright@1.49.1 install firefox` 给的是 **Firefox 132.0（playwright build 1466）**。
+在这份构建上：
+
+| 命令 | 结果（裸 `--headless --remote-debugging-port` 启动，原始 WebSocket 探针） |
+| ---- | ---- |
+| `session.new` | `< 1 s` 返回，`browserVersion: 132.0` |
+| `browsingContext.getTree` | `< 1 s` 返回，带回一个 `about:blank` 顶层 context（`parent: null`） |
+| `browsingContext.create` | **15 s 内既无 error 也无 reply**（带/不带 `MOZ_REMOTE_ALLOW_SYSTEM_ACCESS=1` 各测一次，两次相同） |
+
+旧 `start()` 走的是第三条：`await` 永不平息 → 探针挂住 → CI 侧表现为 20 分钟作业超时，而不是一句
+"这个引擎不能开新标签页"。修法是**复用会话自带的那个 context**（这正是 WebDriver BiDi 的设计形状：
+`session.new` 之后本就存在一个 context），`create` 退为"引擎没报 context 时"的兜底。选择逻辑抽成纯函数
+`contextFromTree`，三条无浏览器用例把它钉住：单标签页、带 iframe 的标签页（不能把 iframe 当标签页）、
+空树（交给 `create`）。
+
+顺带纠正一处文档事实：本仓库 `bidi.mjs` 与 `MEASURE-BROWSER-PERSISTENCE.md` 都写过"`getTree` 需要
+`MOZ_REMOTE_ALLOW_SYSTEM_ACCESS=1`"。那在 Firefox 159 上的确如此，在 132 上不成立——而这正是 CI 作业
+得以存在的前提。
+
+### 162.5 实测：Firefox 132 重跑，与提交的 Firefox 159 读数逐字一致
+
+| 判据 | 提交读数（Firefox 159） | 新跑（Firefox 132） |
+| ---- | ---- | ---- |
+| 检查 | 24 / 24 | **24 / 24** |
+| 24 个检查名 | — | **顺序与字符串完全一致** |
+| tier | `opfs`，`refused: []` | `opfs`，`refused: []` |
+| 重启后摘要 | `matches: true` | `matches: true`（10 行时 `1489868687 == 1489868687`） |
+
+10 行本地整轮耗时约 3 秒；CI 用 400 行。也就是说 gate 2 的主张跨过 **27 个版本**依然成立，并且从此
+每次 push 都重新被问一次——这句话此前不存在。
+
+**CI 实测**（`Verify` run `45129831120`，四个作业全绿；其中 `Verify the browser suite on Firefox`
+是本轮新增的作业，14 步全部 success，含 `The committed Firefox reading still describes this tree`）：
+
+```
+400 rows on opfs (sqlite-wasm 3.54.1 on opfs-sahpool (journal: delete)): one commit per row 11393 ms
+  (35 rows/s), one transaction 207 ms (1932 rows/s), read 10.0 ms, digest 1407308589 == 1407308589
+firefox: 24/24 checks passed -> /tmp/fresh-firefox-run.json
+ok    /tmp/fresh-firefox-run.json agrees with packages/cortex-storage/test/browser/last-run-firefox.json:
+      24 checks, identical in order and string, both on opfs, both digest-matched
+```
+
+同一个 run 的 Chromium 作业里，**三份**读数第一次同时被比较（bundle 那份是首次被任何东西比较）：
+
+```
+ok    /tmp/fresh-browser-run.json agrees with …/last-run.json:          24 checks, identical in order and string, both on opfs, both digest-matched
+ok    /tmp/fresh-corpus-run.json  agrees with …/corpus-run.json:       14 checks, identical in order and string, both on opfs, both digest-matched
+ok    /tmp/fresh-bundle-run.json  agrees with …/bundle-run.json:        4 checks, identical in order and string, both on opfs, both digest-matched
+```
+
+顺带更正一处文档数字：`07-sota-v4-review-and-plan.md:1074` 与本文旧行把 corpus 读数的检查数写成 **11**，
+实际提交的 `corpus-run.json` 里是 **14**（5 个 write 阶段 + 9 个 read 阶段），新比较步骤打印的就是 14。
+
+### 162.6 本轮改了什么
+
+| 文件 | 改动 |
+| ---- | ---- |
+| `tools/browser-reading-check.mjs` | tier/digest 两条判据改为声明式多形状；判定句点名读过的两个文件 |
+| `tools/__tests__/test_browser_reading_check.py` | 6 → **11** 测试：bundle 读数可读、`facts.tier` 落回 idb 即红、`facts.roundTrip` 不等即红、无 tier 记录即红、判定句不得出现 "describes this tree" |
+| `.github/workflows/verify.yml` | 设 `CORTEX_RESULTS_BUNDLE` 并新增 bundle 比较步骤；新增 `browser-firefox` 作业（装 Firefox → 400 行跑套件 → 比较 `last-run-firefox.json`）；两个浏览器作业各加一步 `tools/readings-in-place.mjs`；artifact 改传 `/tmp` 里的三份新读数 |
+| `packages/cortex-storage/test/browser/bidi.mjs` | `start()` 复用会话 context；新增纯函数 `contextFromTree`；自检 8 → **11** 用例 |
+| `tools/readings-in-place.mjs`（新）+ `tools/__tests__/test_readings_in_place.py`（新，4 测试） | 把 bundle 那处缺陷的**一般形式**接上电：干净检出上跑完套件后，`git status` 必须为空。故意**不**进 `pnpm check`（本地工作树按定义是脏的），只由两个浏览器作业调用；忽略 `dist/`，但不忽略新的未跟踪文件（写一个新读数与覆盖一个旧读数是同一缺陷） |
+| `tools/__tests__/test_bidi_deserialize.py` | 用例清单 +3，计数断言同步（`11 passed, 0 failed`；变异后 `7 passed, 4 failed`），导出表加 `contextFromTree` |
+| `docs/MEASURE-BROWSER-PERSISTENCE.md` | 新增"第二个 Firefox 构建"一节与"现在跑在哪"的三行表；纠正 `getTree` 那句 |
+
+本地验证：`tools/__tests__` **3,331 passed, 19 skipped**；`guard:ci` 8 gates attached；`guard:bundle` PASS；
+`docs:crosscheck` 74/79 marker 验证通过；`prettier --check` 各改动文件通过。远端验证：`Verify` run
+`45129831120` 四个作业全绿（含新增的 Firefox 作业），`Verify` run `305d48b7` 见下一条提交。
+
+### 162.7 完成度、可发布信号、SOTA 差距
+
+| 项 | 本轮值 |
+| --- | --- |
+| 产品完成度 | **19/28 不变**。本轮没有增加产品能力——增加的是**已声称的证据真的在被生产**：三份读数从"两份被比较、一份无人问"变成"三份都由一次运行重算"，gate 2 从一份文件变成一个每次 push 都跑的作业 |
+| 可发布信号 | **仍未触发** |
+| 与 SOTA 的量化差距 | 不变：注册臂 **91.25% @ 7,448 tok/题** 对 **Maximem Synap 95.6% @ ~7.4K**，**−4.35 点**，落在 ±3.21 点 judge 带内 → 不可判定 |
+| cortex 是否 SOTA | **不是**。成本轴领先一个数量级，准确率轴落后且不可判定 |
+| 本轮真正的增量 | "gate 2 的第二个引擎每次 push 都被重新证明，而且换一个构建（132 对 159）也成立" —— 这句话此前不能写，因为没有任何作业在跑它 |
+
+### 162.8 六个必答问题（本轮口径）
+
+1. **测评集与排行榜完备性**：不变——LongMemEval-S 在用，LoCoMo/MSC 未接；第三方榜仍无一同时固定 LLM、
+   固定 judge、公开逐题记录。
+2. **竞品穷举**：不变（Mastra/Mem0/MemCog 已测；Letta/Zep/Memobase/MemOS/Cognee 未测；Synap 闭源）。
+3. **同一张图**：`docs/figures/fig-longmemeval-matched-model.png`。产品臂仍不进图（图的两轴要求 500 题
+   注册配置，产品臂只有 100 题单轮）。
+4. **是否穷尽可借鉴价值**：不变——三条判据（抄 MemCog 导航接口；抄答案**之前**的压缩；不抄 Mem0 抽取）。
+   本轮没有新的竞品结论，做的是自家证据的接线。
+5. **剩余路径**：`MR` 的聚合候选抽取（**下一个**，未实现、未登记）；`turnWindow` 只能作为 `temporal`
+   专用 reach；Synap 500 条重判（≈¥1–2）；MemCog 导航接口（≈¥25）；LoCoMo（≈¥8）。浏览器轴上剩下的
+   是 Safari/WebKit（需真机，列为边界）与多标签并发/配额耗尽（两个探针都没测）。
+6. **自我审查**：本轮所有"通过"都来自**打回来的东西**——先让工具在 bundle 读数上报错，才知道它只认一种
+   形状；先用原始 WebSocket 探针打出 `create` 无应答，才敢改 `start()`；`prettier` 打回 `bidi.mjs`。
+   没有一处是"读代码觉得对"就写下的。仍然存疑的一处：`bundle-run.json` 的 `rows` 是 200、CI 跑 400，
+   比较器**不比较行数**（与 `/tmp` 两份读数同理），这是一条有意的豁免，不是遗漏。
+
+### 162.9 为什么这一轮值得做，而不是"又一份文档"
+
+因为这三处是同一个形状反复出现：**一个存在但没被任何东西调用的机制**。产品侧它出现过四次
+（`reviewPass`/`replyRepair`/`semanticCarry`/`factTimeline`，§161.6），这次它在证据侧出现三次——
+一个变量定义了没人设置、一个读数没有任何比较器、一个引擎没有任何作业。这类缺陷的共同点是不产出错误，
+只产出**沉默**：套件绿、文件说 24/24、工作流全绿。要发现它，只能逐个问"这个东西谁在读"，而本轮的三个
+答案都是"没人"。
