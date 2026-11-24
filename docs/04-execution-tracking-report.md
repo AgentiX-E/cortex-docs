@@ -33528,3 +33528,11 @@ If the evidence contains nothing about the user's situation, reply exactly INSUF
 | ⑥ 选值/选实体（最新值优先、实体消歧） | 4 题 | +0.8 点 | 1 轮 ≈¥6 | `KU` 的 `supersededRendering` 是现成候选 |
 
 ④⑤⑥ 与 ① 互不重叠（① 是 `flat` 上的 30 道 preference），并集是 10 + 4 + 6 + 4 = 24 题，与 §173.8 的数一致——这说明 24 这个上界是**按机制可分解**的，而不是一个总数。
+
+### 173.10 归档产物可以被重新取回，所以"读数不可复核"这条限制撤掉
+
+本轮验证了一件此前被记为"网络挡住"的事：**任何历史 artifact 都能重新下载**。做法不是常规的 `curl -L`——API 的 302 会跳到 `*.blob.core.windows.net`，而带着 `Authorization` 头跟过去会被签名 URL 拒绝（`401 InvalidAuthenticationInfo`）。正确的做法是把 302 读成**地址**而不是跟随：先 `GET /repos/.../actions/artifacts/<id>/zip` 拿到 `Location`，再对那个签名地址发一个**不带任何凭据**的请求。实测：`14304937230`（S16，16.3 MB）一次成功，字节数与本地存的那份一致。
+
+这条通道的意义不在省一次人工拷贝，而在**可复核性**：本轮 §173.1 的人口修正（29 → 30）就是把归档拉到本地、逐题比对 gold 才发现的；如果 artifact 只能从浏览器点，这类修正就只能靠别人代劳。同一条通道也让 `tools/readout-arm-run.py --registration/--numbers/--paired` 这些已经写好、带测试的读数工具可以在任何一台机器上对任何一次历史运行重跑，而不是只在派发它的那次 CI 里跑过一遍。
+
+（通道目前是本地脚本 `artifact_pull.py`，未入库：它需要 PAT，而工具目录里的脚本一律从 git remote 读凭据、不落文件。要不要入库是一个独立决定，取决于是否有第二个需要它的人。）
