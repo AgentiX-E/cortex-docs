@@ -34550,3 +34550,126 @@ reach **双向**是这轮唯一没有任何一次派发跑过的配置：把同�
 2. **不能证明 `session-text` 在新臂上仍输。** 它没在新臂上跑过；本轮 0 派发、0 CNY。**不跑的理由是判负一次已经足够**，不是数字已定。
 3. **不能证明守卫能覆盖全部形态。** 它抓「计划句式引用已判注册」；一个用陌生措辞写的计划会漏。`strict: false` 是给人工审阅的入口，不是自动通过。
 4. **不能证明「先查注册」这条流程会被遵守。** 工具能抓住写在文档里的引用，抓不住只写在推理里的。本轮的错误正是后者——它在三份文档之间走，而守卫只能读文档。
+
+## §186 发布工装里躺着 821 个测试文件，而这个仓库从未安装过自己发布的包
+
+本轮是**发布侧**的一步，不是 SOTA 的一步。它由一个从未被问过的问题触发：把五个包 `pnpm pack` 出来，里面到底是什么？
+
+答案：`cortex-memory` 的 547 个文件里 **382 个是编译后的测试**；五个包合计 1,834 个文件里 **821 个是测试**。`files: ["dist"]` 是真的，`tsc -p tsconfig.json` 把 `src/__tests__` 编译进 `dist/__tests__` 也是真的——两个真话之间那一段没人看过。
+
+### 186.1 三个缺陷，与「本该看见它们的守卫」
+
+| 缺陷 | 为什么所有既有门禁都是绿的 | 用户实际拿到什么 |
+| --- | --- | --- |
+| 编译测试随包发布 | `files: ["dist"]` 为真；`entry-guard` 只看**入口能到达什么**，`bundle-guard` 只打**浏览器子路径**，没有一条门禁列过 `dist` 的**内容清单** | 821 个断言文件，`import 'vitest'`，以及三个 manifest 里写着 `devDependencies` 的包 |
+| 每个 sourcemap 都是死路 | `sourceMap`/`declarationMap` 开着，`files` 只发 `dist`，于是每条 `sources` 都指向 `../src/x.ts`——包里没有这个文件 | 调试器知道行号、找不到文件；比没有 map 更坏，因为它看起来像有 |
+| `workspace:*` 离 registry 只差一个 `npm publish` | `pnpm pack` 会改写协议，所以本地 tarball 是好的；`npm publish` 不改写，而 CI 从不 pack | 一个 npm 拒绝安装的包，或者一个从公共 registry 解析兄弟包的包 |
+
+前两条与 `AUDIT-PRODUCT-SURFACE.md` 收集的缺陷同形：**在被检查的那一层为真，在没被检查的那一层被假设**。`entry-guard` 证明的是**源码**干净，而发布物不是源码。
+
+### 186.2 三种状态下的同一个包
+
+| 包 | 原样（as found）文件 / 测试 | 干净重建（clean）文件 / 测试 | 修复后文件 / 测试 |
+| --- | --- | --- | --- |
+| `cortex-core` | 277 / 3 | 366 / 172 | 146 / 0 |
+| `cortex-storage` | 102 / 44 | 114 / 60 | 41 / 0 |
+| `cortex-ai` | 209 / 59 | 222 / 104 | 89 / 0 |
+| `cortex-eval` | 699 / 333 | 1,030 / 664 | 275 / 0 |
+| `cortex-memory` | 547 / **382** | 701 / **540** | 122 / 0 |
+| **合计** | **1,834 / 821** | **2,433 / 1,540** | **673 / 0** |
+
+| 状态 | 字节 | 测试占比 |
+| --- | ---: | --- |
+| 原样 | 3,389,897 | 821 文件 |
+| 干净重建 | 3,964,838 | 1,540 文件 |
+| 修复后 | **3,337,596** | **0** |
+
+**中间那一列是本轮的第二个发现，不是脚注。** 同一份源码 pack 两次差 **599 个文件、575 KiB**，因为 `build` 是 `tsc -p tsconfig.json` 且 `incremental: true`——**发布物是「之前构建过什么」的函数，不是提交的函数**。第一列是累积出来的状态，第二列是全新 checkout 会发布出去的东西。一个离开构建历史就描述不清的发布物，和一个离开派发历史就描述不清的臂是同一类缺陷，而后者这个仓库早就拒绝过（`DESIGN-ARM-ADOPTION.md`）。
+
+字节几乎没动（相对原样 **−1.5%**，相对干净重建 **−15.8%**），因为 `inlineSources` 把源码塞进了每条保留下来的 `.js.map`。所以缺陷从来不是下载体积：
+
+> 这个包不是大到不能发布，是**大到不能读**。审计依赖树的人在生产安装里发现了关于本库内部机制的断言，以及一个 `devDependency` 的 `vitest` 从后门进来，而没有任何声明能让他拒绝它。
+
+### 186.3 修法：把门禁放回编译器，以及为什么不用 `files` 取反
+
+`files: ["dist", "!dist/__tests__"]` 是第一反应，也是错的：取反由打包器实现，本仓库用 `pnpm` 打包，而一条「取决于哪个打包器在跑」的规则，在发布路径改变的那天就不再成立。缺陷在于**编译器把测试写进了发布树**，所以修在编译器：
+
+```json
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "inlineSources": true, "declarationMap": false },
+  "exclude": ["src/__tests__/**", "src/**/__tests__/**"]
+}
+```
+
+`build` 变成 `rm -rf dist tsconfig.build.tsbuildinfo && tsc -p tsconfig.build.json`。三个决定：
+
+1. **清理不是整洁癖。** `incremental: true` 意味着第二次构建信任 `.tsbuildinfo`，而上一次留下的 `dist/__tests__` 仍在盘上、仍在 `pnpm pack` 的视野里。
+2. **`declarationMap` 关掉而不是发出去。** `inlineSources` 只填 `.js.map`，不填 `.d.ts.map`——后者仍指向 `../src/x.ts`。一个无法被做成诚实的 map 就该被拒绝，于是「跳转到定义」落在 `.d.ts` 上，也就是发布出去的那个类型。
+3. **`tsconfig.json` 保留测试。** `typecheck` 仍跑 `tsc -p tsconfig.json --noEmit` 覆盖 `src` 含 `__tests__`，收窄的只是 **emit**。
+
+### 186.4 新门禁：四个问题，只有第四个问的是产品
+
+`tools/install-smoke.mjs`（`guard:install`，`--self-test` **19 条断言**，已进 `check` 链，位置紧跟 `guard:bundle`）：
+
+| 类别 | 读什么 | 证明什么 |
+| --- | --- | --- |
+| 清单 | **tarball**，不是 `package.json` | 无 `__tests__/` 路径、无 `*.test.js`、有 `dist/index.js`、每个 `exports` 目标在包内可解析、无 `.d.ts.map`、每条 `.js.map` 的 `sourcesContent` 与 `sources` 一一对应 |
+| manifest | **打包后**的 `package.json` | 四个依赖字段里没有 `workspace:` |
+| 安装 | 一个只把 tarball 作为 `file:` 依赖的临时工程 | 陌生人拿到的解析。一个被写成 `devDependency` 的运行时依赖**只**会在这里失败，因为工作区里 `pnpm -r build` 能解析到 |
+| 快速上手 | **安装后**的产品，问一个问题 | `assembleMemory` 默认 `reader`；房间表是注册的那张（`multi-session` 48,460，其余五个 24,000）；追加 4 轮回来 4 轮；返回的是读者自己的句子；交付 prompt 里含证据与已发布的多会话指令块 |
+
+第四行是唯一把这份文档和精度记录绑在一起的门禁，也是本仓库唯一一条说「**安装后的工件渲染的是注册臂**」的检查：
+
+```
+quickstart: profile=reader turns=4 promptChars=2675 multi-session room=48460
+tarballs: 5 packages, 673 files, 3259 KiB
+```
+
+四轮语料 2,675 字符是注册渲染，不是它的夹具：三个被钉住的字面量——证据（`Lisbon`、`Berlin`）与指令块（`Work in two steps.`）——断言在**交付的** prompt 上。渲染一变，这里就红，由人来判是采纳还是回归；这正是 `MEASURE-PROMPT-IDENTITY.md` 给基准产物建立的属性，被搬到了包上。
+
+### 186.5 变异：890 条命中，三条规则族
+
+`--self-test` 是封闭的（五个夹具、无网络、不打包），19 条断言，每个变异必须让**恰好一条**规则变红——一条因为错误原因而响的检查是失败，不是「带噪声的通过」：
+
+| 夹具 | 必须响的规则 |
+| --- | --- |
+| `dist/__tests__/index.test.js` 条目 | `tests-shipped` |
+| `__tests__` 之外的 `dist/thing.test.js` | `test-file-shipped` |
+| 没有文件支撑的 `exports` 目标 | `export-target-missing` |
+| 有 `sources` 无 `sourcesContent` 的 map | `map-not-self-contained` |
+| `workspace:*` 依赖 | `workspace-protocol` |
+| 发出去的 `.d.ts.map` | `declaration-map-without-source` |
+| 快速上手读数（profile/轮数/答案/prompt/房间，各自单独变异） | `quickstart-failed` |
+
+活体变异才是要紧的那一个，因为夹具证明的是谓词而不是管线。把 `cortex-memory` 的旧构建命令放回去、从空 `dist` 重建、再跑守卫：**890 条命中，三条规则族**——`tests-shipped` ×540、`declaration-map-without-source` ×175、`map-not-self-contained` ×175，exit 1。每条都是不该出现在发布 tarball 里的文件。再用它自己的脚本重建，读数回到 **0 条**——这一对才让上面的数字成为证据而不是演示。
+
+### 186.6 这一节证明不了什么
+
+1. **证明不了这些包能从 registry 安装。** `pnpm pack` + `file:` 是不发布能得到的最好近似，对四条规则里的四条都够用；但 `pnpm publish` 与 `npm publish` 跑的是不同的打包器、不同的 manifest 处理，而差别恰好落在本轮只检查**结果**、不检查**行为**的 `workspace:` 改写上。
+2. **证明不了原生 peer 能解析。** `better-sqlite3` 与 `pg` 是可选 peer，探针用 `--ignore-scripts` 安装，坏掉的 prebuild 不在射程内。那是后端一致性套件的地盘。
+3. **证明不了浏览器路径。** `guard:browser` 与 `guard:bundle` 覆盖子路径；这条检查导入的是根，以及探针自己的 `Map` 版 `Storage`。
+4. **证明不了升级。** 没有任何一步先装 n 版再覆盖装 n+1 版。
+5. **证明不了与基准可比。** `promptChars=2675` 是四轮语料；它证明渲染到达了工件，不证明这个臂得多少分。
+
+### 186.7 本轮的位置
+
+| 项 | 读数 |
+| --- | --- |
+| 产品完成度 | 发布工件这一格从**无门禁**变成**有门禁且有读数**（`tools/install-smoke.mjs`，19 条自检 + 活体变异 890 条） |
+| 可发布信号 | **仍未触发**——既有阻塞不变（两仓库 secret scanning 需组织管理员开启）；本轮加的是发布物本身的证据，不是解除那个阻塞。附带一条事实：五个包从未发布到任何 registry，所以「发布出去会是什么」直到本轮之前都只是一个假设 |
+| 精度读数 | 不变：91.6%（同提交 400，四遍）为可发布，93.2%（600）为候选且 p=0.18 |
+| 与 SOTA | 不变：Maximem Synap **95.6% @ 7.4K**；判官带宽 ±3.2 点（§`MEASURE-JUDGE-SENSITIVITY`）使 2.4 点的差距落在仪器内 |
+| 本轮模型花费 | **¥0** |
+| `pnpm check` | **EXIT=0**；覆盖率 memory 99.90/99.71/100/100、core 99.63/98.42/99.79/99.83、eval 99.59/98.67/99.84/99.78、ai 100/100/100/100、storage 100/100/100/100；203 个文件 4 维受门禁、0 ratchet |
+
+剩余路径（下一轮候选，按「上界 ÷ 成本」排序，互不重叠）：
+
+| 步骤 | 上界 | 成本 | 前置 |
+| --- | --- | --- | --- |
+| ① 读者家族（`zhipu:glm-4.6`，`MR` 121 题、判官钉 `deepseek-chat`） | 未知；差距均匀（−4 至 −8）指向家族而非版本 | 若额度恢复 **≈¥26** 一次（GLM 无 prompt 缓存，22 题已花 4.8） | **Zhipu 账户额度**——上次三个时间点从可用到关闭（`PREREGISTRATION-READER-FAMILY.md` §6.2） |
+| ② 冲突块 KU 活体读数 | +4 题 KU ≈ **+0.8 点** | 2 × KU-only 4 遍 **≈¥4.6**，且必须串行（开关是仓库级变量） | 无 |
+| ③ 600 宽度并进下一次登记册重读 | 点估计 +8 题，**p=0.18** | **¥15.64** | 需同一轮再落地一个机制，否则只是一次重读 |
+| ④ LoCoMo 跨榜 | 未知 | **≈¥8** | 网络与适配器 |
+
+①之所以排第一，是因为它是唯一**有能力**解释 2.4 点差距的轴：`MR` 在 −8.2、`TR` −4.0、`KU` −4.3、单会话 −4.4 至 −5.4，**均匀**后移正是「读者更弱」的形状，而机制缺失预测的是塌陷。它被账户额度而不是被否证挡住，这一点必须写在这里，否则下一轮又会从「还没试过」开始。
