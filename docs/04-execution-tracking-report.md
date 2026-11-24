@@ -33363,3 +33363,136 @@ cortex 失败的题上展开到两倍长（365 vs 177）。
 | ③ 剩余差距 | 0.6 点 | —— | ①② |
 
 ①的上界来自本轮实测，不是估计：20 题比 gold 短，且这 20 题里 Synap 对了 37/44 中的大部分。
+
+## §173 缺的那条路由：29 道题、9 个错、一个契约
+
+本轮做的是**产品侧的闭合**，不是新的精度实验。§172 把 preference 这一列钉成可归因缺口之后，改动的实质是：`CortexMemory` 的类头注释自己写着 `answerPreference` 是**故意缺席**的，而缺席的后果现在有了价格。
+
+### 173.1 人口是在归档 artifact 上数出来的，不是估计
+
+分母来自 S16（run `44017278305`，500 题 × 4 遍，`feature.metrics.correct = 456`）。**artifact 的 `questions[]` 里没有 `questionType`**，所以人口不能按字段筛——按 gold 筛，因为 LongMemEval-S 的 preference 题 gold 有一句固定模板：
+
+| 读数 | 值 | 来源 |
+| --- | --- | --- |
+| gold 以 `The user would prefer` 开头的题 | **29** | 归档 500 题逐题 `groundTruth` |
+| 其中渲染 `flat` 路由的 | **29 / 29** | 逐题 `route` 字段 |
+| 答对 | **20 / 29** | 逐题 `correct` |
+| 答错 | **9 / 29** | 同上 |
+| `IE` 整体 | 137 / 150 | `feature.metrics.perCapability.IE` |
+
+九道错的题，逐条读过回答，形态是两种，不是九种：
+
+| 题 | 回答 | 形态 |
+| --- | --- | --- |
+| `75832dbd` | "The evidence contains requests for recommendations…" | 拒答 + 回显证据 |
+| `0edc2aef` | "The evidence above contains no information about hotels in Miami" | 拒答 |
+| `09d032c9` | "The evidence does not contain any tips for improving phone battery life." | 拒答 |
+| `57f827a0` | "No direct tips on rearranging bedroom furniture are in the evidence" | 拒答 |
+| `d6233ab6` | "The evidence only mentions positive high school memories…" | 拒答 |
+| `1da05512` | "The evidence does not address whether to buy a NAS now or wait" | 拒答 |
+| `1d4e3b97` | "The evidence does not explain why the bike would perform better" | 拒答 |
+| `d24813b1` | "Based on the evidence, here are baking ideas…" | 已组合，判官不接受 |
+| `0a34ad58` | "Based on the evidence, here are helpful tips for getting around Tokyo…" | 已组合，判官不接受 |
+
+**七道在说"证据里没有"，五道顺手把证据抄了一遍。** 上界因此是 9 题 = **1.80 点**，而且这个上界是在**被处理人口上**算的：29 题全部走 `flat`，没有一道落在处理范围之外——这正是 §13.129 的 `recommend` 当初把 claim 写成"上界 28"时做不到的那一步。
+
+### 173.2 旧理由为什么站不住
+
+类头注释的原话是：
+
+> `answerPreference` is omitted on purpose: a value gate filters *evidence*, while a preference question asks for a *suggestion*.
+
+前提为真，结论不成立。缺了这条路由，这 29 题落到 `flat`，而 `flat` 在 `verbatim-acts` 下读的收尾是：
+
+> `Reply with the answer alone. If the evidence does not contain the answer, reply exactly INSUFFICIENT_EVIDENCE.`
+
+preference 题的 gold 是**从用户说过的话里组合出来的一句话**，所以窗口里没有任何一句"就是那个答案"，而"只回答答案本身"要求的是一句短事实。读者做了它被授权的唯一一件事：报告缺失。参考实现在同一数据集、同一模型上把同一诊断写进了源码：*"the extractive contract is wrong for preference questions … it reads as having nothing to say and abstains."*
+
+这条缺口在评估侧早就有对照臂（`natural-language-memory.ts` 的 `answerPreference`），产品侧一直是 `benchmark.ts` 的 fallback——**评估侧证明过、产品侧没发货**，正是需求 16 点名的那一类。
+
+### 173.3 新契约：四句，每句对应一种失败
+
+`PromptContract` 增加 `'preference'`，块是 518 字符：
+
+```
+Step 1 — read the evidence and note what the user has said they like, want, own, or are dealing with.
+         Keep those notes to yourself: do not write them out.
+Step 2 — recommend something concrete that builds on those preferences, and reply with the
+         recommendation itself.
+Do not quote, copy, or list the evidence turns. Reply in your own words, in at most three sentences,
+naming the specific options the evidence supports.
+If the evidence contains nothing about the user's situation, reply exactly INSUFFICIENT_EVIDENCE.
+```
+
+| 句子 | 它回答的失败 | 覆盖的题 |
+| --- | --- | --- |
+| Step 1 静默 | `silent`（run `40792853362`）要求把笔记写出来，`MR` 掉 26 题，错答是"少一项的和"——步骤要有，输出不能有 | 7 道拒答 |
+| Step 2 组合 | 把"只回答答案本身"换成"回答这个推荐本身" | 7 道拒答 |
+| 禁止回显 | 九道里五道是证据复述；形状守卫永远够不到这一半（§13.129.3） | 5 道 |
+| 收窄拒答条件 | 从"证据是否包含答案"（对组合题天然为假）换成"证据里是否有关于用户处境的内容"（同一窗口天然为真） | 7 道拒答 |
+
+**为什么是契约而不是再一个 ask**：§13.129 的 `recommend` 用的是**插入**——把许可和禁令放在 `extractive` 收尾**上方**，而 §13.55 的 run `39035438120` 量过位置：规则放在收尾上面会输给收尾，28 道拒答里有 21 道再拒，**12 道手里已经有清单**。所以这里用 `withReplacedClose` 把收尾**替换**掉。`recommend` 的字节保持不动（它是消融参考），两句共享的是同一条常量 `RECOMMEND_NO_ECHO`，不是第二份文案。
+
+### 173.4 单变量主张写成字节，不写成形容
+
+新增 `preference-route.test.ts`（9 条），核心三条：
+
+1. **渲染出的块等于注册的常量**（`toBe(PREFERENCE_INSTRUCTION)`），且不含 `Reply with the answer alone`——改一个字就是改变量，测试红。
+2. **证据段逐字相等**：同一个 corpus、同一个问题，`answer()` 与 `answerPreference()` 渲染的提示词在"最后一个空行之前"完全一致。准入、宽度计划、相关性排序、24,000 字符房间，任何一处动了这条就红。
+3. **一次调用**，且空证据时不调用（`CortexMemory` 的第一条性质不变）。
+
+另外三处既有测试被**反转**（不是删除）：`memory-conformance.test.ts` 里"声明 absence、flat 接收这些题"改成"声明 `answerPreference`、preference 题读到 flat 读不到的块"；`prompt-contract-reach.test.ts` 的路由表 6 → 7 行（并给 `instructions()` 加第二个起点标记，因为 preference 块不以 `Answer the question` 开头，否则比较会把渲染折进关于 ask 的断言里）；`product-provider-route.test.ts` 里"preference 落到 flat"改成**断言字节**：`lastPromptText()` 含新块、且与普通 IE 题不同。
+
+### 173.5 为什么不加第七条路由
+
+第一版实现让 `answerPreference` 自己也 `#enterRoute('flat')`，`evidence-census.test.ts` 立刻红：它断言"每条路由只声明自己一次"，理由是**同一条路径出现两次，其中一次一定是错的**。这条不变式是对的，所以没有放宽它，改的是实现：新增私有 `#answerFlat(question, context, contract)`，`answer` 与 `answerPreference` 都走它，`#enterRoute('flat')` 在源码里仍然只出现一次，契约变成参数。
+
+**也没有新增 `'preference'` 这个 `TurnCapRoute`**，尽管从"一路由一契约"看它更整齐。原因是一笔连锁账：`TURN_CAP_ROUTES` 加一项 → `REGISTERED_ROOMS`（`Record<TurnCapRoute, number>`，总数而非部分）必须加一项 → `assemble-rooms.test.ts` 拿 `REGISTERED_ROOMS` 与 `tools/arm-config-baseline.json` 的 `maxPromptCharsByRoute` 做 `toEqual` → 那份基线是 `arm-config-record.py --record` **从真实 artifact 投影出来的**，手改它就是伪造记录。给一条与 `flat` 逐字符相同的房间再记一笔账，得到的不是精度，是一份说假话的基线。所以路由是 `flat`，区分靠契约，可观测性靠 `lastPromptText()`——这比路由名更强。
+
+### 173.6 派发与四条判据
+
+注册文件是 `docs/PREREGISTRATION-PREFERENCE-ROUTE.md`，判据在派发前写死：
+
+| # | 判据 | 门槛 | 否证 |
+| --- | --- | --- | --- |
+| C1 | 覆盖面：只有这 29 题的指令块动，其余 471 题 `promptDigest` 与归档逐字节相同 | 471/471 相同 | 任何范围外的 digest 变化 |
+| C2 | 转化：九道里救回 | ≥ 5 / 9（McNemar 单侧 p < 0.10） | ≤ 2 / 9 |
+| C3 | 成本：每题调用数不变；提示词 token × 题 +≤ 0.5% | 实测增量 +125 字符/题 ≈ +0.02% | 多出一次调用，或 > +1.0% |
+| C4 | 守卫：`IE` 里 121 道非 preference 题是内部对照 | 翻转 ≤ 7（5.0% 读者地板，19/379） | ≥ 10 |
+
+派发不走 `tools/dispatch-cortex-memory-ab.py`（它的 `INPUTS` 是注册表的镜像，加一个 `capability` 会让 `test_preregistration_config.py` 与 §10.3 对不上），而是直接按 `workflow_dispatch` 传**全量显式参数**：`limit=0`、`capability=IE`、`ablation_runs=4`，其余每一项都写成归档里的值而不是交给默认值——"默认值恰好相同"是这个仓库反复吃亏的那一类（`arm-config-record.py` 存在的理由）。
+
+成本：`150 题 × 4 遍 = 600` 次读者调用 + 600 次判官调用，按归档 7,448 prompt tokens/题算 ≈ 4.5M tokens；对照是归档的同一批题，所以这一轮不需要再跑一遍 control。
+
+### 173.7 本轮的位置
+
+| 项 | 读数 |
+| --- | --- |
+| 产品完成度 | **19/19**（本条不是新特性，是把已有的 `MemorySystem` 契约补齐） |
+| 可发布信号 | **未触发**（两仓库 secret scanning 与 PAT 权限仍待管理员） |
+| 本轮模型花费 | **¥0**（代码 + 单测 + 门禁，无模型调用） |
+| 契约路由数 | 5 / 6 → **6 / 6** |
+
+剩余路径（精度侧），按上界排序且互不重叠：
+
+| 步骤 | 上界 | 成本 | 前置 |
+| --- | --- | --- | --- |
+| ① preference 路由（本轮已交付，待派发读数） | **+1.8 点**（9 题） | 1 轮 `IE` 消融 ≈¥6 | 无 |
+| ② 多值答案补全（`subset` 修复） | **+4.0 点**（20 题） | 1 轮消融 ≈¥6 | 无 |
+| ③ `H2` + LoCoMo 接入 | 未知 | 2 轮 ≈¥8 | LoCoMo 已落地 |
+
+### 173.8 两个上界相交 5 题，所以它们不能相加
+
+§172.6 把 ① 和 ② 并列成"+4.0 点"和"1.8 点"，读者会读成 5.8。本轮把交集数了出来（同一份归档 artifact，逐题）：
+
+| 集合 | 口径 | 题数 |
+| --- | --- | --- |
+| 全部错答 | `correct = false` | 44 |
+| ② 的人口：回答比 gold 短的错答 | `len(answer) < len(gold)` | 20 |
+| ① 的人口：preference 错答 | gold 前缀 | 9 |
+| **交集** | 既短又是 preference | **5**（`09d032c9` `1d4e3b97` `1da05512` `57f827a0` `d6233ab6`） |
+| 并集上界 | 20 + 9 − 5 | **24 题 = 4.8 点** |
+
+所以两条路径的**合计**上界是 **4.8 点**，不是 5.8；把两个数字相加会把 5 道题数两遍。这个错误和 §170 记录的是同一类——两个数字各自都对，但它们的分母不是一件事——只是这次的规模从 0.05 点变成了 1.0 点。
+
+修完 ①+② 的并集上界 4.8 点之后，cortex 的理论位置是 **91.20 + 4.80 = 96.00%**，与同一把尺下 Synap 的 **95.80%** 只差 0.2 点；差的那 0.2 点落在判官与读数的噪声里，不再落在机制上。**但这是上界，不是预测**：上界的含义是"如果九道和二十道全部转化"，而转化率本身是要被测的量。
