@@ -33370,17 +33370,20 @@ cortex 失败的题上展开到两倍长（365 vs 177）。
 
 ### 173.1 人口是在归档 artifact 上数出来的，不是估计
 
-分母来自 S16（run `44017278305`，500 题 × 4 遍，`feature.metrics.correct = 456`）。**artifact 的 `questions[]` 里没有 `questionType`**，所以人口不能按字段筛——按 gold 筛，因为 LongMemEval-S 的 preference 题 gold 有一句固定模板：
+分母来自 S16（run `44017278305`，500 题 × 4 遍，`feature.metrics.correct = 456`）。**artifact 的 `questions[]` 里没有 `questionType`**，所以人口不能按字段筛——按 gold 筛：
 
-| 读数 | 值 | 来源 |
-| --- | --- | --- |
-| gold 以 `The user would prefer` 开头的题 | **29** | 归档 500 题逐题 `groundTruth` |
-| 其中渲染 `flat` 路由的 | **29 / 29** | 逐题 `route` 字段 |
-| 答对 | **20 / 29** | 逐题 `correct` |
-| 答错 | **9 / 29** | 同上 |
-| `IE` 整体 | 137 / 150 | `feature.metrics.perCapability.IE` |
+| 读数 | 第一版（前缀） | 修正后（子串） | 来源 |
+| --- | --- | --- | --- |
+| gold 命中 preference 模板的题 | 29 | **30** | 归档 500 题逐题 `groundTruth` |
+| 其中渲染 `flat` 路由的 | 29 / 29 | **30 / 30** | 逐题 `route` 字段 |
+| 答对 | 20 / 29 | **20 / 30** | 逐题 `correct` |
+| 答错 | 9 / 29 | **10 / 30** | 同上 |
+| `IE` 整体 | 137 / 150 | 137 / 150 | `feature.metrics.perCapability.IE` |
+| 上界 | 1.80 点 | **2.00 点** | 被处理人口 × 单题 0.2 点 |
 
-九道错的题，逐条读过回答，形态是两种，不是九种：
+第一版用的是**前缀** `The user would prefer`，漏掉的那一道 gold 以从句开头：`1a1907b4` = *"Considering their mixology class background, the user would prefer cocktail suggestions that build upon their existing …"*。它是一道 preference 题、走 `flat`、而且**答错**。所以"看起来机械"的筛子其实是前缀匹配，人口少了一、上界少了一。这是本战役第七次同类的错：**筛子写在名字上，而名字不是定义**。修正发生在派发之后、读数之前，两侧都记在案。
+
+十道错的题，逐条读过回答，形态是两种，不是十种：
 
 | 题 | 回答 | 形态 |
 | --- | --- | --- |
@@ -33393,8 +33396,9 @@ cortex 失败的题上展开到两倍长（365 vs 177）。
 | `1d4e3b97` | "The evidence does not explain why the bike would perform better" | 拒答 |
 | `d24813b1` | "Based on the evidence, here are baking ideas…" | 已组合，判官不接受 |
 | `0a34ad58` | "Based on the evidence, here are helpful tips for getting around Tokyo…" | 已组合，判官不接受 |
+| `1a1907b4` | "The evidence mentions a Pimm's Cup with a Twist made with Hendrick's gin…" | 拒答 + 回显证据 |
 
-**七道在说"证据里没有"，五道顺手把证据抄了一遍。** 上界因此是 9 题 = **1.80 点**，而且这个上界是在**被处理人口上**算的：29 题全部走 `flat`，没有一道落在处理范围之外——这正是 §13.129 的 `recommend` 当初把 claim 写成"上界 28"时做不到的那一步。
+**八道在说"证据里没有"，六道顺手把证据抄了一遍。** 上界因此是 10 题 = **2.00 点**，而且这个上界是在**被处理人口上**算的：30 题全部走 `flat`，没有一道落在处理范围之外——这正是 §13.129 的 `recommend` 当初把 claim 写成"上界 28"时做不到的那一步。
 
 ### 173.2 旧理由为什么站不住
 
@@ -33455,10 +33459,10 @@ If the evidence contains nothing about the user's situation, reply exactly INSUF
 
 | # | 判据 | 门槛 | 否证 |
 | --- | --- | --- | --- |
-| C1 | 覆盖面：只有这 29 题的指令块动，其余 471 题 `promptDigest` 与归档逐字节相同 | 471/471 相同 | 任何范围外的 digest 变化 |
-| C2 | 转化：九道里救回 | ≥ 5 / 9（McNemar 单侧 p < 0.10） | ≤ 2 / 9 |
+| C1 | 覆盖面：只有这 30 题的指令块动，其余 470 题 `promptDigest` 与归档逐字节相同 | 470/470 相同 | 任何范围外的 digest 变化 |
+| C2 | 转化：十道里救回 | ≥ 5 / 10（McNemar 单侧 p < 0.10） | ≤ 2 / 10 |
 | C3 | 成本：每题调用数不变；提示词 token × 题 +≤ 0.5% | 实测增量 +125 字符/题 ≈ +0.02% | 多出一次调用，或 > +1.0% |
-| C4 | 守卫：`IE` 里 121 道非 preference 题是内部对照 | 翻转 ≤ 7（5.0% 读者地板，19/379） | ≥ 10 |
+| C4 | 守卫：`IE` 里 120 道非 preference 题是内部对照 | 翻转 ≤ 7（5.0% 读者地板，19/379） | ≥ 10 |
 
 派发不走 `tools/dispatch-cortex-memory-ab.py`（它的 `INPUTS` 是注册表的镜像，加一个 `capability` 会让 `test_preregistration_config.py` 与 §10.3 对不上），而是直接按 `workflow_dispatch` 传**全量显式参数**：`limit=0`、`capability=IE`、`ablation_runs=4`，其余每一项都写成归档里的值而不是交给默认值——"默认值恰好相同"是这个仓库反复吃亏的那一类（`arm-config-record.py` 存在的理由）。
 
@@ -33477,7 +33481,7 @@ If the evidence contains nothing about the user's situation, reply exactly INSUF
 
 | 步骤 | 上界 | 成本 | 前置 |
 | --- | --- | --- | --- |
-| ① preference 路由（本轮已交付，待派发读数） | **+1.8 点**（9 题） | 1 轮 `IE` 消融 ≈¥6 | 无 |
+| ① preference 路由（本轮已交付，待派发读数） | **+2.0 点**（10 题） | 1 轮 `IE` 消融 ≈¥6 | 无 |
 | ② 多值答案补全（`subset` 修复） | **+4.0 点**（20 题） | 1 轮消融 ≈¥6 | 无 |
 | ③ `H2` + LoCoMo 接入 | 未知 | 2 轮 ≈¥8 | LoCoMo 已落地 |
 
@@ -33490,8 +33494,8 @@ If the evidence contains nothing about the user's situation, reply exactly INSUF
 | 全部错答 | `correct = false` | 44 |
 | ② 的人口：回答比 gold 短的错答 | `len(answer) < len(gold)` | 20 |
 | ① 的人口：preference 错答 | gold 前缀 | 9 |
-| **交集** | 既短又是 preference | **5**（`09d032c9` `1d4e3b97` `1da05512` `57f827a0` `d6233ab6`） |
-| 并集上界 | 20 + 9 − 5 | **24 题 = 4.8 点** |
+| **交集** | 既短又是 preference | **6**（`09d032c9` `1d4e3b97` `1da05512` `57f827a0` `d6233ab6` `1a1907b4`） |
+| 并集上界 | 20 + 10 − 6 | **24 题 = 4.8 点** |
 
 所以两条路径的**合计**上界是 **4.8 点**，不是 5.8；把两个数字相加会把 5 道题数两遍。这个错误和 §170 记录的是同一类——两个数字各自都对，但它们的分母不是一件事——只是这次的规模从 0.05 点变成了 1.0 点。
 
