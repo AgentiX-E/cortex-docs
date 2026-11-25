@@ -1,0 +1,127 @@
+{
+ "kind": "cache-credit-probe",
+ "prompts": [
+  {
+   "variant": "reference",
+   "chars": 3753
+  },
+  {
+   "variant": "repeat",
+   "chars": 3753
+  },
+  {
+   "variant": "head-changed",
+   "chars": 3753
+  },
+  {
+   "variant": "paragraphs-swapped",
+   "chars": 3753
+  },
+  {
+   "variant": "unrelated",
+   "chars": 3928
+  }
+ ],
+ "samples": [
+  {
+   "variant": "reference",
+   "promptTokens": 1393,
+   "cacheHitPromptTokens": 0
+  },
+  {
+   "variant": "repeat",
+   "promptTokens": 1393,
+   "cacheHitPromptTokens": 1152
+  },
+  {
+   "variant": "head-changed",
+   "promptTokens": 1392,
+   "cacheHitPromptTokens": 0
+  },
+  {
+   "variant": "paragraphs-swapped",
+   "promptTokens": 1393,
+   "cacheHitPromptTokens": 0
+  },
+  {
+   "variant": "unrelated",
+   "promptTokens": 1483,
+   "cacheHitPromptTokens": 0
+  }
+ ],
+ "position": {
+  "model": "position",
+  "meanAbsoluteResidual": 0.034601579325197404,
+  "worstResidual": 0.17300789662598703,
+  "rows": [
+   {
+    "variant": "reference",
+    "expected": 0,
+    "credited": 0
+   },
+   {
+    "variant": "repeat",
+    "expected": 1,
+    "credited": 0.826992103374013
+   },
+   {
+    "variant": "head-changed",
+    "expected": 0,
+    "credited": 0
+   },
+   {
+    "variant": "paragraphs-swapped",
+    "expected": 0,
+    "credited": 0
+   },
+   {
+    "variant": "unrelated",
+    "expected": 0,
+    "credited": 0
+   }
+  ]
+ },
+ "content": {
+  "model": "content",
+  "meanAbsoluteResidual": 0.42452000206999835,
+  "worstResidual": 1,
+  "rows": [
+   {
+    "variant": "reference",
+    "expected": 0,
+    "credited": 0
+   },
+   {
+    "variant": "repeat",
+    "expected": 1,
+    "credited": 0.826992103374013
+   },
+   {
+    "variant": "head-changed",
+    "expected": 0.9415900486749594,
+    "credited": 0
+   },
+   {
+    "variant": "paragraphs-swapped",
+    "expected": 1,
+    "credited": 0
+   },
+   {
+    "variant": "unrelated",
+    "expected": 0.008002065049044915,
+    "credited": 0
+   }
+  ]
+ },
+ "verdict": "position",
+ "closest": 0.034601579325197404,
+ "dispatch": "45574814660",
+ "workflow": "probe-cache-credit.yml",
+ "model": "deepseek-chat (workflow default)",
+ "cost": {
+  "calls": 5,
+  "promptTokens": 7054,
+  "completionTokens": 40
+ },
+ "note": "Five prompts sent in order, one call at a time. The credit is the provider's own `prompt_cache_hit_tokens`, read through the product adapter. Verdict `position`: the counter serves a run from the start of the prompt and nothing else. The `repeat` row is 82.7%, not 100%."
+}
