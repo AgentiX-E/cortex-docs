@@ -1,0 +1,52 @@
+{
+ "capability": "MR",
+ "questions": 121,
+ "correct": 108,
+ "wrong": 13,
+ "excludesNothing": {
+  "replies": 49,
+  "correct": 47
+ },
+ "excludesSomething": {
+  "replies": 72,
+  "correct": 61
+ },
+ "buckets": {
+  "period": {
+   "replies": 50,
+   "correct": 42,
+   "lines": 119,
+   "wrong": 8
+  },
+  "verb": {
+   "replies": 10,
+   "correct": 7,
+   "lines": 12,
+   "wrong": 3
+  },
+  "category": {
+   "replies": 2,
+   "correct": 1,
+   "lines": 4,
+   "wrong": 1
+  },
+  "planning": {
+   "replies": 21,
+   "correct": 19,
+   "lines": 32,
+   "wrong": 2
+  },
+  "absence": {
+   "replies": 10,
+   "correct": 7,
+   "lines": 10,
+   "wrong": 3
+  },
+  "duplicate": {
+   "replies": 10,
+   "correct": 8,
+   "lines": 13,
+   "wrong": 2
+  }
+ }
+}

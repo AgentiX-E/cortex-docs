@@ -35560,3 +35560,164 @@ R4 fired  `R2` and `R3` both cleared, so the registered rule accepts the mechani
 | 可发布信号 | **仍未触发**（阻塞不变：两仓库 secret scanning 需组织管理员开启；五个包未发布，需 npm token） |
 
 本轮一句话：**队列之所以全是贵的，一半是因为它们被按整卷定价，另一半是因为唯一能证明它们便宜的那个数字被写成了一句散文；把发票写进基线之后，三个机制 7.76，而认证要等赢了再买。**
+
+## §195 上一轮推荐的下一步，在交付的臂上没有对象
+
+§193 把「换掉 `Step N` 标题」列为本轮唯一可修的机制，价格从 ¥16 压到 ¥5.87。本轮的**第一步**是检查那个机制在**正在交付的配置**里有没有人口——答案是没有：那个判据是在 `enumerated` 上建的，而已采纳臂读的是 `verbatim-acts`。同一轮里还把 §190 被守卫拒掉的合并取回来了，因此第一次拿到已采纳臂的**全宽逐题**读数，把剩下的 34 道失败画成了地图。本轮模型花费 **¥0**。
+
+### 195.1 反证：那个判据在已采纳臂上的流行率是 0
+
+§193 的判据要找的是「回复把契约的通用标题抄了回来」。它成立的前提是那句标题**可抄**——`enumerated` 的 Step 1 是 *"list every item in the evidence that matches the question"*，一句关于答案的谓词。已采纳臂的 `ask` 是 `verbatim-acts`，多会话路由的 Step 1 是另一句：*"Enumerate every item matching the question's EXACT action, one per line"*。
+
+shard 0（63 条回复）逐条检索：
+
+| 指令里的字面片段 | 含它的回复数 |
+| --- | ---: |
+| `EXACT action` | **0** |
+| `Enumerate every item` | **0** |
+| `substitute or infer` | **0** |
+
+而读者真正写出来的标题是裸的 `Step 1:`（7 条）或自己的话（`Step 1 — Candidate feed purchases`，5 条），另有 51 条根本没有 `Step 1` 行——那是另外四条路由，它们从来收不到这个块。**判据的流行率是 0，所以它的分离度不是「小」而是「未定义」**：在这条臂上不存在可被换掉的标题。那 ¥5.87 会买到一次对空集的测量。
+
+`RETRACTIONS.md` 第 27 条把这件事记成**建议**被撤回，而不是**读数**被撤回：`enumerated` 上的 19.7 / 13.3 点仍然成立，它只是关于一个已退役的契约。这是两轮里第二次「杠杆没有对象」——§191.8 那一次花了 ¥8 才发现。检查顺序因此固定下来：**先问这个机制点名的那个群体，在要交付的配置里存不存在。**
+
+### 195.2 被自己的守卫拒掉的那次合并，本轮从归档里取回来了
+
+`45543010618` 的 `merge the shards` 当时 exit 1：`refusing: shard 1 differs from shard 0 in memoryArmConfig`。§190.1 诊断出字段是 `selfIndex`（答完之后才写的读数），修法是 `tools/arm-config-census.json` 加声明，但**合并后的文档没有归档**，93.50 是以散文形式引用的。本轮重新下载八个分片并复跑合并：
+
+```
+merged 8 shards -> 500 questions (500 corpora x 1 windows), 2 repetition(s)
+  accuracy per run: baseline 0.9180, 0.9160 | feature 0.9320, 0.9380
+  mean: baseline 0.9170 | feature 0.9350 | difference 0.0180
+```
+
+`feature 0.9350` 与已发布数字四位相同，所以那个读数是**被验证**而不是被引用的。附带价值：这批制品早于 `memoryArmConfig.censusKeys` 字段，走的正是 `arm-config-census.json` 的**回退清单**分支——即修复自己 docblock 里说的「归档制品不能重新序列化」那条路径，第一次被真实数据跑到。
+
+### 195.3 全宽失败地图：34 道，两种制度
+
+首遍逐题（两遍均值即上面的 93.50）：
+
+| 能力 | n | 对 | 准确率 | 错 | 失败里 **gold 全覆盖**的 | 失败携带的 gold turn |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `MR` | 121 | 108 | 89.26% | 13 | **9** | 249 / 258（97%） |
+| `TR` | 127 | 122 | 96.06% | 5 | **0** | 59 / 77（77%） |
+| `IE` | 150 | 141 | 94.00% | 9 | **0** | 53 / 110（48%） |
+| `KU` | 72 | 65 | 90.28% | 7 | **0** | 83 / 162（51%） |
+| `ABS` | 30 | 30 | 100.00% | 0 | — | — |
+| 全体 | 500 | 466 | 93.20% | 34 | **9** | 444 / 607（73%） |
+
+这张表把五个能力分成两种制度，而任何单一改动只能服务其中一种：
+
+- **`MR` 是决策制度。** 13 道失败里 9 道把 gold 全部投递到位，另四道只差 1、1、2、5 个 turn——这条路由失败时 97% 的 gold turn 已经在页面上。读者读得够仔细，仍然做了 gold 不做的决定。检索、加宽窗口、换索引都够不着它。
+- **`TR`/`IE`/`KU` 是投递制度。** 21 道失败里**没有一道**是全覆盖，三个能力分别携带 77%、48%、51% 的 gold turn。这三条是排序、房间与预算的问题，而那两个旋钮（`§13.79` 的池、`§193` 的宽度）已经量过。
+- **`TR` 的 77% 离 `MR` 很近**，所以这只是本制品的读数，不是对能力的断言：更宽的窗口可能把它推进决策制度，`IE` 的 48% 则不会。
+
+### 195.4 排除普查：121 条回复在丢东西时说了什么
+
+新增 `tools/exclusion-census.mjs`，读每条回复里的 `excluded` 行并按它自己说的理由分桶：
+
+```
+MR  121 questions, 108 correct (89.3%), 13 wrong
+
+  reply                      replies  correct    acc
+  excludes nothing                49       47  95.9%
+  excludes something              72       61  84.7%
+
+  reason it cites            replies  correct    acc  lines in wrong
+  period                          50       42  84.0%    119        8
+  verb                            10        7  70.0%     12        3
+  category                         2        1  50.0%      4        1
+  planning                        21       19  90.5%     32        2
+  absence                         10        7  70.0%     10        3
+  duplicate                       10        8  80.0%     13        2
+```
+
+三条读数，第三条才是决定性的：
+
+1. **「排除了什么」是这个群体的标记。** 95.9% 对 84.7%，11.2 点在 49/72 的切分上，13 道失败里 8 道在下面那行。什么都没丢的读者，是找到了答案的读者。
+2. **但它不能证明「排除」本身是错的。** 72 条排除的回复里 61 条是对的。问题在于错的那几条用的是**哪一张许可证**，而全群体 190 条排除行里有 119 条引用的是「期间/日期」。
+3. **一个桶不是原因。** `period` 桶 84.0% 与群体平均几乎相同，单看它不足以支持一行改动。支持它的是下面三道题——gold 数的正是被日期筛掉的东西，而且是算术，不是相关性。
+
+### 195.5 三道逐题读到 gold turn
+
+**`3a704032`（gold `3`，答 `2`）**
+
+```
+- Snake plant | acquired (got) | 2023/05/25 — excluded from the last-month window: described as received
+  "last month," which points to the prior calendar month rather than the recent 30-day period
+```
+
+证据原文是 *"my snake plant, which I got from my sister last month"*，题目问的是 *"the last month"*。回复把题目的相对期间拿去和**会话日期**对账，落到四月，丢掉了那个「自己的话就是题目期间」的项。gold 数它。
+
+**`gpt4_731e37d7`（gold `$720`，答 `$220`）**
+
+```
+- Digital marketing workshop (Mar 15–16) | ... | 2023/02/26 — outside last four months; no cost stated.
+- Workshop with Jane (Mar 22) | ... | 2023/02/26 — outside last four months; no cost stated.
+```
+
+*"Mar 15–16"* 是**证据自己说的**日期，而它所在的会话是 `2023/02/26`——在它之前。回复把题目窗口套在会话日期上，把这条「未来」的提及判成窗口外，丢掉它自己写着的 `$500`。`$200 + $20 + $500 = $720`，与 gold 严丝合缝。
+
+**`37f165cf`（gold `856`，答 `INSUFFICIENT_EVIDENCE`）**
+
+```
+- The Nightingale | finished | 2023/05/22 — page count 440; described as "just finished" in May, not January or March.
+- Unnamed 416-page novel | finished | 2023/05/27 — page count 416; described as "just finished" in May, not January or March.
+```
+
+两项都在清单里，两个页数都写出来了，`440 + 416 = 856` 就是 gold。回复把答案写完，然后因为会话日期与题目的月份不符而拒答。
+
+**三者共同点**：全部是**日期**排除了 gold 会数的项，而且每一次的裁决都由**会话**日期做出，而不是由提及自己的话做出。这正是 `verbatim-scope` 从另一端量过的那根轴：`S17` 加了「行为必须落在题目说的期间内」，读 **98/121 对控制 102**（转换 2、回归 6，精确 McNemar p=0.070），回归里就有一道是 `3a704032`。
+
+### 195.6 机制：一行，价格 ¥5.87
+
+`ask` 从 `verbatim-acts` 换成新增的 `verbatim-clock`——那个块加**第三行行为规则**，别的都不动（`ask-verbatim-clock.test.ts` 把渲染当差分断言：没有删除、恰好新增一行、顺序不变；`ask-changes.test.ts` 把变更集钉在单一路由）：
+
+> A turn is dated by when it was said, not by when the thing happened, so that date is never a reason to exclude … A period says what to look for; a mention that describes the act counts even when the arithmetic of dates says otherwise.
+
+保留的边界是「提及自己的话可以把项排除在期间之外」，所以 §13.290 表里那五道高估（`gpt4_2f8be40d` 重复计同一次婚礼、`gpt4_7fce9456` 把「一见倾心」当看房、`d851d5ba` 把「活动募到 $5,000」算进个人募款）都不由这一行经手，也不会被它放大。
+
+`docs/PREREG-CLOCK-AXIS.md` 在派发**之前**登记判据：`C1` 至少净转 4 道引用期间的失败、`C2` 精确 McNemar `p ≤ 0.05`（`c=0` 时需要 `b≥6`）、`C3` 期间引用从 50 降到 ≤25、`C4` 高估人口不增长（失败里「从低于 gold 变成高于 gold」至多 1 道）、`R1` `MR ≥ 112`、`R3` 提示词账单 ≤ +1.0%。并写明**最有信息量的负结果是 `C3` 过而 `R1` 不过**：许可证消失了而准确率不动，说明排除是不完整筛查的**症状**而不是原因，那这根轴两端就都关闭了，下一步是筛查本身（`candidates`，§13.205）。
+
+### 195.7 仪器、测试与一处自查出的错
+
+| 项 | 读数 |
+| --- | --- |
+| 新增 `tools/exclusion-census.mjs` | 自测 **11** 条断言（能力过滤 / 空人口与缺失能力两条拒绝 / 空排除单列 / 一行落两个桶 / 多分片拼成一个群体） |
+| 新增 `ask-verbatim-clock.test.ts` | **11** 例（差分三条、内容四条、reach 四条） |
+| `ask-changes.test.ts` | **43** 例通过，`shapeSpecific` 从四个键扩到五个 |
+| `test_ask_table_parity.py` | **14 passed**，两张 reach 表（产品侧与 harness 侧）一致 |
+| `prereg-status.mjs` | 13 份登记：6 关闭 / 7 开放，`PREREG-CLOCK-AXIS` 为 `pending` |
+| 新守卫 | `guard:exclusion-census`，接在 `guard:paired-delta` 之后 |
+| 本轮模型花费 | **¥0** |
+
+**自查出的错**：写第一版文档时我写的是「13 道失败里 10 道 gold 全覆盖」，并把 `TR` 的 5 道也算成全覆盖。逐题重算后是 **9 道**（`gpt4_7fce9456` 29/30、`3a704032` 17/18 都不算全覆盖），而 `TR`/`IE`/`KU` 的全覆盖数是 **0**——也就是「TR 与 MR 同属决策制度」那句是错的，`TR` 属于投递制度。因为这条错误同时出现在五处（`prompt.ts` docblock、`bench-memory-arm.ts`、工作流说明、`README` 索引、审计正文），它被当作本轮的一个真缺陷记在这里而不是悄悄改掉：**两个聚合数（每个能力的错题数、gold 覆盖率）之间也会说谎，只有当它们逐题并列时才不会。**
+
+### 195.8 位置
+
+| 项 | 读数 |
+| --- | --- |
+| 产品完成度 | 未动产品面（组合根仍 33 字段 / 32 转发 / 1 说明 / 0 未判定）；改的是**证据层与一条提示词契约** |
+| 已发布精度 | **91.20%**（`S16`，4 遍）；已采纳默认臂 **93.50%**（`45543010618`，2 遍，本轮从归档复算验证） |
+| 与 SOTA | Maximem Synap **95.6% @ 7,400**；cortex **93.50 @ 7,224** → 差 **2.1 点**（本轮未变；但下一刀的位置第一次被量化） |
+| 可发布信号 | **仍未触发**（阻塞不变：两仓库 secret scanning 需组织管理员开启；五个包未发布，需 npm token） |
+| 队列 | ⑨ 已撤回（¥5.87 省下）；⑩ `verbatim-clock` **¥5.87** 已登记待派发；⑤ 冲突块 `KU` ¥1.03；④ 钉官 ¥0.86；③c 整卷确认 ¥3.57 |
+
+剩余路径，按「每 CNY 能拿回的 MR 题数」排序：
+
+| 序号 | 内容 | 目标人口 | CNY | 状态 |
+| --- | --- | ---: | ---: | --- |
+| ⑩ | `verbatim-clock`（本行） | 8 道引用期间的失败 | **5.87** | 已登记，待派发 |
+| ⑪ | 筛查完整性（`candidates` 的 EXCLUDE 行）——若 ⑩ 的 `C3` 过而 `R1` 不过 | 13 | ~5.87 | 条件性 |
+| ⑤ | 冲突块 `KU` 活体 | 7 道 KU 失败 | 1.03 | 未派发 |
+| ④ | 60 题钉官 | 判官噪声 | 0.86 | 未派发 |
+| ③c | 整卷确认（第三遍，与归档两遍合并成 4 遍） | 发布数 | 3.57 | 未派发 |
+| ⑫ | `IE`/`KU` 的投递缺口（48% / 51% gold 覆盖） | 16 道 | ~10 | 未设计；需要先回答「谁的窗口」 |
+
+### 195.9 这一轮没有做的事
+
+- **没有派发。** 本轮买的是「下一刀的位置与它的价格」，而登记与实现都要先于派发——`C1`–`C4` 写在跑之前才叫判据。
+- **没有重算 `TR` 的制度归属。** 77% 的覆盖率落在两种制度之间，把它判给哪一边需要一次加宽窗口的对照，那是 ⑫ 的事。
+- **没有碰 `verbatim-scope` 的结论。** 它被拒绝的读数是本轮的**前提**（那根轴一端值 −4），撤掉它就等于撤掉本行的理由。
+
+本轮一句话：**上一轮那把刀砍在了一个不存在的标题上——省下 ¥5.87；而真正的刀口在会话日期与事件日期之间，三道题自己写出了算术。**

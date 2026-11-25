@@ -1,0 +1,114 @@
+{
+ "source": {
+  "runId": "45543010618",
+  "shards": 8,
+  "questions": 500,
+  "repetitions": 2,
+  "note": "Merged from the eight archived shard artifacts with tools/merge-ablation.mjs after the census-key fix; feature 0.9350 reproduces the published 93.50 exactly."
+ },
+ "merged": {
+  "baselineMean": 0.917,
+  "featureMean": 0.935,
+  "difference": 0.018,
+  "accuracyPerRun": {
+   "baseline": [
+    0.918,
+    0.916
+   ],
+   "feature": [
+    0.932,
+    0.938
+   ]
+  }
+ },
+ "byCapability": {
+  "MR": {
+   "n": 121,
+   "correctFirstRepetition": 108,
+   "accuracy": 0.8926,
+   "wrong": 13,
+   "wrongWithEveryGoldTurn": 9,
+   "wrongGoldTurnsCarried": 249,
+   "wrongGoldTurnsTotal": 258,
+   "failureIds": [
+    "gpt4_15e38248",
+    "gpt4_a56e767c",
+    "gpt4_ab202e7f",
+    "a1cc6108",
+    "bf659f65",
+    "9ee3ecd6",
+    "3a704032",
+    "gpt4_731e37d7",
+    "gpt4_7fce9456",
+    "37f165cf",
+    "gpt4_2f8be40d",
+    "gpt4_31ff4165",
+    "d851d5ba"
+   ]
+  },
+  "TR": {
+   "n": 127,
+   "correctFirstRepetition": 122,
+   "accuracy": 0.9606,
+   "wrong": 5,
+   "wrongWithEveryGoldTurn": 0,
+   "wrongGoldTurnsCarried": 59,
+   "wrongGoldTurnsTotal": 77,
+   "failureIds": [
+    "eac54add",
+    "gpt4_e061b84f",
+    "gpt4_7abb270c",
+    "370a8ff4",
+    "gpt4_8279ba03"
+   ]
+  },
+  "IE": {
+   "n": 150,
+   "correctFirstRepetition": 141,
+   "accuracy": 0.94,
+   "wrong": 9,
+   "wrongWithEveryGoldTurn": 0,
+   "wrongGoldTurnsCarried": 53,
+   "wrongGoldTurnsTotal": 110,
+   "failureIds": [
+    "1da05512",
+    "0a34ad58",
+    "1903aded",
+    "57f827a0",
+    "8752c811",
+    "75832dbd",
+    "1d4e3b97",
+    "a82c026e",
+    "0edc2aef"
+   ]
+  },
+  "KU": {
+   "n": 72,
+   "correctFirstRepetition": 65,
+   "accuracy": 0.9028,
+   "wrong": 7,
+   "wrongWithEveryGoldTurn": 0,
+   "wrongGoldTurnsCarried": 83,
+   "wrongGoldTurnsTotal": 162,
+   "failureIds": [
+    "852ce960",
+    "c4ea545c",
+    "f685340e",
+    "07741c45",
+    "69fee5aa",
+    "ce6d2d27",
+    "a2f3aa27"
+   ]
+  },
+  "ABS": {
+   "n": 30,
+   "correctFirstRepetition": 30,
+   "accuracy": 1.0,
+   "wrong": 0,
+   "wrongWithEveryGoldTurn": 0,
+   "wrongGoldTurnsCarried": 0,
+   "wrongGoldTurnsTotal": 0,
+   "failureIds": []
+  }
+ }
+}
