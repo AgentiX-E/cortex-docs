@@ -89,53 +89,54 @@
    "transitions",
    "unjudged"
   ],
+  "note": "paths are the artifact directory names under run 45543010618; the merge tool writes the local extraction path, which is not part of the reading",
   "parts": [
    {
     "corpora": 63,
     "index": 0,
-    "path": "/tmp/art2/out/semantic-carry-shard-0-of-8/benchmark-cortex-memory-ablation-report.json",
+    "path": "semantic-carry-shard-0-of-8",
     "questions": 63
    },
    {
     "corpora": 63,
     "index": 1,
-    "path": "/tmp/art2/out/semantic-carry-shard-1-of-8/benchmark-cortex-memory-ablation-report.json",
+    "path": "semantic-carry-shard-1-of-8",
     "questions": 63
    },
    {
     "corpora": 63,
     "index": 2,
-    "path": "/tmp/art2/out/semantic-carry-shard-2-of-8/benchmark-cortex-memory-ablation-report.json",
+    "path": "semantic-carry-shard-2-of-8",
     "questions": 63
    },
    {
     "corpora": 63,
     "index": 3,
-    "path": "/tmp/art2/out/semantic-carry-shard-3-of-8/benchmark-cortex-memory-ablation-report.json",
+    "path": "semantic-carry-shard-3-of-8",
     "questions": 63
    },
    {
     "corpora": 62,
     "index": 4,
-    "path": "/tmp/art2/out/semantic-carry-shard-4-of-8/benchmark-cortex-memory-ablation-report.json",
+    "path": "semantic-carry-shard-4-of-8",
     "questions": 62
    },
    {
     "corpora": 62,
     "index": 5,
-    "path": "/tmp/art2/out/semantic-carry-shard-5-of-8/benchmark-cortex-memory-ablation-report.json",
+    "path": "semantic-carry-shard-5-of-8",
     "questions": 62
    },
    {
     "corpora": 62,
     "index": 6,
-    "path": "/tmp/art2/out/semantic-carry-shard-6-of-8/benchmark-cortex-memory-ablation-report.json",
+    "path": "semantic-carry-shard-6-of-8",
     "questions": 62
    },
    {
     "corpora": 62,
     "index": 7,
-    "path": "/tmp/art2/out/semantic-carry-shard-7-of-8/benchmark-cortex-memory-ablation-report.json",
+    "path": "semantic-carry-shard-7-of-8",
     "questions": 62
    }
   ],
