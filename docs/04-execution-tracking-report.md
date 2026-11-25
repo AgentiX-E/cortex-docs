@@ -35175,6 +35175,8 @@ R4 fired  `R2` and `R3` both cleared, so the registered rule accepts the mechani
 
 ### 191.6 位置
 
+![cortex 与已发布榜位，2026-11-25c](../evidence/longmemeval/position-2026-11-25c.png)
+
 | 项 | 读数 |
 | --- | --- |
 | 产品完成度 | 组合根 33 个字段（32 转发 + 1 说明，0 未判定）；本轮新增一个**可测的仪表**而不是一个新机制 |
