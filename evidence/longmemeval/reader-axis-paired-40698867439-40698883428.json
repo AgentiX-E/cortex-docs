@@ -1,0 +1,163 @@
+{
+ "paired": 500,
+ "lost": [
+  "01493427",
+  "0977f2af",
+  "0a34ad58",
+  "10e09553",
+  "157a136e",
+  "2ebe6c90",
+  "32260d93",
+  "35a27287",
+  "3fdac837",
+  "45dc21b6",
+  "67e0d0f2",
+  "6b7dfb22",
+  "6d550036",
+  "6e984302",
+  "7405e8b1",
+  "75832dbd",
+  "75f70248",
+  "778164c6",
+  "81507db6",
+  "8fb83627",
+  "982b5123",
+  "a82c026e",
+  "a89d7624",
+  "b0479f84",
+  "b46e15ee",
+  "b6025781",
+  "b759caee",
+  "ba61f0b9",
+  "caf03d32",
+  "ce6d2d27",
+  "d01c6aa8",
+  "d24813b1",
+  "d851d5ba",
+  "dd2973ad",
+  "eace081b",
+  "ed4ddc30",
+  "edced276",
+  "f9e8c073",
+  "gpt4_1a1dc16d",
+  "gpt4_21adecb5",
+  "gpt4_2f56ae70",
+  "gpt4_2f584639",
+  "gpt4_31ff4165",
+  "gpt4_45189cb4",
+  "gpt4_4cd9eba1",
+  "gpt4_59149c78",
+  "gpt4_59c863d7",
+  "gpt4_68e94287",
+  "gpt4_7fce9456",
+  "gpt4_8c8961ae",
+  "gpt4_93f6379c",
+  "gpt4_a1b77f9c",
+  "gpt4_c27434e8",
+  "gpt4_d6585ce8",
+  "gpt4_e05b82a6",
+  "gpt4_e072b769",
+  "gpt4_e414231e",
+  "gpt4_f49edff3"
+ ],
+ "gained": [
+  "00ca467f",
+  "2ce6a0f2",
+  "4dfccbf7",
+  "6456829e_abs",
+  "6cb6f249",
+  "7161e7e2",
+  "7a87bd0c",
+  "88432d0a",
+  "92a0aa75",
+  "95228167",
+  "a2f3aa27",
+  "a9f6b44c",
+  "b46e15ed",
+  "c4a1ceb8",
+  "d23cf73b",
+  "e4e14d04",
+  "ef66a6e5",
+  "gpt4_194be4b3",
+  "gpt4_7a0daae1",
+  "gpt4_7ca326fa",
+  "gpt4_d6585ce9",
+  "gpt4_fa19884c"
+ ],
+ "byCapability": {
+  "IE": {
+   "n": 150,
+   "lost": 14,
+   "gained": 2,
+   "both": 127,
+   "neither": 7
+  },
+  "MR": {
+   "n": 121,
+   "lost": 13,
+   "gained": 10,
+   "both": 70,
+   "neither": 28
+  },
+  "KU": {
+   "n": 72,
+   "lost": 10,
+   "gained": 2,
+   "both": 54,
+   "neither": 6
+  },
+  "TR": {
+   "n": 127,
+   "lost": 21,
+   "gained": 7,
+   "both": 79,
+   "neither": 20
+  },
+  "ABS": {
+   "n": 30,
+   "lost": 0,
+   "gained": 1,
+   "both": 29,
+   "neither": 0
+  }
+ },
+ "lostShapes": {
+  "declined": 9,
+  "committed": 33,
+  "evidence-echo": 0,
+  "shape-failed": 16
+ },
+ "gainedShapes": {
+  "declined": 1,
+  "committed": 12,
+  "evidence-echo": 0,
+  "shape-failed": 9
+ },
+ "discriminant": {
+  "name": "heading-instantiation",
+  "treatment": {
+   "true": {
+    "matched": 121,
+    "correct": 80,
+    "lost": 13
+   },
+   "false": {
+    "matched": 379,
+    "correct": 301,
+    "lost": 45
+   }
+  },
+  "control": {
+   "true": {
+    "matched": 106,
+    "correct": 72,
+    "lost": 10
+   },
+   "false": {
+    "matched": 394,
+    "correct": 345,
+    "lost": 12
+   }
+  }
+ }
+}
