@@ -1,0 +1,255 @@
+{
+ "bill": {
+  "hit": [
+   7134734,
+   5204800
+  ],
+  "miss": [
+   228105,
+   2148498
+  ],
+  "out": [
+   1158539,
+   987930
+  ],
+  "perAnswerPct": 0.06662590281789615,
+  "priceRatio": 1.5491876145248005,
+  "recordedPct": null,
+  "source": "usageBySide"
+ },
+ "caveat": "R2 combines two p-values from the same 500 questions; Fisher's method assumes they are independent and they are not, so 0.0452 is optimistic. The rule was registered before the data (cortex docs/PREREGISTRATION-RESOLUTION-REPLICATION.md).",
+ "commit": "333685e880d72c5535c765953eb4f6f4244d4df4",
+ "criteria": {
+  "G1": {
+   "reason": "248 >= 150 (the forms reached the population)",
+   "verdict": "pass"
+  },
+  "G2": {
+   "reason": "chars -3.4% <= -3% with turns +2.0% >= +1% (the reallocation signature)",
+   "verdict": "pass"
+  },
+  "G3": {
+   "reason": "the delta line above clears +1.5 points and the +5 up-down floor (up-down +10)",
+   "verdict": "pass"
+  },
+  "G4": {
+   "reason": "gainers 0.045 are only 1.31x the population 0.034, below 1.5x -- the mechanism helps, but not for the reason C8 claims",
+   "verdict": "fail"
+  },
+  "G5": {
+   "reason": "the artifact carries no paired prompt-token ratio, so the bill half of the clause has no reading -- and the absolute threshold belongs to the reference arm",
+   "verdict": "unread"
+  }
+ },
+ "dispatch": "45543010618",
+ "howItWasProduced": [
+  "node tools/merge-ablation.mjs --dir <8 downloaded artifacts> --shards 8 --out merged.json",
+  "python3 tools/read-merged-population.py merged.json --pairing resolution --prior-discordant 15,27 --prior-name 44915923906 --criteria-json 1",
+  "the JSON block at the end of that output is this file, plus the merge provenance above"
+ ],
+ "kind": "resolution-replication-reading",
+ "merge": {
+  "censusDisagreements": null,
+  "foldedCensusKeys": [
+   "goldAccount",
+   "selfIndex"
+  ],
+  "notCarried": [
+   "baselineAggregate",
+   "baselineByCapability",
+   "baselineConfidence",
+   "baselineMetrics",
+   "delta",
+   "discordant",
+   "discordantQuestions",
+   "effectSize",
+   "feature",
+   "featureAdmittedEvidence",
+   "featureAggregate",
+   "featureAnswers",
+   "featureByCapability",
+   "featureConfidence",
+   "featureMetrics",
+   "featurePromptEvidenceChars",
+   "featurePromptRepeatWitness",
+   "featurePromptTexts",
+   "featurePromptVariants",
+   "featureRankings",
+   "featureRawOutputs",
+   "featureRetrievedContexts",
+   "featureRoleCensuses",
+   "featureRoutes",
+   "featureTurnWindowCensuses",
+   "mcnemarPValue",
+   "mcnemarSignificant",
+   "pValue",
+   "perCapability",
+   "questionsByCapability",
+   "significant",
+   "transitions",
+   "unjudged"
+  ],
+  "parts": [
+   {
+    "corpora": 63,
+    "index": 0,
+    "path": "/tmp/art2/out/semantic-carry-shard-0-of-8/benchmark-cortex-memory-ablation-report.json",
+    "questions": 63
+   },
+   {
+    "corpora": 63,
+    "index": 1,
+    "path": "/tmp/art2/out/semantic-carry-shard-1-of-8/benchmark-cortex-memory-ablation-report.json",
+    "questions": 63
+   },
+   {
+    "corpora": 63,
+    "index": 2,
+    "path": "/tmp/art2/out/semantic-carry-shard-2-of-8/benchmark-cortex-memory-ablation-report.json",
+    "questions": 63
+   },
+   {
+    "corpora": 63,
+    "index": 3,
+    "path": "/tmp/art2/out/semantic-carry-shard-3-of-8/benchmark-cortex-memory-ablation-report.json",
+    "questions": 63
+   },
+   {
+    "corpora": 62,
+    "index": 4,
+    "path": "/tmp/art2/out/semantic-carry-shard-4-of-8/benchmark-cortex-memory-ablation-report.json",
+    "questions": 62
+   },
+   {
+    "corpora": 62,
+    "index": 5,
+    "path": "/tmp/art2/out/semantic-carry-shard-5-of-8/benchmark-cortex-memory-ablation-report.json",
+    "questions": 62
+   },
+   {
+    "corpora": 62,
+    "index": 6,
+    "path": "/tmp/art2/out/semantic-carry-shard-6-of-8/benchmark-cortex-memory-ablation-report.json",
+    "questions": 62
+   },
+   {
+    "corpora": 62,
+    "index": 7,
+    "path": "/tmp/art2/out/semantic-carry-shard-7-of-8/benchmark-cortex-memory-ablation-report.json",
+    "questions": 62
+   }
+  ],
+  "shards": 8,
+  "tool": "tools/merge-ablation.mjs"
+ },
+ "pairing": "resolution",
+ "perCapability": {
+  "ABS": {
+   "baseline": 1.0,
+   "deltaPoints": 0.0,
+   "deltaQuestions": 0.0,
+   "discordant": {
+    "b": 0,
+    "c": 0,
+    "upDown": 0
+   },
+   "feature": 1.0,
+   "n": 30
+  },
+  "IE": {
+   "baseline": 0.94,
+   "deltaPoints": 1.33,
+   "deltaQuestions": 2.0,
+   "discordant": {
+    "b": 1,
+    "c": 4,
+    "upDown": 3
+   },
+   "feature": 0.9533,
+   "n": 150
+  },
+  "KU": {
+   "baseline": 0.9306,
+   "deltaPoints": -1.39,
+   "deltaQuestions": -1.0,
+   "discordant": {
+    "b": 2,
+    "c": 0,
+    "upDown": -2
+   },
+   "feature": 0.9167,
+   "n": 72
+  },
+  "MR": {
+   "baseline": 0.8306,
+   "deltaPoints": 6.2,
+   "deltaQuestions": 7.5,
+   "discordant": {
+    "b": 5,
+    "c": 13,
+    "upDown": 8
+   },
+   "feature": 0.8926,
+   "n": 121
+  },
+  "TR": {
+   "baseline": 0.9449,
+   "deltaPoints": 0.39,
+   "deltaQuestions": 0.5,
+   "discordant": {
+    "b": 1,
+    "c": 2,
+    "upDown": 1
+   },
+   "feature": 0.9488,
+   "n": 127
+  }
+ },
+ "population": {
+  "corpora": 500,
+  "marker": "#w",
+  "merged": {
+   "parts": 8,
+   "shards": 8
+  },
+  "windows": 1
+ },
+ "questionCount": 500,
+ "readings": {
+  "baselineAccuracyPerRun": [
+   0.918,
+   0.916
+  ],
+  "baselineMeanAccuracy": 0.917,
+  "deltaMeanAccuracy": 0.018000000000000016,
+  "deltaQuestionsInFirstRun": 25,
+  "featureAccuracyPerRun": [
+   0.932,
+   0.938
+  ],
+  "featureMeanAccuracy": 0.935
+ },
+ "replication": {
+  "R1": {
+   "ident": "R1",
+   "text": "the MR up-down is +8 (b=5 c=13), so the sign replicated",
+   "verdict": "pass"
+  },
+  "R2": {
+   "ident": "R2",
+   "text": "Fisher with 44915923906: p=0.0452 from 0.0872 and 0.0884, on the independence assumption this method makes and two overlapping question sets do not",
+   "verdict": "pass"
+  },
+  "R3": {
+   "ident": "R3",
+   "text": "the paired prompt bill moved +0.07% of +1.00% allowed [usageBySide]",
+   "verdict": "pass"
+  },
+  "R4": {
+   "ident": "R4",
+   "text": "`R2` and `R3` both cleared, so the registered rule accepts the mechanism -- but the cache-adjusted price is 1.55x the baseline (miss 2,148,498 against 228,105 tokens), which the registered clause is a token ratio and does not see",
+   "verdict": "fired"
+  }
+ },
+ "runs": 2
+}

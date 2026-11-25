@@ -34995,3 +34995,121 @@ tarballs: 5 packages, 673 files, 3259 KiB
 | Mastra OM 94.87% 花 **30,000 token**，Hindsight 94.6% 花 **43,600** | 左图右侧两个远离前沿的点 |
 
 最后一行是本轮想让人记住的：**榜上的高分里有两种**。一种是同价位做得更好（Synap、Mem0），值得学；另一种是把预算放大 4–6 倍换 3 点（Mastra、Hindsight），那是**给得起钱**，不是**做得好**。cortex 的缺口在前者，而 `resolution` 正好是前者那一类——同成本、纯准确率。
+
+## §190 八块分片答完了，合并在最后一跳把它们拒了
+
+第三次 `resolution` 复制（`45543010618`）八个 shard **全部 success**，`merge the shards` **exit 1**：
+
+```
+refusing: shard 1 (…-shard-1-of-8/…) differs from shard 0 in `memoryArmConfig`, so the artifacts are
+not parts of one dispatch. Two configurations merged would produce a population nobody ran;
+re-dispatch rather than merging.
+```
+
+八个 job 的 `memoryArmConfig` 逐字段对比，只有两处不同：
+
+| 字段 | shard 0 | shard 1 | 它是什么 |
+| --- | --- | --- | --- |
+| `admission` | 62,122 candidates | 61,824 | 写入门自己的计数（已在排除表里） |
+| `selfIndex` | 126 indexes / 47,394 turns / 39,912 texts | 126 / 46,304 / 39,629 | 产品自己的 embedding 账单 |
+| 其余 40 个字段 | — | — | **完全相同** |
+
+也就是说：**这不是两次派发，是一个派发被自己的守卫拒了**。`selfIndex` 是答完之后才写的读数，两个 shard 读的是不同语料，它必然不同。
+
+### 190.1 这个 bug 的类，以及它为什么第二次发生
+
+`tools/merge-ablation.mjs` 里早有一张表：
+
+```js
+const CENSUS_IN_CONFIG = new Set(['admission']);
+```
+
+注释写着 run `43622841638` 曾因 `admission` 被同样拒绝。一轮之后 `selfIndex` 被折进同一个 block，**没有人往这张表里加名字**——因为写的人在 `packages/cortex-eval/src/bench-memory-arm.ts`，表在 `tools/`。而 `tools/restore-classify.py` 需要同一份知识，从来没拿到：它的 gate 6 是 `configDrift <= 0`，任何 restore 对照一旦跑在 `selfIndex` 上就会被判成「配置漂移」并拒绝分类。
+
+> 一份清单存在三个地方，只有一处被编辑。这不是粗心，是结构：**清单和写者不在同一个文件里，就不可能保持同步。**
+
+### 190.2 改法：制品自己说，清单只剩一份
+
+| 层 | 改动 |
+| --- | --- |
+| 制品 | `memoryArmConfig.censusKeys` —— 由**执行折叠的那个对象**生成（`Object.keys(foldedCensuses)`），所以声明不可能与它描述的那几个字段不一致 |
+| 共享清单 | `tools/arm-config-census.json`：`fold`（数字相加、布尔 AND、不一致就记录）与 `drop`（`min/max/mean` 不可加，只排除不合并） |
+| 合并工具 | 读声明 ∪ 清单；声明优先级更高，声明里出现 `drop` 类字段则按 `drop` 处理并在 `merged.droppedCensusKeys` 里点名 |
+| 反事实工具 | `restore-classify.py` 用同一份清单跳过 census，并把跳过项渲染进表格：「Row 6 is over the configuration only. Not compared, because these are readings: …」 |
+| 拒绝信息 | 从「differs in `memoryArmConfig`」改成逐字段列出**路径与两个值**。找这个字段本轮花了一次 8 MB 制品下载和一次 diff，而工具在决定不打印时手里握着两个值 |
+
+### 190.3 省下的钱：读数从归档制品里取回来，没有重买
+
+八个 shard 跑完就已被付费。修好合并工具后重新下载同一批制品（`45543010618` 的 8 个 artifact，共 62 MB）并合并：
+
+```
+merged 8 shards -> 500 questions (500 corpora x 1 windows), 2 repetition(s)
+  accuracy per run: baseline 0.9180, 0.9160 | feature 0.9320, 0.9380
+  mean: baseline 0.9170 | feature 0.9350 | difference 0.0180
+```
+
+合并后的 `memoryArmConfig.selfIndex` 是 **1,000 indexes / 371,040 turns**，而 shard 0 单独是 126 / 47,394 ——前者是 `merged.foldedCensusKeys = ['goldAccount', 'selfIndex']` 里那两个键相加的结果，不再是「一个 shard 的账单冒充全量」。`admission` 保持 shard 0 的值且不进相加（它的 `min/max/mean` 不可加），这正是 `drop` 那一类的定义。
+
+### 190.4 判决：`R1`–`R4` 四条，脚本自己算
+
+上一次迭代把判决规则写死在派发之前（`cortex` 的 `PREREGISTRATION-RESOLUTION-REPLICATION.md`）。本轮把它们从「文档里的四条」变成「脚本里的四条」，因为**能算而不算的判据只是被引用的一句话**（§189 的教训）：
+
+```
+R1 pass  the MR up-down is +8 (b=5 c=13), so the sign replicated
+R2 pass  Fisher with 44915923906: p=0.0452 from 0.0872 and 0.0884, on the independence assumption
+         this method makes and two overlapping question sets do not
+R3 pass  the paired prompt bill moved +0.07% of +1.00% allowed [usageBySide]
+R4 fired  `R2` and `R3` both cleared, so the registered rule accepts the mechanism -- but the
+         cache-adjusted price is 1.55x the baseline (miss 2,148,498 against 228,105 tokens),
+         which the registered clause is a token ratio and does not see
+```
+
+按能力分解（每问题跨遍取均值再取符号，与 `44915923906` 同一口径）：
+
+| 能力 | n | 基线 | 特征 | Δ 点 | 得/失 |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `MR` | 121 | 83.06 | **89.26** | **+6.20** | 13 / 5 |
+| `TR` | 127 | 94.49 | 94.88 | +0.39 | 2 / 1 |
+| `IE` | 150 | 94.00 | 95.33 | +1.33 | 4 / 1 |
+| `KU` | 72 | 93.06 | 91.67 | **−1.39** | 0 / 2 |
+| `ABS` | 30 | 100.00 | 100.00 | 0.00 | 0 / 0 |
+| 全体 | 500 | 91.70 | **93.50** | **+1.80** | 19 / 9 |
+
+三个要点，一个都不能省：
+
+1. **`KU` 是负的**。`resolution` 的目标是 `multi-session`/`temporal`，但渲染改变是全路由的；−1.39 点在 72 题上是 2 个问题，落在噪声里，可它与 `MR` 的 +6.20 是同一张表里的两个数，不能只引用后者。
+2. **`R2` 的 0.0452 是乐观的**。Fisher 合并假设两次检验独立，而它们是**同一批 500 题**的两次；正相关会让合并值偏小。诚实说法是「按派发前写下的规则，它过关」，不是「效应已确立」。
+3. **`R3` 只看见 token，看不见钱**。同一份 census 换成价格：未命中缓存的 prompt token 从 228,105 涨到 2,148,498（命中率 96.9% → 70.8%），按 `deepseek-chat` 的 10:1:15 价目是 **1.55 倍**。机制把 prompt 文本挪出了前缀缓存——token 数没变，账单变了。
+
+### 190.5 因此 `resolution` 仍然不是默认
+
+`R4 fired` 是规则的结论，不是发布的结论。默认值仍为 `raw`，理由从 §189 的「分辨不出来」换成**「分辨出来了，但代价 1.55 倍，而登记的条款量的是 token」**。
+
+下一轮该做的不是再派发一次 500 题，而是把条款改对：登记一条**按缓存加权的账单判据**，再决定是否翻默认。这条判据本身是可算的（`R3` 的两个数都在 `usageBySide` 里），所以它也是一次工具改动 + 一次 ¥0 重读。
+
+### 190.6 位置
+
+| 项 | 读数 |
+| --- | --- |
+| 产品完成度 | 组合根 **33 个字段：32 转发 + 1 说明，0 未判定**（`censusKeys` 是报告字段而非 `AssembleOptions`，所以这个计数不变，也不该变） |
+| `resolution` 轴 | `R1`/`R2`/`R3` 三条全部 pass，`R4` fired；**因价格不采纳** |
+| 可发布信号 | **仍未触发**（阻塞不变：两仓库 secret scanning 需组织管理员开启；五个包未发布） |
+| 精度 | 已发布 91.20%（`S16`，4 遍）；本次候选 **93.50%**（500 题 2 遍，价格 1.55×） |
+| 与 SOTA | Maximem Synap **95.6% @ 7,400**；candidate 93.50 @ 7,224 → 差 **2.1 点**，但价格 1.55× 让它无法同价对比 |
+| 本轮模型花费 | **¥0**（全部从归档制品重读，未派发） |
+
+![cortex vs the published board, 2026-11-25b](../evidence/longmemeval/position-2026-11-25b.png)
+
+剩余路径（相对 §189 的变化）：
+
+| 序号 | 步骤 | 成本 | 状态 |
+| --- | --- | --- | --- |
+| ① | 剩余字段判定 | ¥0 | §188 完成 |
+| ② | `resolution` 第三次复制 | ≤¥12 | **§190 完成，读数从归档取回，未再付费** |
+| ③ | **缓存加权账单判据 + `resolution` 定点省缓存** | **≈¥8** | **本轮新第一**：`R4` 已触发，唯一阻塞是 1.55× 的价格；若能把渲染改到前缀稳定，93.50% 就能同价卖出 |
+| ④ | 60 题「钉官 + 推理读者」配对 | ≈¥1–3 | 未派发 |
+| ⑤ | 冲突块 KU 活体（`KU` 本轮 −1.39，需要它） | ¥4.6 | 未派发 |
+| ⑥ | 600 宽度并入登记册重读 | ¥15.64 | 未派发 |
+| ⑦ | 读者家族 `zhipu:glm-4.6` | ¥26 | 仍降级 |
+
+③ 取代 ② 的理由：**同一个机制、同一个读数，缺的不再是显著性而是价格**。把 prompt 前缀改成与题目无关（把逐题变化的部分全部放到末尾），缓存命中率就能回到基线水平——这是一个纯工程改动，不需要再买一次 500 题来证明它有 93.50。

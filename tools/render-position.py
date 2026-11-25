@@ -1,11 +1,4 @@
-"""Accuracy x cost position for cortex against the published board (LongMemEval-S, 500 questions).
-
-    python3 tools/render-position.py
-
-Every point is a figure somebody published or this repository measured; the two rings are cortex readings
-whose confirmation is still outstanding, drawn open so they cannot be read as shipped. `COST_ROWS` is the
-subset with a published token count, `ALL_ROWS` is the whole board.
-"""
+"""Accuracy x cost position for cortex against the published board (LongMemEval-S, 500 questions)."""
 import matplotlib
 matplotlib.use('Agg')
 import pathlib
@@ -17,7 +10,7 @@ from matplotlib.lines import Line2D
 COST_ROWS = [
     ('cortex (registered, 400 cap)', 91.20, 7448, 'oss-ts'),
     ('cortex (600 cap, pending control)', 93.40, 7242, 'pending'),
-    ('cortex + resolution: layered (R4 pending)', 93.60, 7461, 'pending'),
+    ('cortex + layered: R4 fired, price 1.55x', 93.50, 7224, 'pending'),
     ('Maximem Synap', 95.6, 7400, 'closed'),
     ('Mem0 (managed)', 94.4, 6800, 'closed'),
     ('Mastra OM', 94.87, 30000, 'oss-ts'),
@@ -34,7 +27,7 @@ ALL_ROWS = [
     ('Hindsight', 94.6, 'closed'),
     ('Mem0 (managed)', 94.4, 'closed'),
     ('cortex (600, pending)', 93.40, 'pending'),
-    ('cortex + layered (R4 pending)', 93.60, 'pending'),
+    ('cortex + layered (R4 fired, 1.55x price)', 93.50, 'pending'),
     ('cortex (registered)', 91.20, 'oss-ts'),
     ('Zep', 90.2, 'closed'),
     ('RAW-RAG', 87.53, 'oss-py'),
@@ -56,10 +49,11 @@ for label, acc, tok, kind in COST_ROWS:
         dx, dy = (12, -22)
     if label.startswith('cortex (600'):
         dx, dy = (16, 14)
-    if label.startswith('cortex + resolution'):
-        # The two rings sit 0.2 points and 3% apart, so their labels are placed on opposite sides with a
-        # leader line: two annotations stacked on one point is how a reader concludes there is one point.
-        dx, dy = (18, -46)
+    if label.startswith('cortex + layered'):
+        # The two candidate points sit 0.1 points and 0.25% apart -- they are one dot on this axis -- so
+        # their labels are placed on opposite sides with a leader line. Two annotations stacked on one
+        # point is how a reader concludes there is one point.
+        dx, dy = (14, -50)
         arrow = dict(arrowstyle='-', color='#9e9e9e', lw=.8, shrinkA=2, shrinkB=4)
     ax1.annotate(label, (tok, acc), textcoords='offset points', xytext=(dx, dy), fontsize=8.4,
                  arrowprops=arrow)
@@ -106,12 +100,12 @@ ax2.set_xlabel('LongMemEval-S accuracy (%)')
 ax2.set_title('The board, whether or not a cost was published')
 ax2.grid(axis='x', alpha=.25, zorder=0)
 ax2.axvline(91.20, color='#c62828', ls='-', lw=1.2, alpha=.55, zorder=4)
-ax2.axvline(93.60, color='#c62828', ls=':', lw=1.4, zorder=4)
+ax2.axvline(93.50, color='#c62828', ls=':', lw=1.4, zorder=4)
 
-fig.suptitle('cortex position, 2026-11-25: shipped 91.20% at 7,448 tokens/question; +2.40 points priced by a '
-             'replication still short of p=0.05',
+fig.suptitle('cortex position, 2026-11-25: shipped 91.20% at 7,448 tokens/question; +layered 93.50% measured, and '
+             '1.55x the price',
              fontsize=11)
 fig.tight_layout(rect=(0, 0, 1, 0.95))
-OUT = pathlib.Path(__file__).resolve().parents[1] / 'evidence' / 'longmemeval' / 'position-2026-11-25.png'
+OUT = pathlib.Path(__file__).resolve().parents[1] / 'evidence' / 'longmemeval' / 'position-2026-11-25b.png'
 fig.savefig(OUT, dpi=170)
 print(f'wrote {OUT}')
