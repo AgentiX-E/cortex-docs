@@ -21,8 +21,8 @@ significant at 80% power when `P(Bin(R, q) >= 6) >= 0.8`.
 class size: the under-count repair's class holds six questions and four of them carry a gold turn outside
 the window, so it has three.
 
-Five of the six rows cannot be certified at any conversion rate. The one that can was dispatched twice
-(`5` up, `5` down against a bar of 88%). Sources: docs/MEASURE-RESOLUTION-WALL.md §2 (ceilings),
+Five of the seven rows cannot be certified at any conversion rate. Of the two that can, one was dispatched
+twice (`5` up, `5` down against a bar of 88%) and the other became visible only this round. Sources: docs/MEASURE-RESOLUTION-WALL.md §2 (ceilings),
 docs/MEASURE-REACHABLE-HEADROOM.md §2, and tools/queue-floor.mjs (the floor the criterion uses).
 """
 
@@ -46,6 +46,7 @@ PAPER = "#fbfbfc"
 ROWS = [
     ("stale-value + the decline, KU", 7.0, 0.880, "dispatched twice: 5 up, 5 down"),
     ("stale-value selection (H2), KU", 6.0, 0.963, "the same dispatch"),
+    ("delivery institution, suite", 6.0, 0.963, "invisible before §205"),
     ("under-count repair, MR", 3.0, None, "3 of its 6 reachable"),
     ("entity grouping (H3), MR", 4.0, None, ""),
     ("decline repair (E3.2), MR", 3.75, None, ""),
@@ -130,7 +131,7 @@ ax.set_xlabel(
 fig.text(
     0.006,
     0.965,
-    "Five of the queue's six mechanisms cannot be certified at any conversion rate",
+    "Five of the queue's seven mechanisms cannot be certified at any conversion rate",
     fontsize=15.4,
     color=INK,
     fontweight="bold",
