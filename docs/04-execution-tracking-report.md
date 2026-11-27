@@ -37849,3 +37849,372 @@ timeout 900 pnpm -s typecheck 2>&1 | tail -15; echo "TYPECHECK=$?"
 一个仪器失败的方式，比它成功的次数更能说明它值不值得信。本轮之前的所有"`pnpm check` 全绿"结论都建立在
 同一条 `| tail; echo $?` 上——**它们都需要用 `pipefail` 重跑一次才算数**，而这不是一句免责，
 是下一轮的第一项待办。
+
+## §209 第 209 轮：四轮"产品侧未动"的根因是发布路径不存在，而不是能力不存在
+
+**结论先行。** 本轮做了三件事，每一件都是把一条**已经写在文档里但从没有对应实现**的句子变成可执行的东西：
+①`PREREG-TURN-FILL.md` §1 写着"两侧在同一个 job 里"，而 harness 里没有任何配对能表达这句话——补上第六个
+pairing `units`；②五个包在 `0.1.0` 上建了几个月、测了三千多条、五包全绿，**却没有任何发布路径**（无 workflow、
+无 `publishConfig`、无 `engines`、无 `repository`、无 keywords）——补上门禁与 `release.yml`；③派发那条唯一
+"机制已落地、只缺一次派发"的臂，价格从 ¥14.26 改到 **¥3.57**，因为 `ablation_runs` 从来没有被写进预注册。
+
+产品完成度：**四轮以来第一次动了产品侧**，而且动的是真正的阻塞项（分发），不是又一轮测量。
+
+### 209.1 一条预注册，描述了一个 harness 造不出来的仪器
+
+`PREREG-TURN-FILL.md` §1 原本写：
+
+> The arm is the full 500 questions with **both sides in one job**, the pairing invariant of
+> `PREREGISTRATION-CORTEX-MEMORY-ARM.md` §2.2, so the comparison is this dispatch's own baseline side
+> rather than an archived run from another day.
+
+这句话是这条臂能便宜的前提：跨日对照要付 1.7–2.1pp 的漂移，同 job 对照不付。而它**在当时不成立**：
+
+| 位置 | 事实 |
+| --- | --- |
+| `arm-pairing.ts` 的 `ArmPairing` | `reference` / `carry` / `clock` / `resolution` / `ask`，**五个**，没有一个把两个 evidence unit 放进同一个 job |
+| `run-ablation.ts` 的 `buildCortex` | `relevanceUnits` 从 `armOptions` 读，**两侧共用一个 dispatch 值** |
+| 后果 | 一次 `units` 派发会让两侧都选 `turn` 或都选 `turn-fill`，delta 恒等于 0，而 artifact 上两侧都写着 unit 名 |
+
+这与 §208.10 记的是**同一个形状**：文档承诺的能力，缺少与之对应的实现。§208.10 缺的是一条能报告失败的
+命令，本轮缺的是一个能承载对照的仪器。差别只在被检查的对象，不在缺陷的类别。
+
+### 209.2 修法：第六个 pairing，以及三份各持一词表的门禁同时变红
+
+`ArmPairing` 加 `units`，`PairingTreatment` 加 `units: string`，`buildPairBaseline` 加一条
+`buildCortex({ ...armTreatment, units: 'turn' })`。三处设计决定值得记下：
+
+1. **unit 从 `armOptions` 移进 `treatment`。** 理由是这条 pairing 存在的全部意义：两侧必须走**同一条路径**
+   从 arm 级名字翻译成构造器选项。原先的翻译在 `buildCortex` 外面算一次（`forwardedUnit`），一个值喂两侧；
+   现在 `relevanceUnitOption(treatment.units)` 在构造器里算，两侧各算各的，走的是同一个函数。
+2. **control 是字面量 `turn`，不是注册值。** 与 `ask` 的 `'route'` 同一个理由：对照必须是产出 93.40% 那次
+   读数时的配置。若将来 `turn-fill` 被采纳、注册值变了，这个 pairing 的对照**不能跟着动**——否则采纳前后
+   两次读数会是对两个不同对照的 delta，而 registry 无从记录这件事。
+3. **`pairingViolation` 拒绝"两侧都是 `turn`"。** 这是 `ask` 拒绝 `route` 的同一个不对称：`turn` 是合法
+   的 unit，却是不合法的 treatment，因为它就是对照。一次 `pairing=units` 而变量留空的派发会产生一个
+   两侧逐字节相同、artifact 上两侧都写着 unit 的零 delta——正是 `PREREG-TURN-FILL.md` §5.1 用来否证整条
+   轴的那种读数。
+
+**三份门禁同时变红，而且都是对的。** 这是本轮最值得记的一段：所有失败都来自"同一份封闭集合被抄进了几个
+地方"的检查，也就是本仓库过去几轮反复付学费的那一类。
+
+| 门禁 | 它读到的不一致 | 修法 |
+| --- | --- | --- |
+| `test_read_merged_population.py` | `read-merged-population.py` 的 `PAIRINGS` 有 5 个，arm 建 6 个 | 加 `'units'` 到 `PAIRINGS` **和** `PAIR_FLAGS`（`'units': 'unitsPair'`） |
+| `test_session_clock_wiring.py` | `dispatch-semantic-carry.py` 的词表有 5 个 | 加 `'units'`，并把拒绝消息里"五个"的清单扩成六个 |
+| `test_anchor_window_wiring.py` | 它钉的是 `relevanceUnits: forwardedUnit` 这**一行** | 断言改成三件：helper 建 `{ relevanceUnits: forwarded }`、helper 调 `relevanceUnitToForward`、构造器 spread `...relevanceUnitOption(treatment.units)` |
+
+第三处值得展开，因为它是唯一一处**测试写法本身**需要改的。原断言是：
+
+```python
+assert 'relevanceUnits: forwardedUnit' in bench, (
+    'the forwarded value is computed and never handed to the product'
+)
+```
+
+它守的是 §13.286.2 那个缺陷——值算出来了但没人传到构造器。本轮改动把那条线从"一个变量"变成"一个函数
+调用"，于是字符串消失。两种错误修法都危险：**改成 grep 新字面量**会让测试继续只认一种拼写，下一次重构
+再红一次；**删掉这条断言**则让 §13.286.2 重新失去覆盖。选的是第三种：把那条线拆成三截，每截一个断言，
+其中第二节钉住"helper 必须走表，不能自己翻译"——那才是这条边真正的语义。
+
+`unitsPair` 还必须进 artifact。理由是 `read-merged-population.py` 的 `PAIR_FLAGS` 是**唯一**把标志反解
+成 pairing 的地方：一个省略该字段的 artifact 会被读成注册配对，它的 delta 会被归因到"两个系统之差"，而
+真实归因是"一个 unit 之差"。这条 pairing 的这个字段比其它四个都更必要，因为它的对照是**被命名**的值
+（`turn`）而不是一个缺席的键——artifact 上没有别的地方能说出"对照是什么"。
+
+### 209.3 `ablation_runs` 从来没有被写进预注册：¥14.26 变成 ¥3.57
+
+预注册 §1 的表格逐行点名了每一个 arm 选项，却没有一行点名 `ablation_runs`——而注册值是 **4**，
+`PREREG-TURN-FILL.md` 的正文只说了"§6 定价第二次重复、§5 说什么时候取"。也就是说：**这条臂的真实价格是
+注册值的四倍，而文档没有一处写着它要跑几遍。**
+
+本轮把它写成表格里的一行，并给出理由链：
+
+| 量 | 值 | 推导 |
+| --- | ---: | --- |
+| question-runs | 500 | 500 题 × 1 遍；两侧在同一个 job 内，所以侧数不是乘数 |
+| 费率 | 0.00713 CNY | `MEASURE-SPEND-MINIMUM.md` §206.1：`42467` 的 `14.26 / (500 × 4)`，**文件费率**而非 `MR` 费率 |
+| 投影账单 | **3.57 CNY** | 500 × 0.00713 |
+| 四遍的账单 | 14.26 CNY | 500 × 4 × 0.00713 |
+| 省下的 | **10.69 CNY** | 比队列里剩余所有行加起来还多 |
+| 标签 | `extrapolated` | `42467` 没跑过这个配置，且在它的重复数之下；既不是 `billed` 也不是 `proxy` |
+
+为什么一遍够：`P3` 的拒绝域是**三道题**，而配对比较按构造固定了其它每一道题。`MEASURE-SPEND-MINIMUM.md`
+§206.2 的算术是四遍买的是方差缩减，而这条臂的待测量是**指定 215 题人口上的配对移动**，不是绝对准确率。
+第二遍只在 `P3` **正好落在 3** 时取。
+
+这条行还带了一个比折扣更好的探针：**人口是已知的**。`MEASURE-UNSPENT-ROOM.md` 用零成本把上界算出来了
+（215 题可增 gold、21 道错题里 10 道够得着、1 道全回收），所以"填满 room 却一道题没变"是一个**已注册的
+结果**（`P3` 的下限），不是一次失败的实验。
+
+### 209.4 产品侧：五个包，零条发布路径，十五条红
+
+四轮"产品侧未动"的记录停在"组合根 33 字段 / 32 转发 / 1 说明 / 0 未判定；台账 28 行 19 product / 7 gated /
+0 blocked / 0 gap；可发布信号未触发（阻塞在仓库外）"。本轮去查那三个"仓库外"到底是不是仓库外，结果一半不是：
+
+```console
+$ node tools/publish-metadata.mjs --check
+5 package(s) x 11 rule(s) = 55 reading(s); 15 red.
+```
+
+十五条红，每包三条，全部在仓库内可修，且全部**没有任何测试能看见**：
+
+| 规则 | 五包的状态 | 消费者看到的是什么 |
+| --- | --- | --- |
+| `public-access` | `publishConfig` 缺失 | `@agentix-e/*` 是 scoped 名，npm 首发的默认是 `restricted`。要么失败，要么**成功进入付费私有域**——后者才是贵的那种，因为没有任何东西报告它 |
+| `engines-node` | 无 `engines.node` | 消费者在 Node 18 上**安装成功**，然后在自己的代码里看到依赖的语法错误 |
+| `repository-directory` | `repository` 缺失 | `npm repo` 与包页面上的源码链接是死的 |
+
+同时发现的两条更贵的：
+
+- **`workspace:*` 协议。** `pnpm publish` 会展开成具体版本，`npm publish` 会**原样发布**，消费者在 resolve
+  时失败。所以发布路径必须是 pnpm，这条写进了 `release.yml` 的注释与实现。
+- **没有 release workflow。** 上一条把"用 pnpm 发布"从一句口头约定变成流水线的唯一入口。
+
+修法是一个门禁 `tools/publish-metadata.mjs`（11 条规则 × 5 包 = 55 条读数），修复后 **55/55 绿**。
+规则不是风格偏好，每一条都对应一个消费者可见的事实：
+
+| # | 规则 | 它守的是什么 |
+| ---: | --- | --- |
+| 1 | `scoped-name` | 名字在 `@agentix-e/` 下 |
+| 2 | `semver` | npm 只接受 semver |
+| 3 | `one-version` | 五包同版本；不同版本意味着消费者解析出两份 `cortex-core` |
+| 4 | `description` | 非空且 ≤200 字符 |
+| 5 | `license-file` | `license: MIT` **且**根目录有 LICENSE 可随包发出 |
+| 6 | `files-dist-only` | 只发 `dist`，不发 `src` / `bench` / `test` / `coverage` |
+| 7 | `public-access` | 上表第一条 |
+| 8 | `engines-node` | 存在**且等于根的值**——两处声明的同一个地板会一直相等到有人改了其中一处 |
+| 9 | `repository-directory` | 指向本包自己的目录 |
+| 10 | `entry-inside-dist` | `main` / `types` 在 `files` 覆盖的范围内；否则装上但 import 不了，而 workspace 符号链接会让它在本仓库里看起来正常 |
+| 11 | `workspace-targets-exist` | 每个 `workspace:` 说明符都指向存在的包；改过目录名会产生一个任何工具都解析不了的说明符 |
+
+**这门禁自己也被门禁了一遍。** `--self-test` 建 13 个单缺陷 fixture、1 个版本漂移 fixture、1 个缺 LICENSE
+fixture、1 个渲染 fixture，每个断言"只有预期的那条规则变红"。第二半（"只有"）是最容易漏的：一条误读第二个
+字段的规则会通过它自己的用例，然后拒绝四分之三的真实包。写这门禁时我自己踩了一次同类错误——`license-file`
+最初闭包捕获了模块级的 `REPO`，于是 fixture 继承了真实仓库的 LICENSE，"删掉 LICENSE"那个用例一直是绿的。
+**读的不是它在测的那棵树**，与 §13.278 的陈旧前提是同一个缺陷，只是带上了一个文件路径。
+
+### 209.5 `release.yml`：把"我手动发一下"变成一条不会说谎的路径
+
+| 步骤 | 拒绝什么 |
+| --- | --- |
+| `pnpm install --frozen-lockfile` | 锁文件与 manifest 不一致 |
+| `pnpm build` | 空的 `dist`——装得上、import 不了 |
+| `pnpm guard:publish-metadata` | 上表十一条 |
+| 版本一致性（内联脚本） | dispatch 说 `0.1.0` 而某个包写着别的。**已发布的版本号永远不能复用**，所以这是文件里最便宜的一次拒绝 |
+| `pnpm -r publish --dry-run` | `workspace:*` 原样发到 npm |
+| 真实发布前的 token 检查 | `NPM_TOKEN` 缺失时**点名**这个 secret，而不是报一个网络错误或静默跳过 |
+
+`dry_run` 默认 **true**。理由只有一个：发布是本仓库唯一不可逆的动作，而 npm 不允许复用版本号——一个坏的
+`0.1.0` 修不了，只能被覆盖。默认 dry-run 意味着这条路径在**每一次**派发时被走一遍，而不是在第一次真实发布
+时才第一次走。
+
+`--provenance` 只挂在真实路径上，且 workflow 显式给 `id-token: write`：签名声明说的是"这个 tarball 由这个
+commit 经这个 workflow 构建"，这是任何注册表账号都伪造不了的事实。dry-run 时不申请，因为一次不用的声明
+会让"它哪天坏了"变得不可见。
+
+**至此，那三个"仓库外"的阻塞少了一个。** 剩下的两个是真的在仓库外：组织级 secret scanning 开关，与首次
+发布所需的 npm token。
+
+### 209.6 六个固定问题
+
+**① 该领域的权威测评集与各自的竞品排行榜是否已经完备？**
+
+不完备，而且不完备的方式本轮又收紧了一条。主榜仍是 **LongMemEval-S**（500 题、官方判官提示词），
+第二数据集 **LoCoMo**（1,986 题），微服务 RCA 的 RE1/RE2/RE3 属于另一个 scope，不进本报告。
+
+不完备的三处，按代价排序：
+
+| 缺口 | 具体是什么 | 本轮状态 |
+| --- | --- | --- |
+| **披露条件不齐** | `MemCog` 的 `MR` 92.48 是唯一高于我们的外部同类读数，但 reader 与 judge 没有以可复现的形式报告，且它那张表把基线行从另外两篇论文抄来、只测自己那一行 | 未变 |
+| **自报 vs 复现的落差** | `Supermemory` 自报 97.0、第三方复现 81.6，**同一系统差 15.4 点**；`Mem0` 自报 94.4、OSS 复现 32.4 | 未变。这两个落差不构成"我们赢了"，只说明榜单的一半是报告方式 |
+| **成本口径不齐** | `Maximem Synap` 的 7.4K 是"memory tokens per question"，`Mem0` 的 6.8K 是"top-200 retrieval budget"，`Hindsight` 的 43.6K 是"per retrieval" | 未变。本轮没有新增可比口径，因此**不生成新的归一化排名** |
+
+**② 竞品穷举（是否用 LLM / 技术栈 / 指标与成本）**
+
+| 竞品 | 用 LLM | 技术栈 | LongMemEval-S | 成本（token/题） | 来源等级 |
+| --- | :---: | --- | ---: | ---: | --- |
+| Recallium | 是 | 未公开 | 98.4（Opus 5.5 读者） | — | C 自报，六项披露齐全 |
+| Supermemory 自报 | 是 | 未公开 | 97.0 | — | C 自报 |
+| ContextStream | 是 | 未公开 | 96.8（Opus 5.5） | — | C 自报，Wilson CI [94.9, 98.0] |
+| Exabase M-1 | 是 | 未公开 | 96.40 | — | 厂商稿 |
+| agentmemory V4 | 是 | 未公开 | 96.2（Opus 4.6） | — | C 单次运行 |
+| Agent Zero Memory | 是 | 未公开 | 95.6（gpt-5.5） | — | C 期刊，判官未署名 |
+| **Maximem Synap** | 是 | 未公开 | **95.6** | **7,400** | C 厂商 + 逐题数据 |
+| Mastra OM | 是 | **TypeScript** | 94.87（gpt-5-mini）/ 84.23（gpt-4o） | — | B 厂商单变量配对 |
+| Mem0 managed | 是 | Python（OSS） | 94.4 | 6,800 | C 自报；OSS 复现 32.4 |
+| **Mem0** | 是 | Python | **93.4** | **6,787** | B 第三方复现 |
+| **cortex** | 是 | **TypeScript** | **93.40** | **7,346** | A 本仓库两遍制品 |
+| Contextier | 是 | 未公开 | 91.6 | **2,807** | C 厂商 |
+| Zep | 是 | Python | 90.2 | 4,400 | C 厂商 |
+| Recallium（GPT-4o） | 是 | 未公开 | 90.2 | — | B 同一厂商的官方脚本 |
+| Supermemory（第三方） | 是 | 未公开 | 81.6 | — | A 第三方复现 |
+| Raw-RAG（朴素） | 是 | — | 87.5 | — | B 论文 |
+| MemCog | 是（agentic 2–3 步） | 未公开 | 95.80 总 / **92.48 `MR`** | — | C 表格抄基线 |
+| Hindsight | 是 | 未公开 | 94.6 | **43,600** | C 厂商 |
+| 无记忆基线 | — | — | 57.6 | 全历史 | B 第三方 |
+
+**③ 同一张图上的准确率 × 成本**
+
+沿用已发布的位置图，本轮不重画——**本轮没有产生新的准确率读数，也没有新的成本口径**，重画一张同数据的图
+只会让"每轮都有新图"变成一种形式。
+
+<!-- image: evidence/longmemeval/cortex-position-45314580164.png -->
+
+归一化每千 token 得分（不变）：**Contextier 32.63 · Zep 20.45 · Mem0 13.76 · cortex 12.72（末位）**。
+一句限定必须同时说：独立第三方复现的**前沿只有 86.5%**，cortex 在其上 7 点——"末位"是相对于厂商自报
+那一列的位置，不是相对于可复现前沿的位置。
+
+本轮新增的是**产品维度**的图，见 §209.7。
+
+**④ cortex 是否已经学习借鉴复刻所有领军竞品的能力与技术设计，穷尽了可借鉴价值？**
+
+没有。本轮把"该借什么"的判据又收紧了一条，而且这条与准确率无关：**在借一个会改 room 的机制之前，先确认
+这条臂在靶路由上真的把 room 花完了**（§208 的读数：`multi-session` 花完了，四条扁平路由没花完）。
+本轮新增的第二条判据是产品侧的：**在追求下一个机制之前，先确认已经做到的东西能发出去**。五个包零发布
+路径这件事说明，"能力已经实现"与"用户能拿到"之间隔着一整个分销层，而这一层此前完全没有被任何测试覆盖。
+
+仍未复刻的、有明确价值的机制，按预期收益排序：`MemCog` 的 agentic 多步检索（`MR` 92.48，我们 88.43）、
+RAW-RAG 的 cross-encoder（对它们值 3.92 点，是它们单个机制里最大的）、`Mem0` 的抽取式上下文（94.4 @ 6,800
+是用"选择印什么文本"换来的，不是用"印更多轮"）。
+
+**⑤ 不是 SOTA，还有没有可能？剩余步骤、时间与金钱**
+
+**cortex 目前不是 SOTA。** 准确率上落后 `Maximem Synap` **95.6 − 93.40 = 2.2 点**（约 11 题），落后
+`Exabase M-1` 96.40 共 3.0 点（厂商稿）；成本轴上被 `Mem0`（93.4 @ 6,787）**帕累托支配**；归一化每千 token
+得分末位。
+
+有路径，且队列在本轮被压缩到 **¥33 以内**：
+
+| # | 步骤 | ¥ | 预计时间 | 它能回答什么 |
+| ---: | --- | ---: | ---: | --- |
+| **0** | **`turn-fill` 配对派发（本轮已派）** | **3.57** | 1.5 h | 付了钱的 room 有三分之一没被读——填满它能不能换来题。`P1`–`P4` 已预注册 |
+| 1 | 按路由 room 在 `verbatim-acts` 上重跑 | 5.81 | 1.5 h | 唯一的"加"方向：21 题可增 gold，gap 中位 14 |
+| 2 | `MemCog` 机制，`MR` 121 题 | 5.87 | 1 h | 唯一外部 `MR` 高于我们（92.48 vs 88.43） |
+| 3 | LoCoMo 300 题子集 | 7.28 | 2 h | 第二数据集，防单一语料过拟合 |
+| 4 | 431 题人口一遍 | 10.45 | 2 h | 唯一能判定 4.96 点以上机制的人口 |
+| — | 发布：npm token + 组织 secret scanning | 0 | 0.5 h | **仓库外**，非工程工作量 |
+
+**第 0 行是本轮唯一动了的行**，也是队列里唯一"机制已经落地、只缺一次派发"的行。第 1–4 行合计 ¥29.41，
+全部前置条件是第 0 行先给出 `P1`（机制是否真的触发）。
+
+**⑥ 代码自审**
+
+逐项复核本轮的四处改动：
+
+| 改动 | 自审结论 |
+| --- | --- |
+| `ArmPairing` 加 `units` | `switch` 无 `default`，`tsconfig` 的返回类型约束使"漏一个分支"变成编译错误；`ArmTreatment` 由 `PairingTreatment` 派生，新增字段对五个旧 pairing 全部可选缺省，不改变既有分支 |
+| unit 从 `armOptions` 移进 `treatment` | 两侧走同一个 `relevanceUnitOption`；表不认识的 unit 仍在**打开数据集之前**抛出（`readRelevanceUnits` + `relevanceUnitToForward` 双层） |
+| `pairingViolation('units')` | 只读 `treatment.units` 一个键；120 组笛卡尔积测试覆盖"是否读了第二个键"；control 是字面量 `turn` 而非移动的注册值 |
+| `publish-metadata.mjs` 11 条规则 | 每条规则一个 fixture，断言"只有预期的那条变红"；`license-file` 曾闭包捕获模块级 `REPO`（已修，写进注释）；`--check` 两条路径都打印完整表格，使 55 条读数可审计 |
+| `release.yml` | `${{ }}` 只出现在 `if:` 与 `env:`，不进 shell 源码——首跑被 `check-shell-interpolation.py` 抓到一处并已修；`dry_run` 默认 true；token 缺失时点名 secret 而不是静默跳过 |
+
+仍未修的仍只有 `unpairedFloor` 的公式（7.87 应为 11.13，不影响任何裁决）。
+
+### 209.7 产品完成度与可发布信号
+
+**本轮产品侧第一次动了，而且动的是一个此前从未被度量过的维度：分销。**
+
+| 维度 | 上一轮 | 本轮 | 说明 |
+| --- | --- | --- | --- |
+| 组合根 | 33 字段 / 32 转发 / 1 说明 / 0 未判定 | **未变** | 没有新增能力，因此没有新增字段 |
+| 能力台账 | 28 行：19 product / 7 gated / 0 blocked / 0 gap | **未变** | gated 表示"能力可达但有配置开关"，不是缺口；门禁双向检查 |
+| **发布就绪度** | **未度量**（无门禁、无流水线） | **55 条读数全绿**（5 包 × 11 规则） | 新增维度，新增门禁 `guard:publish-metadata` |
+| **发布路径** | **不存在** | `release.yml`，`dry_run` 默认 true | 新增 |
+| 手册可编译示例 | 46 | **46** | `manual:check` 未改动；本轮没有新增 API |
+| 测试规模 | 3,545 pytest / 3,811 vitest | **3,550 pytest / 3,811 vitest** | +5（发布元数据） |
+| 覆盖率 | 205 文件 × 4 维 ≥98.42% | **未降** | `coverage:gate` 通过 |
+
+<!-- image: evidence/longmemeval/cortex-release-readiness-2026-11-27.png -->
+
+**可发布信号：仍未触发，但阻塞从三项降到两项。**
+
+| 阻塞 | 归属 | 状态 |
+| --- | --- | --- |
+| 无 `publishConfig.access` / `engines.node` / `repository` | 仓库内 | **本轮清除**（15 条红 → 0） |
+| 无发布流水线 | 仓库内 | **本轮清除**（`release.yml` 落地，dry-run 默认） |
+| `NPM_TOKEN` | 仓库外 | 未清 |
+| 组织级 secret scanning 开关 | 仓库外 | 未清 |
+
+一项限定必须同时说：**"55/55 绿"只说明 tarball 会正确地描述自己，不说明它被发布过**。真正的可发布信号
+仍然需要那两项仓库外凭据，而它们不是工程工作量。
+
+### 209.8 派发：一次被预算拒绝的派发，和一次被前置门禁拒绝的派发
+
+两个拒绝都是本轮值得记的读数，因为它们都在**花钱之前**发生。
+
+**第一次：前置门禁，¥0。** 用裸 workflow API 派发（4 个 input），run `45922781800` 在步骤 5
+"Check the dispatch against the registration" 失败。本地用构造的 event payload 复现，两条原因：
+
+| 原因 | 机制 |
+| --- | --- |
+| `cortex_memory_max_prompt_chars` **ABSENT** | 裸 API 对未命名的 input 传空串，而空串不是注册的那张 room 表。门禁拒绝"只点名预算表以外的东西"的派发 |
+| `cortex_memory_relevance_units` **未声明偏离** | 它是 input，改了就偏离注册；偏离必须写进 `CORTEX_DECLARED_DEPARTURES` |
+
+修法不是改门禁，而是**改用 `tools/dispatch-cortex-memory-ab.py`**：它发全部 24 个注册 input，自己算并
+写 departures。本轮给它加了第十个变量 `CORTEX_MEMORY_AB`（读环境、拒未知、无条件重置）。
+
+**第二次：预算，¥0。** 走正确派发脚本后，脚本自己的 token 级投影算出 **3.57 CNY**，而默认预算是 3.00：
+
+```console
+spend: Projected spend for 500 questions x 1 runs (scale 0.250 of the observed run)
+spend:   input cached    6.54M  1.31 CNY
+spend:   input uncached  0.27M  0.54 CNY
+spend:   output          0.57M  1.72 CNY
+spend:   TOTAL           3.57 CNY   (cache hit 96.0% of input)
+BUDGET EXCEEDED: 3.57 CNY projected against a 3.00 CNY budget.
+Refusing to dispatch.
+```
+
+**这个 3.57 与 §1.2 用文件费率算出的 3.57 是两条独立路径的同一个数**：一条是"账单 ÷ 题数 ÷ 遍数"
+（`14.26 / 500 / 4 = 0.00713`，× 500），另一条是 token 普查按挂牌价（缓存 0.20 / 未命中 2.00 / 输出 3.00）。
+值得记的原因是 `MEASURE-SPEND-MINIMUM.md` §206.5 说这两条**通常不一致**：从 `llmUsage` 按挂牌价重建会得到
+实际花费的 2.4–5.1 倍，因为 `42467` 的 prompt token 有 96.0% 是前缀缓存命中。这里两者相等，是因为这个投影
+**从前缀缓存的拆分出发**，而不是从总 token 数出发。
+
+最终以 `--budget 5` 派发，**run `45923435343`**，2026-11-27T01:35:33Z，commit `daeb72dc`，
+declared departures `['ablation_runs', 'cortex_memory_relevance_units', 'resolution']`。
+截至本轮报告撰写时该 run 在跑（步骤 5、6 均 success，即注册门禁与预算门禁都过了）。
+
+### 209.9 自审：本轮三个"多份副本"缺陷，和一个我自己写出来的同类缺陷
+
+本轮四处改动引出的失败全部属于同一类——**同一份封闭集合被抄进了多处，而只有一处被改了**：
+
+| 处 | 副本数 | 谁抓到 |
+| --- | --- | --- |
+| `ArmPairing` 的六个值 | 4（`arm-pairing.ts` / `read-merged-population.py` / `dispatch-semantic-carry.py` / `dispatch-cortex-memory-ab.py`） | 三个 pytest 同时变红 |
+| 11 条发布规则 | 2（`publish-metadata.mjs` / `test_publish_metadata.py`） | 后者用"规则名集合相等"钉住，删一条就红 |
+| `${{ }}` 能否进 shell | 1（`release.yml`） | `check-shell-interpolation.py` 在首跑抓到 |
+
+第四处是我自己写出来的：`publish-metadata.mjs` 的 `license-file` 规则最初**闭包捕获了模块级的 `REPO`**，
+于是 `--self-test` 的 fixture 继承了真实仓库的 LICENSE，"删掉 LICENSE"那个用例一直是绿的。修法与注释一起
+写进了文件，因为它与 §13.278 的陈旧前提是同一个缺陷，只是带上了一个文件路径。
+
+仍未修的仍只有 `unpairedFloor` 的公式（7.87 应为 11.13，不影响任何裁决）。
+
+### 209.10 本轮的位置与剩余步骤
+
+**位置**：已发布 **93.40% @ 7,346 token/题**（`45760081761`，两遍，A 级）；**不是 SOTA**——落后
+`Maximem Synap` 95.6 共 **2.2 点**（约 11 题），落后 `Exabase M-1` 96.40（厂商稿）3.0 点；成本轴上被
+`Mem0`（93.4 @ 6,787）**帕累托支配**；归一化每千 token 得分 Contextier 32.63 · Zep 20.45 · Mem0 13.76 ·
+**cortex 12.72（末位）**。独立第三方复现的前沿只有 86.5%，cortex 在其上 7 点——此限定必须同时说。
+
+**产品侧**：本轮第一次动了，动的是分销（15 条红 → 0，`release.yml` 落地），不是又一轮测量。
+**可发布信号仍未触发**：剩两项仓库外凭据。
+
+**剩余步骤**（队列 ¥29.41，加上本轮已花的 3.57 共 **¥33**）：
+
+| # | 步骤 | ¥ | 时间 | 状态 |
+| ---: | --- | ---: | ---: | --- |
+| **0** | `turn-fill` 配对派发 | 3.57 | 1.5 h | **已派发** `45923435343`，等读数 |
+| 1 | 按路由 room 在 `verbatim-acts` 重跑 | 5.81 | 1.5 h | 前置：第 0 行的 `P1` |
+| 2 | `MemCog` 机制，`MR` 121 题 | 5.87 | 1 h | 唯一外部 `MR` 高于我们 |
+| 3 | LoCoMo 300 题 | 7.28 | 2 h | 第二数据集 |
+| 4 | 431 题人口一遍 | 10.45 | 2 h | 唯一能判定 4.96 点以上机制 |
+| — | 发布凭据 | 0 | 0.5 h | 仓库外 |
+
+> 本轮最值钱的一句：**五个包建了几个月、测了三千多条、五包全绿，而没有任何一条测试能看见它发不出去。**
+> 最该记住的一句：**我用来证明"预注册可以派发"的那个句子，在代码里没有对应物——和上一轮那条不能报告
+> 失败的命令，是同一个形状。**
