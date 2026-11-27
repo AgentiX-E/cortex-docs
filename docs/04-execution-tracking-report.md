@@ -38920,3 +38920,30 @@ run  45974552492   master ff3a9220
 > 本轮最值钱的一句：**那个判决（净 −1、p=1.000）是真的，而它不属于这个机制——242 次调用全部被 32 token 截断，而 census 把它们记成了 242 次拒答。**
 >
 > 最该记住的一句：**唯一指出真相的字段（`llmUsage.truncatedCalls`）并不在 census 里，所以"机制没执行"这件事只能由一个读 census 之外的东西的人发现。**
+
+### 213.13 重派：同一份配置，唯一的变化是默认预算
+
+```
+run  45989342121   master 7772b355
+  capability = MR *        limit = 0        ablation_runs = 2 *
+  CORTEX_MEMORY_AB = reader *              CORTEX_MEMORY_RESOLUTION = layered *
+  CORTEX_MEMORY_READER_SEARCH = 1
+  departures declared: ablation_runs, capability, readerSearch, resolution
+  spend: 121 qs x 2 = 242 question-runs, 5.87 CNY (measured at 0.0243/question-run)
+```
+
+配置与 `45974552492` **逐字相同**——同一 job、同一配对、同一 `layered`、同一 121×2。代码侧唯一变化是
+`DEFAULT_READER_SEARCH.maxTokens` 32 → 1024 与 census 的 `empty` 字段。派发器、注册表、配对轴一个字都
+没改，这正是把修法放进**产品默认值**而不是派发参数的理由：两次跑之间任何读数差异，来源只能是那个预算。
+
+三条判据写在派发之前，按它们各自要求不同的下一步：
+
+| 读数 | 含义 | 下一步 |
+| --- | --- | --- |
+| `queries > 0`，`empty` 小 | 机制执行了 | 按 §4 的 bar 1/2 读 delta，`p<0.05` 才授权 500×4 |
+| `queries > 0`，`promoted == 0` | 第二眼写了查询但没改善排序 | 关于机制本身的 null，可关闭（这才是"这条轴关"的合法证据） |
+| `queries == 0`，`empty == 242` | 1024 仍不够 | 下一个假设是 `thinking` 的推理长度而非查询长度，先读 `completionTokens` 再决定是否再抬 |
+
+第三行不是"再试一次"，它是**同一个仪表缺陷**的第二次读数：若 242 次调用在 1024 token 下仍然全部截断，
+那么需要的数不是再放大一个常数，而是 `reasoning_tokens` 的实测值——而那个数产物里没有，只有
+`completionTokens` 的总量，可以减去答案侧估出来。
