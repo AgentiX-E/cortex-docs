@@ -38632,3 +38632,125 @@ clock、resolution、`queryExpansion: llm`（S17，+1.75 对 +5）。**未复刻
 >
 > 最该记住的一句：**第一行的那个量，在仓库里根本不存在——而它是被当作"下一个实验"，配了价格、bar 和
 > 控制 run，写进队列的。**
+
+## 212. 队列第 0 行：那个量现在存在了
+
+`§211` 把队列的第一行判给了一件 ¥0 的工程：**`readerSearch` 在仓库里不存在，所以第 1 行永远派发不了**。
+本轮把它实现了。这不是一个数字的胜利——本轮**没有任何新的准确率读数**——而是"注册必须带一个能被派发的量"
+这条规则第一次被执行到位。
+
+### 212.1 改了什么（五个层面，每一层都有自己的门禁）
+
+| 层 | 落点 | 验证它的检查 |
+| --- | --- | --- |
+| 产品机制 | `cortex-memory/src/reader-search.ts`（160 行纯函数）+ `memory.ts#secondLook` | `reader-search.test.ts` 23 条；模块 100/100/100/100 |
+| 产品入口 | `CortexMemoryOptions.readerSearch`、`AssembleOptions.readerSearch` | `assemble-forwarding.test.ts` 新增一条行为断言 |
+| 评估侧 | `CORTEX_MEMORY_READER_SEARCH` → `CortexMemoryArmOptions` → `MemoryArmConfig.readerSearch` | `repo-gates` 的 25 输入上限分类表（新增 `HELD` 一行） |
+| 回执 | `AblationReport.readerSearchCounts`（五个计数器） | `assertReaderSearchReached`：一次第二眼建**两个**索引，`queries ≤ indexes` 即拒绝 |
+| 派发 | `tools/dispatch-cortex-memory-ab.py` 每次派发都写该变量（默认 `0`） | `test_dispatch_inputs.py` + `prereg-knobs` 读它 `buildable` |
+
+`guard:prereg-knobs` 从本轮起读到的状态：
+
+```
+PREREGISTRATION-MULTI-STEP.md      readerSearch          buildable
+```
+
+上一轮它是 `missing`。这一行状态的变化就是本轮的交付物。
+
+### 212.2 第一个发现：seam 比设计文档说的**高一层**
+
+`PREREGISTRATION-MULTI-STEP.md` §3.1 说"剩余工作是 arm 侧、一处调用点"。这句话是错的，而错得很具体：
+
+- 第一次排序发生在 `answerSessions` **内部**：`#relevanceFor` 每题建索引，`selectSessionBudget` 花掉房间。
+- arm 拿到的是 `Answer`，不是那份选区。arm 若要"看见第一遍"，只能自己再建一个索引——而那正是设计文档
+  §1 否掉方案 A 的理由（第二个索引 = 第二个排序，实测代价 −3.75 题）。
+
+所以机制落在 `#secondLook`（`CortexMemory` 的私有方法），从 `answerSessions` 里调用。公开的
+`search(query, context, {k})` 早已发布、也仍然有用，但它**不是缺失的那一块**——缺的是"这一帧里的选区"。
+这就是为什么一个"一处调用点"的工程，在仓库里停摆了四轮。
+
+### 212.3 第二个发现：三道门禁各自抓住了我
+
+实现完、测试全绿之后，`pnpm check` **红了两处**，都是仓库自己的闸门在干活：
+
+1. `manual:check`：`CortexMemoryOptions.readerSearch is declared in the type and not documented` →
+   追加一条契约表行 + 一段带可编译示例的 §6.14.1。
+2. `tools/__tests__/test_arm_config_baseline.py`：`['readerSearch'] != []` → 新字段必须被归类
+   （`PROJECTED` 还是 `UNPROJECTED` 及其理由）。
+
+第 3 道是上一轮新加的 `prereg-knobs`：它从"missing"变"buildable"，而它的测试里那条断言**必须跟着翻**——
+这正是"测试钉住了缺陷"的那一类翻转（`§211.2` 的 `7.87` 是同一形状）。
+
+### 212.4 第三个发现：组合根又一次够不到新能力
+
+写完手册示例，编译器说 `'readerSearch' does not exist in type 'AssembleOptions'`。这是需求 ⑯ 的
+**第三次**同一形状：arm 能派发、`CortexMemory` 能跑、而 `assembleMemory`（本页唯一告诉用户要调的函数）
+够不到。前两次是 `readerByRoute` 和 `factTimeline` 那三个选项。
+
+修法是加一个转发字段，而这一条的**测试断言不是相等而是后果**：`readerSearchCensus()` 在带选项的装配上
+非 `null`、在不带的装配上 `null`。丢字段的实现在这条断言下立刻红。
+
+### 212.5 一条差点混过去的测试
+
+`reader-search.test.ts` 的第一版**绿得没有意义**：夹具里的"植物会话"文本里根本没有 `plant` 这个词，
+于是两个会话在问题下的得分都是 `0.2`，它断言的"提升"来自第二查询赢了一个平局，而不是来自机制。
+
+抓到它的方式是打印（`DBG scores` 打出 `[[0,[0.2,0.2]],[1,[0.5,0.5]]]`），不是读代码。夹具改成
+`I bought a plant, a peace lily` 之后，断言才真的在测机制。这段写进 `DESIGN-READER-SECOND-LOOK.md` §7.5，
+因为"绿在一个表达不了该断言的夹具上"是这场战役最贵的复发缺陷。
+
+### 212.6 成本与预算
+
+| 项 | 值 |
+| --- | --- |
+| 本轮花费 | **¥0**（无派发、无 LLM 调用；所有测试用桩） |
+| 每 MR 题新增账单 | 1 次决策调用（约 600 入 / 32 出）+ 1 次查询 embedding |
+| 121 题一遍的机制成本 | ≈ 7.6 万 token，**约为一次 121 题配对跑（¥5.87）的 1/8** |
+| 队列现价 | **¥27.17**，第 0 行已消掉（¥0） |
+
+### 212.7 位置：仍然不是 SOTA，且本轮没有改变它
+
+已发布 **93.40% @ 7,346 token/题**（`45760081761`）。落后 `Maximem Synap` 95.6（2.2 点 ≈ 11 题）、
+`Exabase M-1` 96.40（厂商稿，3.0 点）；成本轴被 `Mem0`（93.4 @ 6,787）帕累托支配。本轮**没有新读数**，
+所以这张表一位数都没动——本轮的交付物是"下一行现在可以跑了"，不是"分数变了"。
+
+### 212.8 六个固定问题
+
+**① 权威测评集与排行榜是否完备？** 不完备。本轮给"完备性"加了第三维：**队列里的每一行，是否连一个
+能被派发的量都有**。第一维是数字要带配置（§208），第二维是配置要带实现（§211），本轮是第三维落地——
+`readerSearch` 从 `missing` 变 `buildable`，这三个维度现在都由门禁而非由阅读保证。
+
+**② 竞品穷举（LLM · 技术栈 · 指标 · token）**：`docs/03-competitive-analysis.md` 未变。本轮与竞品有关的
+唯一结论：MemCog 式"读者驱动多步检索"在我们这里是**两个不同机制**（盲写短语 `queryExpansion`，实测
++1.75 对 bar +5；看后写查询 `readerSearch`，尚未实测）。把两者混成一个名字，正是 `S17` 那个数字被误读的
+原因。
+
+**③ 准确率 × 成本同图**：`evidence/longmemeval/cortex-position-*.png`。本轮不新增图——没有新读数，
+把"一行从 blocked 变 buildable"画进准确率×成本图会制造假读数。
+
+**④ 是否穷尽了领军竞品的可借鉴价值？** 没有。已复刻并量化：`layered`、`ask` 家族、semantic carry、
+clock、resolution、盲扩张。已建成但**未量化**：本轮的第二眼。未复刻：Mem0 的抽取式记忆、STRIX/BARO 的
+trace 先验。
+
+**⑤ 若非 SOTA，最优路径剩余步骤与代价**：见 §212.9。总价 **¥27.17 / 约 7 h**，其中第 1 行 **¥5.87**
+现在**可以派发了**。
+
+**⑥ 自我审查**：§212.2–212.5 三条发现全部是"实现之前没人看见"的形状；本轮的门禁链（`pnpm check`
+含 build/typecheck/lint/五包测试+覆盖率/tools 3578 条 Python 测试/manual-examples/prereg/knobs）在
+**红了两次之后**才全绿，两次红都是真问题。
+
+### 212.9 队列（第 0 行已消）
+
+| # | 项 | ¥ | 时间 | 说明 |
+| ---: | --- | ---: | ---: | --- |
+| 1 | `MR` 121 题配对筛（`readerSearch=1`） | 5.87 | 1 h | **现在可派发**；带停止规则：`MR` 正增量且 `p<0.05` 才授权 500×4 |
+| 2 | `resolution: raw` 的同一对 | 3.57 | 1.5 h | §210.5 唯一未解释的实测现象 |
+| 3 | LoCoMo 300 题子集 | 7.28 | 2 h | 第二数据集 |
+| 4 | 431 题人口一遍 | 10.45 | 2 h | 唯一能判定 4.96 点以上机制 |
+| — | 按路由 room 重跑 | 5.81 | 1.5 h | 保持降级 |
+| — | 发布凭据 | 0 | 0.5 h | 仓库外 |
+
+> 本轮最值钱的一句：**"剩余工作是一处调用点"这句话本身，就是那处调用点不存在的原因**——它把一件产品级
+> 的重构描述成了一件 arm 级的接线。
+>
+> 最该记住的一句：**三道门禁在同一个提交里各红了一次，而它们红的三件事没有一件是我读代码能看见的。**
