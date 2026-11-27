@@ -39380,3 +39380,74 @@ LoCoMo 91.54%（中国日报 2026-08-03）。**没有** variant / scoring / read
 >
 > 最该记住的一句：**无法说明计分规则的分数不是"待登记的竞品"，是"无法排位的数字"；门禁拒绝它，
 > 比手工放行它更诚实。**
+
+## 218. 第四处同源缺陷：rerank A/B 的分数解析器也会把"没解析"读成"没效果"
+
+本轮仍是**不等待任何工作流结果**的一轮：全量基线、dependabot、代码根因审查、文档同步。
+没有派发 benchmark，API 花费 **¥0**。
+
+### 218.1 起点
+
+两仓远端 tree 与本地 tree 逐字节一致（API 实测：cortex `fddd7db3…`、cortex-docs `527afaf9…`），
+commit 署名 Lambertyan、英文 message，工作区干净。基线 `pnpm check` **EXIT=0**。dependabot 两仓
+**0 PR / 0 alert**。
+
+### 218.2 根因审查：不是又试一个边界，而是把一类缺陷收干净
+
+上一轮修了三处 LLM JSON 解析器的 first-`{`/last-`}` 切片。本轮从 note 8/17（LLM 调用审查）与
+note 13（自审找实现错误）出发，系统扫描**全部** JSON.parse 点与切片模式，确认还有**第四处**同源
+缺陷，且 Consequences 更隐蔽：
+
+`cortex-ai/src/rerank/llm-reranker.ts` 的 `parseListwiseScores` 用 first-`[`/last-`]` 切片取分数数组。
+它决定 cortex-eval 的 B1 rerank A/B **是否采纳 LLM rerank**。推理模型先复述示例数组再给结论时
+（`Example: [0.5, 0.5]. Final: [0.9, 0.1]`），切片横跨两数组+散文→`JSON.parse` 失败→整桶丢弃，
+唯一信号是 `fallbackCount += 1`——A/B 把一个"从未解析"的桶读成"rerank 没产生重排"，和真的无效
+**输出相同**。最小脚本已复现（3 个新用例为红）。
+
+这与上一轮是**同一个根因**，不是新边界试探：全源扫描确认其余 `JSON.parse`（source-aware、
+storage、restore-plan）读的是本地自产缓存而非模型回复，无同类切片。四处 LLM 解析器现全部收敛到
+平衡扫描——**根因级关闭，不是打补丁**。
+
+### 218.3 修复与验收：TDD + 每维 100%
+
+改为括号平衡扫描（数深度，取最后一个可解析数组获胜，保留对象成员的两侧守卫）。score 数组只含
+数字，故不引入不可达的字符串转义分支。新增 4 用例先红后绿：echo 示例、跳过不可解析数组、拒绝
+嵌套数组、忽略游离 `]`。`llm-reranker.ts` **100/100/100/100**；逐文件门禁 206 文件 / **0
+ratcheted**；`pnpm check` 全链路复核见下。
+
+### 218.4 六个固定问题（本轮增量）
+
+**① 权威测评集/排行榜完备？** 本轮联网复核了权威聚合源 sota2.com 的 long-term / long-context memory
+两张榜。它把不同 variant 的 SOTA 混排在一张表里：MemoryOS **97.14** 是 `LongMemEval-S Single-User
+Score`（子集口径）、Claude Opus 4.6 **95.6** 是闭源模型 `LongMemEvalS Overall`、EMem-G **94.4** 是
+`KU` 单项、DeMem **71.45** / zenbrain **47.7** 是 Accuracy/Mean 不同 scoring。逐条核对后**没有一条**
+能与账本主表（full-500 Overall、同 scaffolding）直接排序；且 Chronos 95.60、EMem-G KU 已在
+`SOTA-LANDSCAPE.md` 覆盖。因此**账本维持 54 条不变**——完备性的结论不是"少一个数字"，而是"聚合源把
+不可比口径混排，需显式标注"。这是比上轮 MemoryBear 更典型的一个口径陷阱，已记入竞品分析文档。
+
+**② 竞品穷举**：账本 54 条不变；技术栈/成本分布同上轮。sota2.com 新增 6 个名字均为不可比口径脚注。
+
+**③ 准确率×成本同图**：沿用 [`evidence/longmemeval/position-2026-11-27i.png`](../evidence/longmemeval/position-2026-11-27i.png)，
+本轮无新读数、无新派发，图不变。
+
+**④ 是否穷尽领军竞品价值？** 代码层本轮再**减少一处系统性缺陷**（第四处解析器），使 B1 rerank
+裁决的证据在推理模型下也成立；三条待复刻机制（per-question 路由 / 抽取式记忆 / 多步 ReAct）状态不变。
+
+**⑤ 最优路径剩余步骤与代价**：同 §217.5——队头 `resolution: raw` ¥3.57 / 1.5 h（需派发，本轮不动）；
+其后 431 题人口 ¥10.45、LoCoMo 300 题 ¥7.28；队列剩余约 **¥20.27 / 5 h**。本轮花费 **¥0**。
+
+**⑥ 自我审查**：红→绿可复现；逐维 100% 由门禁实读；根因级全源扫描确认无第五处；方向正确——本轮
+不做边界试探，而是把一类会让推理模型读数失真的实现错误彻底关闭，并加固了一条既有裁决（B1）的证据基础。
+
+### 218.5 产品成熟度与 SOTA 判定
+
+产品能力 28 项 / 19 product / 0 blocked·gap 不变；浏览器双引擎 OPFS digest 稳。位置仍为 **93.40%
+@ 7,346 token/题，非 SOTA**；领先者 ContextStream 96.8、Exabase 96.40、agentmemory 96.2、MemCog
+95.8，成本轴被 Mem0 94.4 @ ~6,800 token 支配。发布阻塞仍是仓库外 `NPM_TOKEN`。**未达 100%，不发
+可发布信号。**
+
+> 本轮最值钱的一句：**一个把"示例数组 + 结论数组"当一个数组去解析的分数器，会让 B1 把"桶从未解析"
+> 读成"rerank 没效果"——裁决没变，但证据之前只对弱模型诚实。**
+>
+> 最该记住的一句：**同类缺陷出现到第四处时，该做的是全源扫描确认根因、一次收干净，而不是再来一次
+> 单点补丁。**

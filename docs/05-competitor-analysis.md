@@ -6578,3 +6578,23 @@ variant、scoring、reader、judge、token/harness 中的任何一项。
 
 即便把这个 marketing 数字照单全收，95% 仍低于 ContextStream 的 96.8% 与 agentmemory 的 96.2%，
 不改变"cortex 非 SOTA"的判定，也不改变领先者的名字。台账维持 54 条、校验绿。
+
+## 35 2026-11-28：sota2.com 聚合榜的口径混排陷阱
+
+联网复核权威聚合源 sota2.com 的 `long-term-memory-evaluation` 与 `long-context-memory-evaluation`
+两张榜，逐条核对后确认：它把**不同 variant / 不同 scoring / 不同 reader** 的 SOTA 混排在一张表里，
+直接当作"排行榜"读会得出错误结论。
+
+| 榜上条目 | 数字 | 实际口径 | 可否与 full-500 Overall 排序 |
+| --- | ---: | --- | --- |
+| MemoryOS | 97.14 | `LongMemEval-S Single-User Score`（子集） | 否，子集口径 |
+| Claude Opus 4.6 | 95.6 | `LongMemEvalS Overall`，闭源模型自身 | 否，不同数据集变体 + 闭源 reader |
+| EMem-G | 94.4 | `KU (Knowledge Update)` 单项 | 否，能力子分；已被 oracle 天花板封死 |
+| Chronos High (PwC) | 95.60 | LongMemEval Average | 已在 `SOTA-LANDSCAPE.md`，非同一 judge |
+| DeMem | 71.45 | LongMemEval Accuracy | 否，scoring 不同且远低 |
+| zenbrain | 47.7 | Full-500 official protocol Mean Accuracy | 否，scoring 不同 |
+
+结论：**账本维持 54 条不变**。MemoryOS 97.14 看似刷新 SOTA，实为 Single-User 子集口径；把它当 Overall
+读数会误判 cortex 差距扩大 3.7 点。这条记录的价值是方法论：与第 34 节 MemoryBear 一样，"榜上的数字"
+必须先回答"它测的是哪个 variant、用什么 scoring、谁当 reader"才能进入排序——答不出的，记为脚注而非
+入库。`SOTA-LANDSCAPE.md` 已覆盖 Chronos / EMem-G，无重复登记。
