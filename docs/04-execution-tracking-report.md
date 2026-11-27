@@ -37817,3 +37817,35 @@ plain 的 11 道在任何预算下都够不着。归一化每千 token 得分未
 **从不把缺失字段当 0**（源码级门禁用 `?? 0` / `|| 0` 反向钉住，四条拒绝各自点名缺的是哪个字段），
 `gap` 在 gold 未被排名时是 `null` 而不是 `-1`。**结论：计算正确、方向正确、机制正确。**
 仍未修的仍只有 `unpairedFloor` 的公式（7.87 应为 11.13，不影响任何裁决）。
+
+### 208.10 本轮真正的缺陷：一个结构上无法报告失败的验证
+
+CI 在 `d9568507` 上**失败**了，而本轮的本地验证报告是绿的。原因不是类型错误本身，而是**用来判定类型错误的那个命令**：
+
+```bash
+timeout 900 pnpm -s typecheck 2>&1 | tail -15; echo "TYPECHECK=$?"
+```
+
+`$?` 是**管道最后一个命令**的退出码，也就是 `tail` 的。`tail` 永远成功。所以这条命令**从诞生起就只能打印 0**——
+它不是一个"偶尔误报"的验证，是一个**在结构上无法报告失败**的验证。同一形状的命令本轮用了两次
+（`pnpm typecheck`、`pnpm check`），两次都打印 0，而 CI 实际抓到的是：
+
+| 位置 | 错误 |
+| --- | --- |
+| `evidence-turn-fill.test.ts:195` | `{ relevanceFor: undefined }` 不满足 `exactOptionalPropertyTypes` |
+| `evidence-turn-fill.test.ts:196` | 同上 |
+| `evidence-turn-fill.test.ts:262` | `'q' is declared but its value is never read` |
+
+两处都是**新写的测试文件**里的，也就是说：**本轮新增的 11 条测试从未在本地通过过类型检查，而我以为它们通过了。**
+
+修法有两层，缺一不可：
+
+1. **命令**：`set -o pipefail`，或 `"${PIPESTATUS[0]}"`。这条已改正，本轮的最终验证用的是 `set -o pipefail`。
+2. **断言**：`relevanceFor: undefined` 在这个代码库里**不是一个"配置了的缺席"，而是一个类型错误**——
+   `exactOptionalPropertyTypes` 把它和"键不存在"分开。所以那条测试改成**省略**该选项（`carriedWithoutSignal`），
+   而不是把它设成 `undefined`：原写法测的是一个构造函数会拒绝的状态。
+
+**这条要记下来的理由，与 §207 记 `gold-band-census` 拒绝自己唯一配置的理由是同一个：**
+一个仪器失败的方式，比它成功的次数更能说明它值不值得信。本轮之前的所有"`pnpm check` 全绿"结论都建立在
+同一条 `| tail; echo $?` 上——**它们都需要用 `pipefail` 重跑一次才算数**，而这不是一句免责，
+是下一轮的第一项待办。
