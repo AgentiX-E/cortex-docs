@@ -6648,4 +6648,16 @@ Hindsight 虽有代码但一手分数 91.4% 低于 cortex 93.40%，不构成新�
 | LongMemOS | 95.4%（477/500，S），另称 M 92.4% | dev.to 个人号自报，deepseek flash + gpt-4o judge，称 0 LLM write/recall | 个人自报；95.4 已由 OMEGA 以 C 级在账，重复分数不新增行 |
 | Amazon OpenSearch Memory | 93.0% @ ~13.5K token（full history 95.2% @ ~167K） | 转载 AWS 公告；闭源托管服务 | 93.0 < cortex 93.40、13.5K > 我们 7,346，不构成新领先者；不入账 |
 
-结论：**账本维持 54 条不变**，图不变。门禁与前几节一致：一手/权威/口径完整/可复现才入账；二手营销与个人自报只记脚注，不据此入账或作 SOTA 断言。三个读数都不改变 cortex 非 SOTA 判定，也不改变领先者名字（ContextStream 96.8，官方判分 + 留出半）。Papr 若后续放出官方 run data 与 harness，应像 Maximem Synap 一样按可比五元组重新核对——本轮先记录、不派发测评（note 15：竞品测评按需触发，不随提交自动跑）。
+## 39 2026-11-28：provider 契约自检复核——无新可比行，账本维持 54 条
+
+本轮（§228）联网复核权威源，逐条核对后**无新增可比五元组**，`position-2026-11-27i.png` 不更新。
+新读数与 §38 一致，仍不满足入账门禁：
+
+| 系统 | 读数 | 来源与口径 | 处置 |
+| --- | --- | --- | --- |
+| Papr | 96.0%（480/500），自报 16.5K token/问 | 二手转载博客自报；称答案与判分全公开，但无 run data / harness | 脚注不入账 |
+| LongMemOS V6.4 | 95.4% S（477/500）/ 92.4% M（462/500） | dev.to 个人号自报，deepseek flash + gpt-4o judge，0 LLM write/recall | 个人自报；S 95.4 已由 OMEGA 在账，不入 |
+| Nemotron 3.5 Bolt | 72.10%（BF16）/ 69.92% | BenchLM display-only，NVIDIA 自报，NeMo Gym 不同 harness | 不可比，不入账 |
+
+结论：**账本维持 54 条不变**，图不变。门禁与前几节一致：一手/权威/口径完整/可复现才入账；二手营销
+与个人自报只记脚注，不据此入账或作 SOTA 断言。三个读数都不改变 cortex 非 SOTA 判定，也不改变领先者名字（ContextStream 96.8，官方判分 + 留出半）。Papr 若后续放出官方 run data 与 harness，应像 Maximem Synap 一样按可比五元组重新核对——本轮先记录、不派发测评（note 15：竞品测评按需触发，不随提交自动跑）。

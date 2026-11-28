@@ -39933,3 +39933,59 @@ Exabase 96.40 / agentmemory 96.2，成本轴被 Mem0 94.4 @ ~6,800 token 支配�
 >
 > 最该记住的一句：**一个在自己输出文件被删除时仍打印 `ok` 的检查器，等于没有检查器。缺失与陈旧是同一种缺陷——
 > 一个无人再重新推导的声明。门禁的可靠性不看它在正常时说什么，看它在被破坏时是否拒绝。**
+
+### 228.1 方向决策（note 11/12/13：换到 provider 抽象与 reasoning 解析）
+§224–§227 连续四轮都是"外部值跨边界 / 声明 vs 实测 / null 强制转换 / 门禁与格式耦合"。本轮按 note 13 再次换方向，
+并行派三路只读审查：provider 抽象与硬编码参数、缓存/存储幂等性、强弱模型（reasoning）契约。三路共报 7 处候选，
+逐条读代码实证后只修 3 处真实缺陷——其余或为设计约束（有测试锁定）、或为未在契约中承诺的场景，按 note 13 不混入。
+开工前两仓 tree 同步、dependabot 0 PR / 0 alert。
+
+### 228.2 修复的三处（TDD 红→绿）
+| 环节 | 事实 |
+|---|---|
+| 缺陷 A | `PlatformLanguageModelAdapter.#acquire` 只读构造期 `this.#options.maxOutputTokens`，忽略调用方 `opts.maxTokens`；`CompleteOptions` 契约声明该字段，openai-compatible 尊重它，调用方 memory.ts 明确传它；模块文档承诺"key is the resolved options" |
+| 红测试证据 | `rebuilds the session when a call asks for a different maxTokens`：请求 `maxTokens:8` 后 `expected 1 to be 2`（session 未重建、cap 被吞） |
+| 修复 A | `maxOutputTokens = opts.maxTokens ?? this.#options.maxOutputTokens`，对称于 temperature；session key 已含该变量，不同 cap 触发重建并销毁旧 session |
+| 缺陷 B1 | `parseJson` 注释承诺"last parseable object wins: reasoning precedes conclusion"，但先用非贪婪正则切到第一个围栏，围栏外的最终答案被截断 |
+| 红测试证据 | fenced example + unfenced answer：`expected "real" to be "example"` |
+| 缺陷 B2 | `readObject`（aggregation/spec.ts）同契约、同围栏截断模式 |
+| 红测试证据 | fenced echo + unfenced plan：返回 `{kind:'refused', reason:'empty-scope'}`（读到无 scope 的示例） |
+| 修复 B | 两处都改为扫描整个 reply；围栏无花括号故全量扫描安全，解析循环本就跳过 prose 与不可解析对象 |
+| 门禁 | 三个测试文件全绿：web 27、llm 48、aggregation-spec 26；无既有断言被放宽 |
+
+外部英文设计文档 `docs/DESIGN-PER-CALL-CAP-AND-WHOLE-REPLY-PARSE.md` 已写（cortex 仓职责）。
+
+### 228.3 实证后不修的候选（note 13）
+- `parseSecondLookQuery` 取首行：既有测试 `takes the first non-empty line when the model explains itself above the answer` 的
+  fixture（`boots at Zara\nbecause...`）证明"答案在上、解释在下"是设计接受的形态，first-non-empty 是刻意约定；
+  "解释在上"的场景未被契约采纳，不把推测混入。
+- rerank llm 后端硬编码 DeepSeek URL/key：eval 侧环境问题，需先确认是否存在真实多 provider 调用路径，登记后续。
+- `StorageEmbeddingCache.flush()` 并发写丢失、`embedManyCached` 缓存 key 不含模型身份、序列化非幂等：均为真实但需
+  更谨慎的并发/契约设计，本轮聚焦已能严格红→绿的三处，登记下一轮候选。
+
+### 228.4 联网竞品前沿复核（note 5，本轮）
+复核权威源，新读数与 §227 一致且均不满足入账门禁，账本维持 **54 条**、图不变：
+Papr 96.0%（480/500，自报 16.5K token/问，二手转载站）、LongMemOS 95.4% S / 92.4% M（dev.to 个人号自报）、
+BenchLM Nemotron 3.5 Bolt 72.10%（不同 harness、display-only，不可比）。三者都不改变 cortex 非 SOTA 判定与领先者名字
+（ContextStream 96.8）。
+
+### 228.5 六问回答
+1. **榜单完备?** 账本 54 条不变；本轮新读数为二手/自报/display-only，记脚注不入账。
+2. **竞品穷举** 54 条不变，LLM 使用 / 技术栈 / 成本分布同 §31.2 表；新读数不满足入账口径。
+3. **同图** 沿用 [position-2026-11-27i.png](../evidence/longmemeval/position-2026-11-27i.png)；无新可比读数，图不变。
+4. **竞品价值穷尽?** 三条待复刻机制状态不变；本轮修复属 provider 契约与 reasoning 解析自检，与竞品机制无关；
+   `reviewBareDecline` adoption 仍是唯一待落地项。
+5. **SOTA 剩余路径** 队头 `resolution: raw` ¥3.57/1.5h，其后 431 题人口 ¥10.45、LoCoMo 300 题 ¥7.28；
+   队列剩余约 **¥20.27 / 5h**；本轮花费 **¥0**（本地单测 + 联网复核）。
+6. **自我审查** 三处红→绿证据可复现（cap 被吞、fenced 示例取代答案 ×2）；修复都锚定书面契约（`CompleteOptions`、
+   last-wins 注释），无既有断言被放宽；四路审查中 4 处候选按设计约束/场景未承诺否决而非硬凑；方向、计算、机制自洽。
+
+### 228.6 产品成熟度与 SOTA 判定
+产品能力 28 项 / 19 product / 0 blocked·gap 不变；位置仍为 **93.40% @ 7,346 token/题，非 SOTA**；
+领先者 ContextStream 96.8 / Exabase 96.40 / agentmemory 96.2（均高于我们），成本轴被 Mem0 94.4 @ ~6,800 token
+支配。**未达 100%，不发可发布信号**（阻塞仍是仓库外 `NPM_TOKEN`）。
+
+> 本轮最值钱的一句：**接口承诺的是"每次调用"的 cap 和"整段回复"的 last-wins，实现却只看了"构造时"的值和
+> "第一个围栏"里的对象。范围一旦被悄悄收窄，正确的调用（更小的 token cap、围栏外的最终答案）就被当成不存在——
+> 而这类缺陷在绿灯下完全隐形，因为测试也从没问过那个问题。契约写在哪，红测就要钉在哪。**
+>
