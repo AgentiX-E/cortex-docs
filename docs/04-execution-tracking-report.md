@@ -39451,3 +39451,79 @@ Score`（子集口径）、Claude Opus 4.6 **95.6** 是闭源模型 `LongMemEval
 >
 > 最该记住的一句：**同类缺陷出现到第四处时，该做的是全源扫描确认根因、一次收干净，而不是再来一次
 > 单点补丁。**
+
+## 219. 竞品成本计量器里一个会把整张账单抹成零的 BUG
+
+本轮仍是**不等待任何工作流结果**的一轮：全量基线、dependabot、六问机制审查、竞品计量代码自审。
+没有派发 benchmark，API 花费 **¥0**。
+
+### 219.1 起点
+
+两仓远端 tree 与本地 tree 逐字节一致（API 实测：cortex `7999a9fc…`、cortex-docs `a79a2a03…`），
+commit 署名 Lambertyan、英文 message，工作区干净。基线 `pnpm check` **EXIT=0**，dependabot 两仓
+**0 PR / 0 alert**。逐文件门禁 206 文件 / 0 ratcheted、竞品账本 54 条绿、产品能力账本 28 行
+（19 product / 0 blocked / 0 gap / record 与 code 一致）。
+
+### 219.2 六问机制的根因级审查：七个方向全绿
+
+按 note 6/16 与 note 13，本轮先做了一轮**根因级代码自审**，逐一查了七个可承载"评估→产品割裂"的方向：
+
+| # | 方向 | 结论 |
+|---|---|---|
+| 1 | temporal-engine（评估侧确定性时间引擎） | 属 eval reference system，产品 temporal route 走 LLM+日期 prompt，分工合理，非割裂 |
+| 2 | acceptance matrix / acceptance-check | 六字段记录、crosscheck 实时校验引用值，机制健康 |
+| 3 | product-capability-ledger | D1/D2/D4 从代码派生、--check 双向失败，28 行 record 与 code 一致 |
+| 4 | EmbeddingMemo（去重/装配） | positions 按原文去重、store hit 与 batch repeat 分离、按 index 装配，自洽 |
+| 5 | `#answerWithBareRetry` | retry 用 `assembled.carried` 保证 evidence 是首 prompt 的 byte prefix，成本可缓存注释详尽 |
+| 6 | 产品默认 `relevanceSignal` | S11 的 `none` 是对照组而非产品默认（产品注册臂为 `self-index`），文档已明确 |
+| 7 | fitToBudget / rooms | 13 个测试文件覆盖，24k/48k 单位差异文档已解释，无简单 bug |
+
+**七个方向无一有 bug**——这是前两轮把四类 JSON 解析器根因级收敛后，核心正确性层已稳定下来的实证。
+本轮不在这里强行制造修复（note 13：不做边界试探）。
+
+### 219.3 真正发现的 BUG：流式零 usage 占位帧抹掉整张账单
+
+转向 note 7/18「竞品同比 LLM 公平比较」的基础设施，在 `tools/competitor-sut/sut_llm_proxy.py`
+（`同 LLM 计量代理`，§7 所有 token 数字的来源）发现真实缺陷：
+
+流式转发时 `_relay_stream` 对**每个**含 `usage` 键的帧赋值。若网关在真实计费帧后补发一个零 usage
+占位帧（`{"prompt_tokens":0,"completion_tokens":0}`），40/9 会被覆盖成 0/0。最小复现确认：
+`read_usage` + relay 循环返回 `(0,0,0)`，而实际读到的是 `(40,9,0)`。**竞品这一题的成本被静默记成免费。**
+
+这比该文件自己声明的"流没有 usage 就记为 0（可见，而非静默为零）"更糟：usage **有**上报，却被计量丢弃。
+因唯一消费者是成本表，下游不会显示任何错误——竞品只会显得比实际便宜，"同模型比成本"得出自信而错误的排序。
+
+修复为只接受**非零** usage 帧（记录最后一个真正携带计费的帧，忽略零占位），同时保留三点：流仍只计一次、
+从未携带 usage 的流仍记 0、字节原样转发不改。TDD 先红后绿：新增用例在真实帧后插入零帧，改前
+`assert 0 == 40` 失败、改后通过；11 个 proxy 测试全绿，全量 `pnpm test:tools` 绿。无 benchmark 重跑、¥0。
+
+### 219.4 六个固定问题（本轮增量）
+
+**① 权威测评集/排行榜完备？** 上两轮已核查 sota2.com（口径混排陷阱）与 MemoryBear（不入账本），
+本轮无新增可入库数字，账本维持 54 条。
+
+**② 竞品穷举**：账本 54 条不变；技术栈/成本分布同前。
+
+**③ 准确率×成本同图**：沿用 [`evidence/longmemeval/position-2026-11-27i.png`](../evidence/longmemeval/position-2026-11-27i.png)，
+本轮无新读数、无新派发，图不变。
+
+**④ 是否穷尽领军竞品价值？** `COMPETITOR-MECHANISMS` 已系统登记可复刻机制（intent gate、压缩+可缓存前缀）
+与不该抄的（三存储）；本轮修复了承载这类公平比较的**计量器**，使下一次同比模型实验的成本列可信。
+三条待复刻机制（per-question 路由 / 抽取式记忆 / 多步 ReAct）状态不变。
+
+**⑤ 最优路径剩余步骤与代价**：同 §217.5/§218.4——队头 `resolution: raw` ¥3.57 / 1.5 h（需派发，本轮不动）；
+其后 431 题人口 ¥10.45、LoCoMo 300 题 ¥7.28；队列剩余约 **¥20.27 / 5 h**。本轮花费 **¥0**。
+
+**⑥ 自我审查**：七方向根因审查全绿有证据（逐条列于 §219.2）；本轮 bug 红→绿可复现；修复保住"字节不改、
+流只计一次、无 usage 仍记 0"三条边界；方向正确——不在健康机制上试探，而是修了会让竞品成本列静默失真的计量错误。
+
+### 219.5 产品成熟度与 SOTA 判定
+
+产品能力 28 项 / 19 product / 0 blocked·gap 不变；浏览器双引擎 OPFS digest 稳。位置仍为 **93.40%
+@ 7,346 token/题，非 SOTA**；领先者 ContextStream 96.8、Exabase 96.40、agentmemory 96.2、MemCog
+95.8，成本轴被 Mem0 94.4 @ ~6,800 token 支配。发布阻塞仍是仓库外 `NPM_TOKEN`。**未达 100%，不发
+可发布信号。**
+
+> 本轮最值钱的一句：**七个承载"评估→产品割裂"的机制逐一审查全绿——这比再修一个解析器更能说明核心层已经稳了。**
+>
+> 最该记住的一句：**一个把零 usage 占位帧当真实计费覆盖的计量器，会把竞品成本静默记成免费；这种 bug 不会报错，只会让排行榜说谎。**
