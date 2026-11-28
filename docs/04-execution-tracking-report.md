@@ -39628,3 +39628,49 @@ commit 署名 Lambertyan、英文 message，工作区干净。基线 `pnpm check
 > 本轮最值钱的一句：**manifest 报 `deepseek-reasoner`，客户端却默默用了 `deepseek-chat`——同比模型实验比的不是模型，是两个 provider 默认值，而报告对此一无所知。**
 >
 > 最该记住的一句：**连续三轮收敛的 bug 都在"声明与实做之间"——manifest 与 config、成本帧与账单、key 与维度；凡是同一个值写两遍的地方，迟早会漂移，正解是让它只有一个源头。**
+
+---
+
+## §222 已计费的响应不能再重试：修复 MemCog driver 的重复计费（2026-11-28）
+
+### 222.1 本轮定位：接住上一轮明确记录的候选缺陷
+
+§221 审计把 memcog driver 的"重试把已计费调用当失败"列为下一轮候选，并说明理由：需要 stub 模拟"已计费但解析失败"才能安全改。本轮兑现这一候选——不碰已多轮实证健康的产品侧 LLM adapter / usage / retry / eval judge / embedding cache / 四个竞品 driver 的健康项，只在竞品比较基础设施里收敛这一类真实缺陷。开了本轮仍是两仓开工前完全同步、dependabot 两仓 0 PR / 0 alert。
+
+### 222.2 根因：两个时刻被塞进同一个 try
+
+调用链实证：
+
+1. `sut_llm_proxy.py:275-287` 在状态 <400 时**先记账**——即便 body 不是 JSON、`decoded=None`、`usage=(0,0,0)`，`ACCOUNTANT.record` 也记一次 call。
+2. `memcog_driver.py` 随后 `json.loads` 该 body 抛 `JSONDecodeError`。
+3. 该异常与 `HTTPError`/`URLError`/`OSError` 同在一个 `except` 元组里 → 重试 2 次 → **同一逻辑调用被记 3 次 call**。
+
+区分两种时刻是正解：**传输失败**（响应未到，proxy 记 failure 不记账）重试合理；**解析失败**（响应已到已记账，只是 body 坏）重试就是重复计费。原实现把两者混为一谈。
+
+### 222.3 TDD 红→绿与验收
+
+| 阶段 | 证据 |
+|---|---|
+| 红 | 真实 proxy + 返回非法 JSON 200 的 upstream → 断言 `calls == 1` 失败，实测 **3**；错误消息仅 "three attempts"，无 body 线索 |
+| 绿 | 传输层（`urlopen`）单独 catch 传输异常可重试；解析层（`json.loads`）立即抛 "already billed" 并附 body 前 200 字节 |
+| 对照 | 计数 503 upstream 断言恰好 3 次尝试，保护重试路径不被一并删掉 |
+| 结果 | `test_memcog_driver.py` 14 passed（含 2 新用例）；`pnpm check` / `pnpm test:tools` EXIT=0，逐文件覆盖率门禁过 |
+
+**成本**：两测试均为本地 HTTP server，**¥0**，未派发 benchmark。
+
+### 222.4 六问回答
+
+1. **榜单完备?** 联网复核（§221）结论不变，本轮无新可比数字，账本维持 54 条。
+2. **竞品穷举** 54 条不变。
+3. **同图** 沿用 [position-2026-11-27i.png](../evidence/longmemeval/position-2026-11-27i.png)，本轮无新读数，图不变。
+4. **竞品价值穷尽?** 三条待复刻机制状态不变；本轮修复让 memcog 臂的 `calls` 列不再因坏 body 翻倍，比较刻度又校一格。
+5. **SOTA 剩余路径** 队头 `resolution: raw` ¥3.57 / 1.5 h，其后 431 题人口 ¥10.45、LoCoMo 300 题 ¥7.28；队列剩余约 **¥20.27 / 5 h**。
+6. **自我审查** 红→绿可复现、对照保护重试路径、传输/解析按"是否已计费"而非异常类型分类，方向正确——这是本系列第五个"两个 instrument 记录不一致"类根因，而非在健康核心上试探。
+
+### 222.5 产品成熟度与 SOTA 判定
+
+产品能力 28 项 / 19 product / 0 blocked·gap 不变；位置仍为 **93.40% @ 7,346 token/题，非 SOTA**；领先者 ContextStream 96.8、Exabase 96.40、agentmemory 96.2、MemCog 95.8，成本轴被 Mem0 94.4 @ ~6,800 token 支配。发布阻塞仍是仓库外 `NPM_TOKEN`。**未达 100%，不发可发布信号。**
+
+> 本轮最值钱的一句：**一个坏 body 让同一逻辑调用在账本上变成 3 次——不是 proxy 多记了，是 driver 把"已经付过钱"的错误当成"还没付钱"又打了两次。**
+>
+> 最该记住的一句：**判断能不能重试，看的是"这次失败有没有被计费"，不是异常类型；`urlopen` 和 `json.loads` 看着在同一个 try 里，其实一个在账单之前、一个在账单之后。**
