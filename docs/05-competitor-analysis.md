@@ -6682,3 +6682,14 @@ display-only 不同 harness——三者都不满足入账门禁。结论：**账
 （准确率轴 ContextStream 96.8 / Exabase 96.40 / agentmemory 96.2，成本轴 Mem0 94.4 @ ~6,800 token 支配），
 cortex 93.40% @ 7,346 token 仍非 SOTA。本轮工作与竞品能力对比无关，不新增行、不改图、不派发测评
 （note 15：竞品测评按需触发）。
+
+## 42 2026-11-28：工具链同型缺陷普查复核——无新可比行，账本维持 54 条
+
+本轮（§231）为 tools/ 目录下同型 CLI 缺值 / null 缺陷的横向普查与修复（见
+`04-execution-tracking-report.md §231`）。联网复核权威源读数与 §38–§41 一致：ContextStream 96.8%
+（484/500，官方 GPT-4o judge，held-out 96.0%）、Synap 95.6%@7,400、Papr 96.0%（二手转载自报、
+top-20 配置经错题观察后选定）、agentmemory 96.2%（自报）、Mem0 94.4%@~6,800——均为厂商自报或
+二手转载，无新满足入账门禁的可比五元组，`position-2026-11-27i.png` 不更新。结论：**账本维持 54 条
+不变**，图不变；领先者格局不变（准确率轴 ContextStream 96.8 / Exabase 96.40 / agentmemory 96.2，
+成本轴 Mem0 94.4 @ ~6,800 token 支配），cortex 93.40% @ 7,346 token 仍非 SOTA。本轮工作与竞品能力
+对比无关，不新增行、不改图、不派发测评（note 15：竞品测评按需触发）。

@@ -40097,3 +40097,67 @@ dependabot 两仓 0 PR / 0 alert。三处缺陷全部先用 CLI 实证复现，�
 > 契约说 `--capability` 后面必须有 NAME、`null` 必须渲染成 label——红测就要钉在那个边界上：缺值必须拒绝，缺失必须标注，
 > 绝不静默升级成看起来正常的答案。**
 >
+
+### 231.1 方向决策（note 13/4：换方向到"同型缺陷的横向普查"）
+§230 修的三处都是"CLI 缺值降级 / null 强制转换"同型。本轮按 note 13 换方向：先并行派两路审查
+产品侧写死参数与 LLM/Embedding 成本浪费——两路均**实证后无可修真实缺陷**（写死参数都有测试背书或
+是文档化默认；缓存 key 已含 provider/model/dimensions，加 key 会触发旧缓存全量失效 + 智谱 429 成本红线，
+不可修）。随即派第三路对 tools/ 做**同型缺陷横向普查**，找到 5 处尚未修复的同类，逐一 CLI 实证后
+全部确认为真实缺陷，本轮修复。开工门禁：两仓 tree 一致、dependabot 0 PR / 0 alert。
+
+### 231.2 修复的五处（TDD 红→绿 + 突变验证）
+| 环节 | 事实 |
+|---|---|
+| 缺陷 A | `arm-verdict.mjs` `flag('--capability')` 取 `argv[at+1]`：trailing 得 undefined（`project` 当"全部"）→ exit 0 静默全量；`--capability --json` 吞 flag 名读 0 题 |
+| 红测证据 | `test_arm_verdict.py` 新增用例：trailing 与吞 flag 都要非零退出、stderr 含 capability |
+| 缺陷 B | `paired-flip.mjs` 同型：trailing 静默读全量，`--capability --list` 吞 flag 打印 `no capability matched --list` exit 0 |
+| 红测证据 | `test_paired_flip.py` 新增用例（正确 fixture：含 ablation masks） |
+| 缺陷 C | `ku-stale-census.mjs` `--capability --json` → capability=`--json`，打印 `0 right, 0 wrong of 0` exit 0 |
+| 红测证据 | 新建 `test_ku_stale_capability_flag.py` |
+| 缺陷 D | `arm-transition.mjs` trailing 静默回退文档化默认 MR；吞 flag 得 0 applicable 读数的 exit 0 |
+| 红测证据 | 新建 `test_arm_transition_capability_flag.py` |
+| 缺陷 E | `audit-discordant-identity.py` `coverage.get("present",[])` 遇 `present:null` → `TypeError: NoneType is not iterable`，try/except 只包 JSON 加载，异常冒泡失败整个审计 |
+| 红测证据 | 新建 `test_audit_discordant_coverage_null.py` |
+| 修复关键 | "flag 缺席"与"flag 出现但无值"都返回 undefined——守卫必须同时查 `argv.includes(name)` 存在性与值，否则 trailing 漏过（本轮一次修正即为此） |
+| 门禁 | 缺陷态 **7 failed / 3 passed**（控制组：合法 NAME、省略 flag、合法 cohort 保持绿）；修复后 **10 passed**；反向突变复现 7 failed，恢复后 33 passed；既有两工具测试 25 passed |
+
+外部英文设计文档 `docs/DESIGN-REPEATED-FLAG-GUARDS.md` 已写（cortex 仓职责）。
+
+### 231.3 纠正长期过时记录（note 13：以代码实证为准）
+历史记忆与多轮文档（§228–§230）反复把 `reviewBareDecline` 称为"评估侧→产品侧唯一待落地项/adoption"。
+本轮读产品侧代码实证：`cortex-memory/src/memory.ts`（2745、3212 行消费）、`assemble.ts`（836 行转发）、
+`registered-arm.ts`（193 行 `reviewBareDecline: true`）、`types.ts`、`reply-repair.ts` 全部已实现；
+`node tools/assemble-coverage.mjs` 实读 **34 fields / 33 forwarded / 1 explained / 0 open**。
+`DESIGN-ARM-ADOPTION.md §1.7` 早已记录六个 open 字段（含 `reviewBareDecline`）"cleared in one round"。
+**结论：该项早已落地，"唯一待落地项"是过时误记，本轮起从剩余清单移除。** 这说明长期进度文档亦需按
+note 13 定期用代码实证复核，不能把历史标注当事实积累。
+
+### 231.4 联网竞品前沿复核（note 5，本轮）
+联网复核权威源：ContextStream 96.8%（484/500，官方 GPT-4o judge，held-out 239/249=96.0%）、
+Maximem Synap 95.6%@7,400、Mem0 94.4%@~6,800、Papr 96.0%（二手转载自报、top-20 在看过 top-5
+错题后选定）、agentmemory 96.2%（自报）——读数与 §38–§41 一致，均为厂商自报/二手转载，
+无新满足入账门禁的可比五元组，账本维持 **54 条**、图不变，不改变 cortex 非 SOTA 判定与领先者名字。
+本轮为离线工具链修复，不涉及新测评（note 15：竞品测评按需触发）。
+
+### 231.5 六问回答
+1. **榜单完备?** 账本 54 条不变；本轮联网复核读数与 §38–§41 一致，无新可比行。
+2. **竞品穷举** 54 条不变，LLM 使用 / 技术栈 / 成本分布同 §31.2 表；无新可比读数。
+3. **同图** 沿用 [position-2026-11-27i.png](../evidence/longmemeval/position-2026-11-27i.png)；图不变。
+4. **竞品价值穷尽?** 本轮纠正 `reviewBareDecline` 早已落地的过时记录（§231.3）；产品侧无剩余 adoption 缺口；
+   三条待复刻竞品机制状态不变，本轮修复属工具链健壮性，与竞品机制无关。
+5. **SOTA 剩余路径** 队头 `resolution: raw` ¥3.57/1.5h，其后 431 题人口 ¥10.45、LoCoMo 300 题 ¥7.28；
+   队列剩余约 **¥20.27 / 5h**；本轮花费 **¥0**（本地单测 + 突变 + 联网复核）。
+6. **自我审查** 五处红测先于修复、在真实缺陷上失败（7 failed / 3 passed），修复后 10 passed，反向突变复现失败；
+   修复锚定 flag 契约（`<NAME>` 必填）与 docstring "null as label" 语义，控制组保持绿、既有 25 项测试全过；
+   `reviewBareDecline` 误记已用代码实证纠正；方向、计算、机制自洽。
+
+### 231.6 产品成熟度与 SOTA 判定
+产品能力 28 项 / 19 product / 0 blocked·gap 不变；位置仍为 **93.40% @ 7,346 token/题，非 SOTA**；
+领先者 ContextStream 96.8 / Exabase 96.40 / agentmemory 96.2（均高于我们），成本轴被 Mem0 94.4 @ ~6,800 token
+支配。**未达 100%，不发可发布信号**（阻塞仍是仓库外 `NPM_TOKEN`）。
+
+> 本轮最值钱的一句：**`flag()` 对"没传这个 flag"和"传了但没给值"都返回 `undefined`——
+> 于是"缺值"被无声地翻译成了"默认/全部"，一个显式请求被当成没请求。判据不是"返回值是什么"，
+> 是"这个 flag 到底有没有出现、出现时旁边有没有 NAME"。把缺失和默认值分开，才不会把
+> 一个改变了范围的读取，伪装成一次正常的读取。**
+>
