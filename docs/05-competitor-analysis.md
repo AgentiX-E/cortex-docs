@@ -6672,3 +6672,13 @@ E4B 69.92%），均 NVIDIA 自报、NeMo Gym 单一 harness、页面明确标注
 / Exabase 96.40 / agentmemory 96.2，成本轴 Mem0 94.4 @ ~6,800 token 支配，cortex 93.40% @ 7,346
 仍非 SOTA。本轮工作是测试质量自检（三处空洞测试强化，见 `04-execution-tracking-report.md §229`），
 与竞品能力对比无关，不新增行、不改图。
+
+## 41 2026-11-28：工具链边界修复复核——无新可比行，账本维持 54 条
+
+本轮（§230）为离线工具链边界健壮性修复（三处 CLI 缺值/null 缺陷，见 `04-execution-tracking-report.md §230`），
+联网复核权威源后**无新增可比五元组**，`position-2026-11-27i.png` 不更新。读数与 §38–§40 一致：Papr 96.0%
+仍为二手转载自报、LongMemOS V6.4 95.4% S 已由 OMEGA 在账、Nemotron 3.5 Bolt 72.10% 为 BenchLM
+display-only 不同 harness——三者都不满足入账门禁。结论：**账本维持 54 条不变**，图不变；领先者格局不变
+（准确率轴 ContextStream 96.8 / Exabase 96.40 / agentmemory 96.2，成本轴 Mem0 94.4 @ ~6,800 token 支配），
+cortex 93.40% @ 7,346 token 仍非 SOTA。本轮工作与竞品能力对比无关，不新增行、不改图、不派发测评
+（note 15：竞品测评按需触发）。

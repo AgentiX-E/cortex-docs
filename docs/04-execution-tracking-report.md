@@ -40044,3 +40044,56 @@ harness、display-only、明确"不用于排名"）。无新可比五元组，�
 > 这些断言在命题恒真时也通过。一个永远抓不到 bug 的测试，和一个没有测试的函数，
 > 在覆盖率报表上长得一模一样。判据不是"测试通过了"，是"把它声称的行为改坏，它会失败"。**
 >
+
+### 230.1 方向决策（note 13/14：回到上一轮登记的真实 BUG）
+§229 实证否决 7 处产品候选后，明确登记三处"真实产品 BUG 且无测试覆盖、优先级高于空洞测试"的工具脚本缺陷
+作为下一轮队头。本轮开工门禁：两仓本地 tree 与远端 tree 一致（cortex `ece6f270`、cortex-docs `24ec52fc`），
+dependabot 两仓 0 PR / 0 alert。三处缺陷全部先用 CLI 实证复现，再写红测，再修复，再突变验证。
+
+### 230.2 修复的三处（TDD 红→绿 + 突变验证）
+| 环节 | 事实 |
+|---|---|
+| 缺陷 A | `paired-delta-census.mjs` 把 `--capability` 解析为 `capability = argv[(index+=1)]`；缺值得到 `undefined`，而 `index()` 把 `undefined` 当"全部 capability"，于是带 scope 的读取静默变成全量，exit=0、stderr 为空 |
+| 红测证据 | `test_paired_delta_census_args.py`：trailing `--capability` 与 `--capability --json` 都要求非零退出且 stderr 含 refused/capability |
+| 修复 A | 赋值前检查下一 token：`undefined` 或以 `--` 开头即写 `refused: --capability requires a NAME` 并返回 1；合法 NAME 行为不变 |
+| 缺陷 B | `membership-reach.mjs` 同型：`capability = argv[i+1]`，缺值落入 `censusOf(report,undefined)` 静默读全量，打印看似正常的 reach、exit=0 |
+| 红测证据 | `test_membership_reach_args.py`：同两例 + 合法 scope 仍运行 |
+| 修复 B | 同样的边界守卫，refuse + return 1 |
+| 缺陷 C | `benchmark-summary.py` 的 docstring 承诺"Never fails the step"与"null 渲染为 label"，但 `ablation_table` 对 `cohortCoverage.missing` 直接 `len(None)` → TypeError 冒泡，失败整个 job-summary step |
+| 红测证据 | `test_benchmark_summary_coverage.py`：`missing:null`、`present:null+missing:null` 都要渲染 n/a 且不抛；合法 cohort 仍渲染计数 |
+| 修复 C | 两侧按"可选 list"处理：都是 list 时按原样渲染 `2/3 (INCOMPLETE...)`；否则可读侧给长度、缺失侧给 `n/a` 并标注 `(n/a = not recoverable)`，绝不伪造 `0/0` |
+| 门禁 | 三份红测在缺陷上 **5 failed / 4 passed**，修复后 **9 passed**；反向突变（把三处 guard 改回缺陷形态）复现失败，证明断言锁定的是修复行为而非恒真；两工具 `--self-test` 全绿 |
+
+外部英文设计文档 `docs/DESIGN-CLI-GUARD-AND-PERSISTED-NULL.md` 已写（cortex 仓职责）。
+新增三份 pytest `tools/__tests__/test_{paired_delta_census,membership_reach}_args.py`、`test_benchmark_summary_coverage.py`。
+
+### 230.3 实证后的边界说明（note 13：不硬凑）
+- paired-delta 的 `--capability --json` 在缺陷态下因"不存在的 capability 名被拒绝"碰巧非零退出，但那是错误原因；
+  修复后统一在解析阶段以缺值原因拒绝，测试从此绑定正确原因而非偶然。
+- 三处都是参数/持久化边界，不触碰产品语义；eval 侧缓存身份等高风险改动仍按 §229 回滚状态不变。
+
+### 230.4 联网竞品前沿复核（note 5，本轮）
+权威源读数与 §227–§229 一致，无新满足入账门禁的五元组；账本维持 **54 条**、图不变，不改变 cortex 非 SOTA
+判定与领先者名字（ContextStream 96.8）。本轮为离线工具链修复，不涉及新测评。
+
+### 230.5 六问回答
+1. **榜单完备?** 账本 54 条不变；本轮无新可比读数。
+2. **竞品穷举** 54 条不变，LLM 使用 / 技术栈 / 成本分布同 §31.2 表；无新可比读数。
+3. **同图** 沿用 [position-2026-11-27i.png](../evidence/longmemeval/position-2026-11-27i.png)；图不变。
+4. **竞品价值穷尽?** 三条待复刻机制状态不变；本轮修复属工具链边界健壮性，与竞品机制无关；`reviewBareDecline` adoption 仍是唯一待落地项。
+5. **SOTA 剩余路径** 队头 `resolution: raw` ¥3.57/1.5h，其后 431 题人口 ¥10.45、LoCoMo 300 题 ¥7.28；
+   队列剩余约 **¥20.27 / 5h**；本轮花费 **¥0**（本地单测 + 突变验证 + 联网复核）。
+6. **自我审查** 三处红测先于修复、在真实缺陷上失败（5 failed / 4 passed），修复后 9 passed，反向突变复现失败；
+   修复锚定工具自身书面契约（`--capability <NAME>` 用法、docstring 的 "never fails the step" / "null as label"），
+   无既有断言被放宽，两工具 self-test 全绿——方向、计算、机制自洽。
+
+### 230.6 产品成熟度与 SOTA 判定
+产品能力 28 项 / 19 product / 0 blocked·gap 不变；位置仍为 **93.40% @ 7,346 token/题，非 SOTA**；
+领先者 ContextStream 96.8 / Exabase 96.40 / agentmemory 96.2（均高于我们），成本轴被 Mem0 94.4 @ ~6,800 token
+支配。**未达 100%，不发可发布信号**（阻塞仍是仓库外 `NPM_TOKEN`）。
+
+> 本轮最值钱的一句：**一个把 `--capability` 无值读成"全部"的工具，和一个把 `null` 计数字段读成 `len(None)` 崩溃的工具，
+> 病根是同一个：把"缺失"当成了"某个具体的值"。前者把缺失当成空 scope（于是读全量），后者把缺失当成列表（于是崩溃）。
+> 契约说 `--capability` 后面必须有 NAME、`null` 必须渲染成 label——红测就要钉在那个边界上：缺值必须拒绝，缺失必须标注，
+> 绝不静默升级成看起来正常的答案。**
+>
