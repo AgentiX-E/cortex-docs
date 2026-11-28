@@ -40145,8 +40145,10 @@ Maximem Synap 95.6%@7,400、Mem0 94.4%@~6,800、Papr 96.0%（二手转载自报�
 3. **同图** 沿用 [position-2026-11-27i.png](../evidence/longmemeval/position-2026-11-27i.png)；图不变。
 4. **竞品价值穷尽?** 本轮纠正 `reviewBareDecline` 早已落地的过时记录（§231.3）；产品侧无剩余 adoption 缺口；
    三条待复刻竞品机制状态不变，本轮修复属工具链健壮性，与竞品机制无关。
-5. **SOTA 剩余路径** 队头 `resolution: raw` ¥3.57/1.5h，其后 431 题人口 ¥10.45、LoCoMo 300 题 ¥7.28；
-   队列剩余约 **¥20.27 / 5h**；本轮花费 **¥0**（本地单测 + 突变 + 联网复核）。
+5. **SOTA 剩余路径**（此队头 `resolution: raw` 已撤回/已关闭：属 C7 分辨率分层，已于 2026-11-19 按预注册后果表
+   关闭并写入 `RETRACTIONS.md §1`，见 §232 的 stale-queue 修正；本节为 §231 当时的历史陈述，保留原读数仅作历史，
+   不再作为待派发队头）当时记的 ¥3.57/1.5h，其后 431 题人口 ¥10.45、LoCoMo 300 题 ¥7.28；
+   当时队列约 **¥20.27 / 5h**；本轮花费 **¥0**（本地单测 + 突变 + 联网复核）。
 6. **自我审查** 五处红测先于修复、在真实缺陷上失败（7 failed / 3 passed），修复后 10 passed，反向突变复现失败；
    修复锚定 flag 契约（`<NAME>` 必填）与 docstring "null as label" 语义，控制组保持绿、既有 25 项测试全过；
    `reviewBareDecline` 误记已用代码实证纠正；方向、计算、机制自洽。
@@ -40160,4 +40162,69 @@ Maximem Synap 95.6%@7,400、Mem0 94.4%@~6,800、Papr 96.0%（二手转载自报�
 > 于是"缺值"被无声地翻译成了"默认/全部"，一个显式请求被当成没请求。判据不是"返回值是什么"，
 > 是"这个 flag 到底有没有出现、出现时旁边有没有 NAME"。把缺失和默认值分开，才不会把
 > 一个改变了范围的读取，伪装成一次正常的读取。**
+>
+
+### 232.1 方向决策（note 13/4：停止在边界 BUG 上打转，转向战略级记录正确性）
+§230（3 处）+§231（5 处）连续两轮修的都是"CLI 缺值 / null 强制转换"同型工具链 BUG，再修第三轮就是
+note 13 警告的"在边界自我否定"。本轮开工门禁：两仓 tree 一致（cortex `3e5488b8`、cortex-docs `6842d10a`，
+docs fetch 遇瞬时 TLS 故障但缓存 tree 一致）、dependabot 两仓 0 PR / 0 alert。
+
+### 232.2 发现并修复战略级 BUG：15 轮 stale 队头
+| 环节 | 事实 |
+|---|---|
+| BUG | `RETRACTIONS.md §1` 明确记录 C7 分辨率分层（`resolution: raw` / `layered`）已于 **2026-11-19** 按预注册后果表关闭（`F3` 密度失败、`F5` 结构不可达），仓库变量复位 `raw`；但进度报告 **§217–§231 连续 15 轮**把它写作"队头 `resolution: raw` ¥3.57/1.5h（需派发，本轮不动）" |
+| 性质 | 比 CLI 边界 BUG 高一个量级：队头是"计划"，已关闭机制不是计划；每轮复制上一轮的字条，使错误只要没人交叉读撤回记录就永远存活——正是 note 13 要防的"停在已关闭的井里" |
+| 盲区 | `guard:prereg` 只查 `PREREG*.md` 内"已决定注册被当计划引用"，进度追踪报告的"队头"句未覆盖 |
+| 修复 A（门禁） | 新建 `tools/stale-queue-guard.mjs`：撤回账本用 `<!-- retracted: KEY -->` 声明已关闭 key（7 个章节全部补标，去重后 6 个）；guard 取报告**最新一轮**（最后一个 `### NNN.1` 到文末）的队头句，把反引号 token 归一到冒号前的 family key，命中已撤回 key 且句内无"关闭/撤回/result/refut"确认词即报错 |
+| 关键设计 1 | 取"整个最新轮次"而非最后一个 `###` 小节——队头在"六问回答"小节，其后还有"成熟度/SOTA 判定"小节；取最后一个小节会正好漏掉被测句。self-test 专门有一条锁此行为 |
+| 关键设计 2 | 空撤回集 = 硬失败（fail closed），否则删掉注释即可绕过门禁 |
+| 关键设计 3 | `resolution: raw` 归到 family `resolution`（已关闭的族，非替代它的默认值）——用 `raw` 限定正是 stale 伪装成"活配置"的手法 |
+| 修复 B（文档） | §231.5 原句保留历史读数，但同句加"已撤回/已关闭 + 见 §232"确认词，使历史陈述诚实且 guard 通过；不篡改历史数字 |
+| 修复 C（接线） | `package.json` 加 `guard:stale-queue`（self-test + check），插入 `check` 链紧跟 `guard:prereg` |
+| 关键的自我修正 | 写 §232 审计文本时 guard 把审计里引用的 stale 队头当成了新计划（假阳性）——补第 5 条判据：成对标点（中英文引号/括号）内的 token 是引用或旁注，不是裸 prose 里的计划提名；`withinQuotes()` 仅认配对成功者，孤立的开括号不会吞掉整行。这让"发现 BUG 的那一轮"能诚实引用那个队头而不自踩门禁 |
+| 门禁证据 | 7 个 pytest：缺陷态 **6 failed**（脚本缺失）→ 脚本实现后 fixture 5 passed、真实文档用例仍精确失败并报出 `resolution` → §231.5 修正后 6 passed → 加引用判据后 **7 passed**；反向突变两轮：①把 family-key 命中改成 `if(true) continue` 使 stale 用例失败，②删掉 `withinQuotes` skip 使引用用例失败，恢复后全绿；`pnpm guard:stale-queue` 全绿 |
+
+外部英文设计文档 `docs/DESIGN-STALE-QUEUE-GUARD.md` 已写（cortex 仓职责）。
+
+### 232.3 联网竞品深挖（note 4/5/7：换方向挖机制，不只盯分数）
+联网复核权威源：ContextStream 96.8%（484/500、官方 GPT-4o judge、held-out 239/249=96.0%）、Synap
+95.6%@7,400、Mem0 94.4%@~6,800、Papr 96.0%（二手转载自报）——读数与 §38–§42 一致，账本维持 **54 条**。
+新增两条候选：Agent Zero Memory（论文 alphaxiv.org/abs/2608.29606，LongMemEval 95.60% / LoCoMo 93.60%，
+8 骨干模型对照"记忆驱动而非模型驱动"）与 Memind（Overall 84.20%@1,615 token，GitCode 二手解读，未见一手
+run data/harness）——后者低于我们 93.40% 且无一手数据，不满足入账门禁，不入账。
+
+**关键实证（note 13：以代码为准，不把厂商机制当"待复刻"）**：Agent Zero 的招牌"引用锁"——答案每个论断必须由
+本次检索真正打开过的证据支撑、无证据即弃权——**cortex 早已实现且更细**：`packages/cortex-memory/src/abstention-recovery.ts`
+的 `DECLINE_TOKEN='INSUFFICIENT_EVIDENCE'`、`isBareDecline`、`declinedItems`、`planAbstentionRecovery`，
+配合 `packages/cortex-core/src/domain/memory.ts` 的 provenance 投毒防御、`protocol/memory-system.ts` 的
+`answerAbstention`、`value/value.ts` 的弃权决策，且带多轮实测 run id（`40807829150`、`39367801501` 等）。
+这与 §231 的 `reviewBareDecline` 纠正同型：**历史"待落地/待复刻"清单需定期用代码实证复核**。三条待复刻竞品
+机制状态不变；本轮无新增可落地机制项。
+
+### 232.4 真正的最优路径重估（note 6：队列队头被 stale 占了两轮，现据实重排）
+stale 队头纠正后，SOTA 队列按证据重排：原队头 `resolution: raw`（¥3.57/1.5h）**已关闭，移除**；
+431 题人口扩展（¥10.45）与 LoCoMo 300 题（¥7.28）仍是真实待办但无具体机制 key、且依赖 Runner secrets，
+本轮按"不等待工作流结果"原则不动。可本地无工作流推进的低风险工具链项在 §230/§231/§232 三轮后已基本清空。
+
+### 232.5 六问回答
+1. **榜单完备?** 账本 54 条不变；联网复核读数与 §38–§42 一致，Agent Zero/Memind 不满足入账门禁。
+2. **竞品穷举** 54 条不变，LLM 使用 / 技术栈 / 成本分布同 §31.2 表；无新可比行。
+3. **同图** 沿用 [position-2026-11-27i.png](../evidence/longmemeval/position-2026-11-27i.png)；图不变。
+4. **竞品价值穷尽?** 本轮实证 Agent Zero 引用锁机制 cortex 早已实现（abstention-recovery + provenance + 弃权决策），
+   与 §231 `reviewBareDecline` 纠正同型；产品侧无新增 adoption 缺口，三条待复刻机制状态不变。
+5. **SOTA 剩余路径** 已关闭的 `resolution: raw` 队头移除；队列剩 431 题人口 ¥10.45 / LoCoMo 300 题 ¥7.28
+   （依赖 Runner，本轮不动），约 **¥17.73 / 3.5h**；本轮花费 **¥0**（本地单测 + 突变 + 联网复核）。
+6. **自我审查** stale 队头 BUG 先由真实文档红测复现（精确报出 `resolution`），新增 guard 由 6 用例 + 突变验证
+   锁定行为；修复只加确认词不篡改历史数字；竞品机制以代码实证判定"已落地"而非照单全收；方向从边界 BUG 转到
+   战略记录正确性，计算（family key 归一）、机制（fail-closed + 最新轮次 + 确认词）自洽。
+
+### 232.6 产品成熟度与 SOTA 判定
+产品能力 28 项 / 19 product / 0 blocked·gap 不变；位置仍为 **93.40% @ 7,346 token/题，非 SOTA**；
+领先者 ContextStream 96.8 / Exabase 96.40 / agentmemory 96.2（均高于我们），成本轴被 Mem0 94.4 @ ~6,800 token
+支配。**未达 100%，不发可发布信号**（阻塞仍是仓库外 `NPM_TOKEN`）。
+
+> 本轮最值钱的一句：**一个每轮都被抄写、却早已按预注册关闭的"队头"，不是数字错误，是一个没人去交叉读撤回
+> 记录的活化石。防线不是"记得去查"，而是让撤回记录说机器能读的话（`<!-- retracted: KEY -->`），让计划句
+> 必须声明自己不是已关闭的族。把"历史陈述"和"当前计划"分开，才不会把一口已经封死的井，一遍遍写成下一轮的
+> 挖掘点。**
 >

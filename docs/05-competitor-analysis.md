@@ -6693,3 +6693,24 @@ top-20 配置经错题观察后选定）、agentmemory 96.2%（自报）、Mem0 
 不变**，图不变；领先者格局不变（准确率轴 ContextStream 96.8 / Exabase 96.40 / agentmemory 96.2，
 成本轴 Mem0 94.4 @ ~6,800 token 支配），cortex 93.40% @ 7,346 token 仍非 SOTA。本轮工作与竞品能力
 对比无关，不新增行、不改图、不派发测评（note 15：竞品测评按需触发）。
+
+## 43 2026-11-28：Agent Zero Memory 引用锁实证——机制已落地，账本维持 54 条
+
+本轮（§232）联网深挖竞品机制层（note 4/5/7），有两条新候选读数与一条重要机制实证：
+
+| 候选 | 读数 | 一手源 | 门禁判定 |
+|---|---|---|---|
+| Agent Zero Memory | LongMemEval 95.60% / LoCoMo 93.60% | 论文 alphaxiv.org/abs/2608.29606，8 骨干模型对照 | 有论文但未见公开逐题 run data / harness，不可比，不入账 |
+| Memind | LongMemEval Overall 84.20% @ 1,615 token | GitCode 二手解读，无一手 run data | 低于 cortex 93.40% 且无一手数据，不入账 |
+
+**机制实证（关键）**：Agent Zero 的招牌"引用锁"（answer 的每个论断必须由本次检索真正打开过的证据支撑，
+无证据即弃权，从而排除模型拿训练期记忆编答案）经读 cortex 产品侧代码确认**早已落地且更细**：
+`packages/cortex-memory/src/abstention-recovery.ts`（`DECLINE_TOKEN='INSUFFICIENT_EVIDENCE'`、
+`isBareDecline`、`declinedItems`、`planAbstentionRecovery`，带 run `40807829150` / `39367801501` 实测）、
+`packages/cortex-core/src/domain/memory.ts` 的 provenance 投毒防御、`protocol/memory-system.ts` 的
+`answerAbstention`、`value/value.ts` 的弃权决策。与 §231 的 `reviewBareDecline` 纠正同型——历史"待复刻"
+清单按代码实证复核后，产品侧无新增 adoption 缺口。
+
+结论：**账本维持 54 条不变**，`position-2026-11-27i.png` 不更新；领先者格局不变（准确率轴 ContextStream
+96.8 / Exabase 96.40 / agentmemory 96.2，成本轴 Mem0 94.4 @ ~6,800 token 支配），cortex 93.40% @ 7,346
+token 仍非 SOTA。本轮不新增可比行、不改图、不派发测评（note 15：竞品测评按需触发）。

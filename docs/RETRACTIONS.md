@@ -15,6 +15,8 @@
 
 ## 1. 分辨率分层（`C7`）—— 2026-11-19
 
+<!-- retracted: resolution -->
+
 **判据出处**：`PREREGISTRATION-RESOLUTION-LAYERING.md` §2（`F1`–`F5`），§3 后果表第 2 行。
 **读数**：`tools/window-pair.mjs --subset`，控制 `44317789307`（`resolution=raw`，500×4）对
 处理 `44468090152`（`resolution=layered`，200×2），200 道共有题（控制的 300 道被丢弃）。
@@ -61,6 +63,8 @@
 ---
 
 ## 2. 房间表作为成本杠杆（`C1` 的第二点）—— 2026-11-19
+
+<!-- retracted: roomtable -->
 
 **判据出处**：`07-sota-v4-review-and-plan.md` §37.16，commit `8d0b5b9`（15:44），派发 `44482224999` 的时间戳是 15:46:41。
 判据在派发**之前**两分钟入库，这是这一条能进本文件的前提——不是事后补的阈值。
@@ -117,6 +121,8 @@
 ---
 
 ## 3. 读者强度作为 `MR` 的最后一级（`R1`）—— 2026-11-19
+
+<!-- retracted: readerstrength -->
 
 **判据出处**：`PREREGISTRATION-READER-RUNG.md` §4，写在派发**之前**（run `44507560716` 于 10:38Z 起跑）。
 三条判据：配对净 **+5 题**、**p < 0.05**、提示词同一性 **121/121**。
@@ -186,6 +192,8 @@ p = 0.375；即使判官差异值 5 点（`M1` 量到的读者效应是 4.35 点
 prompt 命中前缀缓存），判据读数为零额外成本。
 
 ## §4 `verbatim-scope`：范围界被否证，而且否证它的是一个更强的发现
+
+<!-- retracted: verbatimscope -->
 
 **登记**：`PREREGISTRATION-SCOPE-BOUND.md`（派发前写定，五条判据）。
 **运行**：`S17` = `44642788342`（121 题 `MR` × 4 轮，`deepseek-chat`，判官 `reader`），控制臂 `44017278305`。
@@ -262,6 +270,8 @@ cost is route-scoped and the census scales by count」**——它用 500 题的�
 
 ## 5. 会话边界时钟（`sessionClock`，判据 `C1`/`C4`）—— 2026-11-21
 
+<!-- retracted: sessionclock -->
+
 **判据出处**：`PREREGISTRATION-SESSION-CLOCK.md` §3.2（`C1`–`C4`）与 §3.3 后果表第三行；本次派发的配置与
 花费上限写在 `03-execution-plan.md` §14.99.10，读数之前。
 **读数**：run [`44891901371`](https://github.com/AgentiX-E/cortex/actions/runs/44891901371)，
@@ -302,6 +312,8 @@ whole population: n=121  delta=-1.5000 question(s)  discordant b=4 c=2  McNemar 
 ---
 
 ## 6. 分辨率分层（`C7`，判据 `F3`）—— 2026-11-21
+
+<!-- retracted: resolution -->
 
 **判据出处**：`PREREGISTRATION-RESOLUTION-LAYERING.md` §2（`F1`–`F5`）与 §3 后果表第二行；派发配置写在
 `03-execution-plan.md` §14.144.3，读数之前。
@@ -361,6 +373,8 @@ F3 fail: turns +4.5% is below the +20% floor
 ---
 
 ## 7. 「按相关性重分配房间」（`C8`，判据 `G1`–`G5`）—— 2026-11-21
+
+<!-- retracted: roomalloc -->
 
 **判据出处**：`03-execution-plan.md` §14.146.3（写在读数之前，本轮派发时未改动）；配置 §14.147.6。
 **读数**：run [`44915923906`](https://github.com/AgentiX-E/cortex/actions/runs/44915923906)，
