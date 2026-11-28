@@ -39767,3 +39767,52 @@ TypeError: unsupported operand type(s) for /: 'NoneType' and 'int'   →  EXIT=1
 > 本轮最值钱的一句：**拼错一个环境变量，benchmark 会以 0 道题算出 accuracy 并照常上榜——它不崩，所以它比崩溃更危险。**
 >
 > 最该记住的一句：**竞品的二手营销数字（94.6%）和它自己论文的一手数字（91.4%）打架时，信论文——排行榜的诚实，先从拒绝一个好看但无判据的数字开始。**
+
+---
+
+## 225. 重复次数也必须诚实：RUNS=NaN 静默变一趟（2026-11-28）
+
+### 225.1 方向决策与根因扫描（note 13）
+兑现上一轮 §224.4 明确登记的 follow-up。开工前两仓同步、dependabot 0。本轮不重复已健康的八类方向，聚焦"外部数值进入守卫"这一类：`runs` 是上一轮 `LIMIT` 之外唯一仍用裸 `Number(process.env...)` 直接进入比较守卫的计数。系统性扫描确认 `two-window.ts`（`CORTEX_WINDOWS`）、`shard.ts`（`CORTEX_SHARD(S)`）、`readTemperature`/`readMilliseconds`/`readWhole`/上轮的 `readWholeNumberLimit` 都已在守卫前用 digits-only 正则严格解析——`runs` 是唯一缺口，`PROGRESS_EVERY=NaN` 只关进度日志、不碰分数，属无实证的边缘，按 note 13 不改。
+
+### 225.2 修复的真实 BUG（TDD 红→绿）
+| 环节 | 事实 |
+|---|---|
+| 根因 | `run.ts`/`run-ablation.ts` 用 `Number('abc')`→`NaN`；`runAblation` 守卫 `if (runs < 1)` 对 `NaN` 为 false（所有关系运算遇 NaN 皆 false） |
+| 缺陷 | 重复循环 `for(i=1;i<runs;i++)` 同样 `1<NaN`=false → 0 次额外 pass；accuracy 由第一趟算出，报告却发布 `"runs": NaN`（JSON 序列化为 `null`） |
+| 红测试证据 | `runAbstentionRetryAblation(..., {runs: NaN})` 旧代码正常 resolve 并产出 `"runs": NaN` 的报告（测试输出记录了确切 artifact） |
+| 修复 | `runAblation` 守卫改为 `!Number.isInteger(runs) \|\| runs < 1`——拒绝 NaN/Infinity/小数/0/负数；位于消费点，覆盖所有调用方（含直接 API 调用） |
+
+这是本系列第九个"值跨边界未校验"类根因，也是继空样本、幽灵日期之后**输入/配置层的第三个**。`NaN` 让比较守卫全部失效是这一类里最隐蔽的一种：守卫在，却形同虚设。
+
+### 225.2b 并行审查发现的第二个真实 BUG（HIGH，TDD 红→绿）
+并行派发的统计/聚合层只读审查发现一处配对显著性问题，我逐一核对代码与契约后确认并修复：
+
+| 环节 | 事实 |
+|---|---|
+| 契约 | `metrics.ts:243-245` 与 `types.ts:899-901` 明文：判失败（unjudged）的题在**单臂**中是仪器制造的 discordant pair，必须从 McNemar 的 b/c 计数中排除 |
+| 缺陷 | `runAblation` 的翻转循环只走 `correct[]`（unjudged→false），`unjudged[]` 向量虽在该点可用、几行后即落盘，却从未参与判定；基线判失败→false、特征答对→true 被记为真实 `baselineIncorrectFeatureCorrect` 增益 |
+| 红测试证据 | 一个对基线答案抛错的 scorer，产出 **3** 个虚假增益（`expected 0, got 3`），小样本下可把 `mcnemarSignificant` 从 no 翻成 yes |
+| 修复 | 翻转循环从双臂 unjudged 向量建 question-id Set，命中即 `continue` 跳过翻转分支；准确率桶仍先对双臂计数（保留"pessimistic false"下界），只让配对检验丢弃仪器自身失败；per-capability 桶同循环，同规则 |
+
+`benchmark-ablation.test.ts` 25 passed（23 既有 + 2 新）：基线臂判失败用例断言 discordant=0、增益列表不含该题、`mcnemarPValue===1`、`mcnemarSignificant===false`、`perCapability.IE` 同规则；镜像用例（特征臂判失败）断言不记 regression 翻转——覆盖率棘轮抓到缺它时特征侧 Set 的 lambda 不可达，`ablation.ts` 覆盖率回到 177/179 语句（98.88% > 记录 98.82%）、31/31 函数。这是本系列第十个"值跨边界未校验"类根因，也是**首个直接污染配对显著性判定**的缺陷——比此前各位移都更接近"让排行榜说谎"的核心。
+
+审查另报两处成本账缺陷（`runAblationReport` 默认不落 `runs` 字段致 `costEfficiency` 静默丢弃；`cost-per-capability.ts` 在 `featureCorrectByRun` 存在时 `runs` 默认 1、per-correct 成本放大 runs 倍）。二者 interdependent、需先决定"有效重复数在哪落盘"，属有实证但未充分设计的改动——按 note 13 **登记为下一轮候选，不混入本轮已实证的修复**。
+
+### 225.3 联网竞品前沿复核（note 5，本轮）
+本轮无新可比数字入库。沿用 §224 的复核结论：Hindsight 一手论文 91.4% < Cortex 93.40%、二手营销 94.6% 与一手打架不入账；账本维持 54 条。并行派发的统计/聚合层只读审查 agent 本轮仍在运行，其结论若含可复现缺陷，留待下一轮按 TDD 收敛——不为凑一轮改动把未验证推测混入已实证的 RUNS 修复。
+
+### 225.4 六问回答
+1. **榜单完备?** 账本 54 条不变；无新可比数字。
+2. **竞品穷举** 54 条不变，技术栈/成本分布同前。
+3. **同图** 沿用 [position-2026-11-27i.png](../evidence/longmemeval/position-2026-11-27i.png)，无新可比读数，图不变。
+4. **竞品价值穷尽?** 三条待复刻机制状态不变；本轮修复与竞品机制无关，纯属比较仪器自检。
+5. **SOTA 剩余路径** 队头 `resolution: raw` ¥3.57/1.5h，其后 431 题人口 ¥10.45、LoCoMo 300 题 ¥7.28；队列剩余约 **¥20.27 / 5h**；本轮花费 **¥0**（本地单测）。
+6. **自我审查** 两个 BUG 红→绿可复现（`"runs": NaN` artifact、`3` 个虚假 McNemar 增益实证）、守卫置于消费点覆盖全部调用方、unjudged 排除同时保留准确率下界与 per-capability 一致、根因扫描确认唯一缺口、合法调用无回归（`runs: 0` 调用本就期望拒绝）、两处未充分设计的成本账缺陷登记而不混入——符合 note 13。
+
+### 225.5 产品成熟度与 SOTA 判定
+产品能力 28 项 / 19 product / 0 blocked·gap 不变；位置仍为 **93.40% @ 7,346 token/题，非 SOTA**；领先者 Recallium 98.4（不可比）/ ContextStream 96.8 / Exabase 96.40 / agentmemory 96.2，成本轴被 Mem0 94.4 @ ~6,800 token 支配。**未达 100%，不发可发布信号**（阻塞仍是仓库外 `NPM_TOKEN`）。
+
+> 本轮最值钱的一句：**`runs < 1` 这个守卫在，却对 `NaN` 完全失效——拼错一个数字，标注"8 次重复"的报告其实只跑了一趟；而一次 judge 超时被配对检验当成"特征臂赢了一题"，足以把 p 从 1 拉到不显著变显著。两处都不报错，只是让报告说谎。**
+>
+> 最该记住的一句：**比较守卫挡不住 `NaN`（它和任何数比都是 false），配对检验也挡不住 `false`——因为判失败的 `false` 和答错的 `false` 长得一模一样。凡是"仪器没测到"要进统计，先用一个独立的影子向量把它和"测到了、答错了"分开。**
