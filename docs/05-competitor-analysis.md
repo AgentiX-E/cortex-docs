@@ -6637,3 +6637,15 @@ Virginia Tech Sanghani Center + Washington Post 独立复现）在不同来源�
 `04-execution-tracking-report.md §226`），与竞品能力对比无关，因此不新增行、不改图。领先者格局不变：
 准确率轴 ContextStream 96.8 / Exabase 96.40 / agentmemory 96.2，成本轴 Mem0 94.4 @ ~6,800 token 支配；
 Hindsight 虽有代码但一手分数 91.4% 低于 cortex 93.40%，不构成新领先者。
+
+## 38 2026-11-28：三个新自报读数，全部记脚注不入账
+
+本轮联网复核（LongMemEval 权威源 + 聚合榜）出现三个 2026-11 新读数，逐条按账本门禁核对后**均不入账**：
+
+| 系统 | 读数 | 来源与口径 | 处置 |
+| --- | --- | --- | --- |
+| Papr | 96.0%（480/500），自报 16.5K token/问 | 第三方转载博客自报；称答案与判分全公开，但无 run data / harness；自述"前三名半点内、run-to-run 约 3 题" | 二手自报，待核实脚注 |
+| LongMemOS | 95.4%（477/500，S），另称 M 92.4% | dev.to 个人号自报，deepseek flash + gpt-4o judge，称 0 LLM write/recall | 个人自报；95.4 已由 OMEGA 以 C 级在账，重复分数不新增行 |
+| Amazon OpenSearch Memory | 93.0% @ ~13.5K token（full history 95.2% @ ~167K） | 转载 AWS 公告；闭源托管服务 | 93.0 < cortex 93.40、13.5K > 我们 7,346，不构成新领先者；不入账 |
+
+结论：**账本维持 54 条不变**，图不变。门禁与前几节一致：一手/权威/口径完整/可复现才入账；二手营销与个人自报只记脚注，不据此入账或作 SOTA 断言。三个读数都不改变 cortex 非 SOTA 判定，也不改变领先者名字（ContextStream 96.8，官方判分 + 留出半）。Papr 若后续放出官方 run data 与 harness，应像 Maximem Synap 一样按可比五元组重新核对——本轮先记录、不派发测评（note 15：竞品测评按需触发，不随提交自动跑）。

@@ -39886,3 +39886,50 @@ Exabase 96.40 / agentmemory 96.2，成本轴被 Mem0 94.4 @ ~6,800 token 支配�
 >
 > 最该记住的一句：**JavaScript 会把 `null` 和空数组静默 coerce 成 `0` / `NaN`，于是"没测到"穿上了"测到且为零"的外衣
 > 混进排行榜、账单和百分比。凡是可能缺席的数字，在进算术、进 sort、进 JSON 之前都要先问一句：这是测量，还是占位？**
+
+## 227. 检查器本身也会说谎：两处与输出格式耦合的门禁失效（2026-11-28）
+
+### 227.1 方向决策（note 13：不在同一口井继续挖）
+§224–§226 连续三轮都是"外部值跨边界 / 声明 vs 实测 / null 强制转换"。本轮按 note 13 主动换方向，并行派三路只读审查：
+产品侧 LLM 调用浪费（cortex-ai/core/memory）、评估→产品接线割裂、工具脚本真实 BUG。前两路逐行核验后**均报告未发现**（LLM 侧的 selfConsistency 是有意采样、bare retry 与 reply-repair 顺序互斥、embedding 有批内去重+store 命中；接线侧的 forwarded-not-defaulted 均有设计文档、已默认落地的 resolution/relevanceTopK 有双向上线测试）——不为凑改动把"看似可疑实则正确"的点混入。第三路找到三处门禁问题，逐一实证后只修两处真实缺陷，第三处按 note 13 登记不改。开工前两仓 tree 同步、dependabot 0 PR / 0 alert。
+
+### 227.2 修复的两处门禁失效（TDD 红→绿）
+| 环节 | 事实 |
+|---|---|
+| 缺陷 A | `export-census.mjs` 的 `if (json) { 输出; return 0; }` 在 baseline 判定之前——`--check --json` 组合在有未登记 orphan 的树上仍退出 0，`--json` 静默取消了 gate |
+| 红测试证据 | `keeps --check enforced when --json is also present`：`--json suppressed the gate: expected +0 to be 1`（注入 orphan 后 `--check` 单独为 1，加 `--json` 变 0） |
+| 修复 A | 提取 `freshOrphans(orphans)`（唯一判定：未被 baseline 覆盖的 orphan）+ `writeVerdict(fresh, write)`（渲染+退出码）；两种输出模式共用同一判定。`--check --json` 的 JSON 留 stdout（保机器消费者），人类 verdict 走 stderr |
+| 缺陷 B | `readings-census.mjs --check` 的 `existsSync(document) &&` 守卫——生成的文档被删时整段比较被跳过，打印 `ok`。文档是记录的第二产物，缺失与陈旧同属"无人再推导的声明" |
+| 红测试证据 | `test_a_missing_generated_document_is_refused`：删除文档后 `assert 0 == 1`（实际仍 ok） |
+| 修复 B | 缺失与不匹配都 push problem、都指向 `pnpm readings:write`；既有绿色 fixture 补 `--write` 前提（贴近真实 write+check 管线）；确认无测试依赖精确 problem 计数，无假阳性 |
+
+外部英文设计文档 `docs/DESIGN-GATE-INDEPENDENT-OF-FORMAT.md` 已写（cortex 仓职责）。
+
+### 227.3 不修的第三处（note 13）
+`reader-cost-census.mjs --check` 的用法注释承诺"exit 1 unless every field is computable"，实际 `ok` 语义是"feature 侧可用"；per-call 数字在零调用侧本就合法为 `null`。该工具不在 CI check 链，属文档措辞过宽而非正确性缺陷——收窄注释是文档编辑，登记为后续文档 pass，不混入门禁修复。
+
+### 227.4 联网竞品前沿复核（note 5，本轮）
+逐条核对权威源，发现三个 2026-11 新读数但**均不满足入账门禁**，账本维持 **54 条**、`position-2026-11-27i.png` 不变：
+- **Papr 96.0%**（480/500，vercel 转载博客自报，称 16.5K token/问）：厂商自报、来源为二手转载站、无公开 run data/harness；其自述"top three within half a point、run-to-run 约 3 题"——记为待核实脚注。
+- **LongMemOS 95.4%**（477/500，dev.to 个人号自报，deepseek flash + gpt-4o judge，称 0 LLM write）：个人自报；95.4 已由 OMEGA 以 C 级在账，重复分数不新增行。
+- **Amazon OpenSearch Memory 93.0% @ ~13.5K**（wpnews 转载 AWS 公告）：93.0 < Cortex 93.40，成本轴 13.5K > 我们 7,346，不构成新领先者；且属闭源托管服务。
+三者都不改变 cortex 非 SOTA 判定与领先者名字（ContextStream 96.8）。按多轮建立的门禁——一手/权威/口径完整/可复现才入账，二手自报记脚注——不入账。
+
+### 227.5 六问回答
+1. **榜单完备?** 账本 54 条不变；本轮三个新读数均为二手/自报，记为脚注不入账。
+2. **竞品穷举** 54 条不变，LLM 使用 / 技术栈 / 成本分布同 §31.2 表；新读数不满足入账口径。
+3. **同图** 沿用 [position-2026-11-27i.png](../evidence/longmemeval/position-2026-11-27i.png)；无新可比读数，图不变。
+4. **竞品价值穷尽?** 三条待复刻机制状态不变；本轮修复属门禁仪器自检，与竞品机制无关；`reviewBareDecline` adoption 仍是唯一待落地项。
+5. **SOTA 剩余路径** 队头 `resolution: raw` ¥3.57/1.5h，其后 431 题人口 ¥10.45、LoCoMo 300 题 ¥7.28；队列剩余约 **¥20.27 / 5h**；本轮花费 **¥0**（本地单测 + 联网复核）。
+6. **自我审查** 两处红→绿证据可复现（gate 被 `--json` 静默取消、删文档仍 ok）；判定提取为单一纯函数，两种输出模式共享、无重复实现漂移；`--check --json` 的 JSON 仍可 `JSON.parse`、verdict 走 stderr；无测试依赖精确 problem 计数；两路审查报"未发现"而非硬凑；第三处按 note 13 登记不改——方向、计算、机制三者自洽。
+
+### 227.6 产品成熟度与 SOTA 判定
+产品能力 28 项 / 19 product / 0 blocked·gap 不变；位置仍为 **93.40% @ 7,346 token/题，非 SOTA**；
+领先者 ContextStream 96.8 / Exabase 96.40 / agentmemory 96.2（均高于我们），成本轴被 Mem0 94.4 @ ~6,800 token
+支配。**未达 100%，不发可发布信号**（阻塞仍是仓库外 `NPM_TOKEN`）。
+
+> 本轮最值钱的一句：**`--check` 是策略，`--json` 是格式。当格式分支在策略判定之前 `return`，一个"机器可读"的请求就把门禁静默关掉了——
+> 输出看起来完全正常，退出码却是 0。判定必须与渲染分离：无论打印给人还是给机器，同一个 gate 必须给出同一个裁决。**
+>
+> 最该记住的一句：**一个在自己输出文件被删除时仍打印 `ok` 的检查器，等于没有检查器。缺失与陈旧是同一种缺陷——
+> 一个无人再重新推导的声明。门禁的可靠性不看它在正常时说什么，看它在被破坏时是否拒绝。**
