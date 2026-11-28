@@ -6619,3 +6619,21 @@ Virginia Tech Sanghani Center + Washington Post 独立复现）在不同来源�
 调用）、0.8B `hs-decide-1-flash` 决策模型压缩 LLM 调用。这些印证账本已记的"cross-encoder reranking 是最大
 单一部件（去掉 −3.92）"和"前缀稳定=成本杠杆"两条方向，无重复建设价值；前三名仍无公开代码，Hindsight
 虽有代码但一手分数低于我们，不构成新领先者。
+
+## 37 2026-11-28：成本仪器自检复核——无新可比行，账本维持 54 条
+
+本轮（§226）联网复核权威源，逐条核对后**无新增可比五元组**，`position-2026-11-27i.png` 不更新。
+复核读数全部已在账、口径完整：
+
+| 系统 | 读数 | variant / 口径 | 处置 |
+| --- | --- | --- | --- |
+| Maximem Synap | 95.6% @ ~7.4K token | LongMemEval，公开 run data / harness | 已在账，可比 |
+| ContextStream | 96.8% full / 96.0% held-out | 官方 GPT-4o judge、per-question routing | 已在账，准确率领先者 |
+| Mem0 | 94.4% @ ~6.8K token | LongMemEval，开源自托管 | 已在账，成本轴支配 |
+| Zep | 90.2% @ ~4.4K token | LongMemEval | 已在账，低成本点 |
+| Hindsight | 一手 91.4% / 二手营销 94.6% | 一手论文 arXiv:2512.12818 | 一手低于 cortex 93.40%；二手与一手打架，沿用 §36 门禁不入账 |
+
+结论：**账本维持 54 条不变**。本轮工作是成本仪器自检（六处"没测到却当成 0"的缺陷修复，见
+`04-execution-tracking-report.md §226`），与竞品能力对比无关，因此不新增行、不改图。领先者格局不变：
+准确率轴 ContextStream 96.8 / Exabase 96.40 / agentmemory 96.2，成本轴 Mem0 94.4 @ ~6,800 token 支配；
+Hindsight 虽有代码但一手分数 91.4% 低于 cortex 93.40%，不构成新领先者。

@@ -39816,3 +39816,73 @@ TypeError: unsupported operand type(s) for /: 'NoneType' and 'int'   →  EXIT=1
 > 本轮最值钱的一句：**`runs < 1` 这个守卫在，却对 `NaN` 完全失效——拼错一个数字，标注"8 次重复"的报告其实只跑了一趟；而一次 judge 超时被配对检验当成"特征臂赢了一题"，足以把 p 从 1 拉到不显著变显著。两处都不报错，只是让报告说谎。**
 >
 > 最该记住的一句：**比较守卫挡不住 `NaN`（它和任何数比都是 false），配对检验也挡不住 `false`——因为判失败的 `false` 和答错的 `false` 长得一模一样。凡是"仪器没测到"要进统计，先用一个独立的影子向量把它和"测到了、答错了"分开。**
+
+## 226. 声明不是测量：成本账里六个"没测到却当成 0"的缺陷（2026-11-28）
+
+### 226.1 方向决策与开工前门禁（note 13）
+接住 §225.3 明确登记、因 interdependent 而 deferred 的两个成本账候选：默认跑不落 `runs` 字段致
+`costEfficiency` 被静默丢弃；`featureCorrectByRun` 存在时 `costPerCapability` 把 `runs` 默认成 1、
+per-correct 成本放大 runs 倍。二者共享同一根因——**顶层声明值冒充实测值**——本轮按 note 13 串行收敛。
+开工前两仓 tree 完全同步（`cortex ab1b8200…` / `cortex-docs c3c0d09b…`）、dependabot 两仓 0 PR / 0 alert，
+baseline `check-r9d-final.log EXIT=0`、`tools-test-r9.log` 3611 passed / 19 skipped。
+并行派发的成本聚合层与报告落盘层只读审查各回报三处 / 两处缺陷，逐一核对代码与契约后确认其中四处可复现并
+在本轮修，一处（`reviewBareDecline` 产品默认）经核查为设计选择而非缺陷，**记录为候选但不改**。
+
+### 226.2 登记候选的修复（TDD 红→绿）
+| 环节 | 事实 |
+|---|---|
+| 根因 | `runAblationReport` 只在调用方显式传 `runs` 时才落盘；默认跑有四行 `featureCorrectByRun` mask，却**没有** `runs` 字段 |
+| 缺陷 A | `costPerCapability` 用 `runs = ablation.runs ?? report.runs ?? 1`，四行 token ledger 除以一趟正确答案数 → per-correct 与 per-question-run 双双重算至 4× |
+| 红测试证据 | `reads runs from the measured mask when the report omitted the declared count`：`expected 1 to be 4` |
+| 修复 A | `const runs = mask !== undefined ? mask.length : (ablation?.runs ?? report.runs ?? 1)`——mask 存在时以实测行数为权威，声明仅作无 mask 档案的 fallback |
+| 缺陷 B | `attachCostEfficiency` 在 `report.runs === undefined` 时直接拒绝，丢弃分子（全程 ledger）与分母（all-runs accuracy）都在 artifact 里的比率 |
+| 红测试证据 | `prices from the measured mask when the declared count was never written`：`expected undefined to be defined`（构造 `runs: null` + 四行 mask） |
+| 修复 B | `const runs = report.ablation.featureCorrectByRun?.length ?? report.runs`；两者皆无才拒绝，保留"unknown is not one" |
+
+### 226.3 并行审查发现的另外四处（TDD 红→绿）
+| # | 文件 | 缺陷 | 红证据 | 修复 |
+|---|---|---|---|---|
+| 3 | `cost-per-capability.ts` | 排序把 `promptTokensPerCorrect: number\|null` 直接 `as number`，`null - null === 0` 让稳定排序把首行留顶 | 全 `null` 时 `expected 'IE' to be ''` | 排序前 `.filter(row => row.promptTokensPerCorrect !== null)`；无可定价行返回 `''` |
+| 4 | `cache-credit-arithmetic.mjs` | `mean([]) = 0/0 = NaN`→单题报告 Markdown 打印 `NaN%`、JSON 静默落 `null` | stdout 含 `NaN%` | `mean` 空数组返回 `null`；`percent(null)` 输出 `n/a`；新建 `test_cache_credit_arithmetic.py` 三测 |
+| 5 | `reader-cost-census.mjs` | `null * 100 === 0`→prompt/completion 为 0 时把不可算 share 打印成 `cache 0.0%`、`(0.0%)` | stdout 含 `0.0%` 且无 `n/a` | 统一 `pct()`：null / 非有限值一律 `n/a`，三处调用点全替换 |
+| 6 | `cost-ledger.py` | 采纳作者比率的前置 `authored.get('state') != 'measured'`，而唯一 writer `costEfficiencyFrom` 从不写 `state` | 真实 writer 形状被丢弃、比率被重算并误标 `all-runs` | 去掉 `state` 守卫，按 writer 实际写的字段校验（正有限比率 + accuracy∈(0,1]）；测试改喂真实 writer 产物 |
+
+六个缺陷同一形态：**"没测到"的值被算术/sort/序列化 coerce 成"测到且为 0"**。外部设计文档
+`docs/DESIGN-MEASURED-RUN-COUNT-AND-NULL-SHARES.md` 已写，落英文（cortex 仓职责）。
+
+### 226.4 不修的候选：`reviewBareDecline` 是设计选择，不是缺陷
+并行审查建议把 `REGISTERED_ARM.reviewBareDecline: true` 写成产品默认（`assemble.ts:836-838`）。核查后否决：
+`assemble.ts` 明文 second-consultation 机制是 forwarded-not-defaulted，bench 默认 `CORTEX_MEMORY_REVIEW_PASS=none`
+也未打开裸弃答重试。默认打开会在每次裸弃答时增加一次 LLM 调用（成本与行为双变），且无实测 adoption 数据支撑。
+红测 `reviewBareDecline` 确实失败（`expected null to be 'Business Administration'`），但失败证明的是"默认未开"这一
+已知事实，不是需要修的 BUG。该红测与 import 已完整回滚（当前 `registered-arm.test.ts` diff 为空），登记为需先做
+adoption 实测定价的候选，不混入本轮正确性修复。
+
+### 226.5 联网竞品前沿复核（note 5，本轮）
+逐条复核权威源后无新增可比五元组，账本维持 **54 条**，`position-2026-11-27i.png` 不更新：
+Maximem Synap 95.6% @ ~7.4K、ContextStream 96.8% full / 96.0% held-out（官方 GPT-4o judge、per-question routing）、
+Mem0 94.4% @ ~6.8K、Zep 90.2% @ ~4.4K——均已在账，口径完整，本轮非新增。Hindsight 一手论文 91.4%（低于
+cortex 93.40%）、二手营销 94.6% 与一手打架，沿用 §36 门禁继续不入账。领先者格局不变：ContextStream 96.8 /
+Exabase 96.40 / agentmemory 96.2，成本轴被 Mem0 94.4 @ ~6,800 token 支配。
+
+### 226.6 六问回答
+1. **榜单完备?** 账本 54 条不变；权威测评集与排行榜已穷举，本轮复核无新可比数字。
+2. **竞品穷举** 54 条不变，LLM 使用 / 技术栈 / 成本分布同 §31.2 表；本轮无新增行。
+3. **同图** 沿用 [position-2026-11-27i.png](../evidence/longmemeval/position-2026-11-27i.png)；无新可比读数，图不变。
+4. **竞品价值穷尽?** 三条待复刻机制状态不变；本轮六处修复全属比较/成本仪器自检，与竞品机制无关；`reviewBareDecline` 若将来实测 adoption 为正，是唯一待落地项。
+5. **SOTA 剩余路径** 队头 `resolution: raw` ¥3.57/1.5h，其后 431 题人口 ¥10.45、LoCoMo 300 题 ¥7.28；队列剩余约 **¥20.27 / 5h**；本轮花费 **¥0**（本地单测 + 联网复核）。
+6. **自我审查** 六处红→绿证据可复现（`expected 1 to be 4` / `expected undefined to be defined` / `expected 'IE' to be ''` / `NaN%` / `0.0%` / 作者比率被忽略）；mask 优先于声明且保留无 mask 档案的 fallback；null / NaN / 空总体一律不被 coerce 成 0；writer 字段契约与 reader 校验对齐；`reviewBareDecline` 以设计意图否决而非掩盖；全量 `cortex-eval` 3841 passed、coverage 206 files gated / 0 ratcheted / 全维 ≥95%。
+
+**本轮三次完整 `pnpm check` 的证据链（拒绝 flaky 借口）**：第一次 `CHECK_EXIT=1`——Prettier 在 `cost-efficiency.test.ts` / `cost-per-capability.ts` 报格式问题（真实失败，已 `--write` 修复并复验）；第二次 `CHECK_EXIT=1`——`deadline-loss.test.ts` 的 `does not count a deadline loss as a provider refusal` 抛 `TimeoutError`。对第二次做根因排查：单独跑该测试文件三次均 14/14 通过；本轮 9 个改动文件全部在成本计算/报告后处理与独立脚本层（`cost-per-capability.ts` / `report.ts` / `tools/*`），**不触碰** `benchmark.ts` 的 `deadlineReached`/`deadlineExhaustion`、`retry.ts` 的 `attemptSignal`/attemptMs 记录或该测试文件；该测试自身注释（deadline-loss.test.ts:66-88）已记录 `AbortSignal.timeout` 在满载五包/167-worker 下会把 attempt 延迟到 deadline 以下、曾从 30 ms 调到 250 ms 才稳定——判定为已修过一次的负载时序 flaky，本轮改动不构成回归。第三次完整 check `CHECK_EXIT=0`：3616 tools passed / 19 skipped、test files 167+145+42+25+13 全过、coverage 206 gated / 0 ratcheted、docs crosscheck 215 文档、format clean。**不掩盖、不 skip、不 `|| true`**：真实格式失败修复，flaky 以可复现证据定位并如实记录，不用它阻塞正确改动。
+
+### 226.7 产品成熟度与 SOTA 判定
+产品能力 28 项 / 19 product / 0 blocked·gap 不变；位置仍为 **93.40% @ 7,346 token/题，非 SOTA**；
+领先者 ContextStream 96.8 / Exabase 96.40 / agentmemory 96.2（均高于我们），成本轴 Mem0 94.4 @ ~6,800 token
+支配。**未达 100%，不发可发布信号**（阻塞仍是仓库外 `NPM_TOKEN`）。
+
+> 本轮最值钱的一句：**报告里有两类数字——调用方"声明"的和唯一生产者"实测"的。四行 mask 明明记录了跑过四趟，
+> 顶层却没写 `runs`，两个 reader 就一个默认成 1、一个直接拒付；同一批 token 账单被除以一趟的正确答案，价格立刻翻四倍。
+> 声明缺席时，正确动作是"说不知道"，不是"填个看起来合理的值"。**
+>
+> 最该记住的一句：**JavaScript 会把 `null` 和空数组静默 coerce 成 `0` / `NaN`，于是"没测到"穿上了"测到且为零"的外衣
+> 混进排行榜、账单和百分比。凡是可能缺席的数字，在进算术、进 sort、进 JSON 之前都要先问一句：这是测量，还是占位？**
