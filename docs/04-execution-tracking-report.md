@@ -39577,3 +39577,54 @@ commit 署名 Lambertyan、英文 message，工作区干净。基线 `pnpm check
 > 本轮最值钱的一句：**负责让竞品比较诚实的缓存，把 1024 宽的向量交给要 256 宽的请求——这不会报错，只会让一次向量库 "failed ingest" 背后藏着一个缓存串味。**
 >
 > 最该记住的一句：**连续两轮同类 bug 都在"计量基础设施"（成本帧、向量 key）里，而不是在核心检索里——这恰恰说明核心层稳了，比较仪器的刻度还没校完。**
+
+## 221. 竞品 manifest 声明的模型，和实际注入给客户端的模型不是同一个
+
+本轮仍是**不等待任何工作流结果**的一轮：两仓同步实测、全量基线、dependabot、六问机制审查、竞品 driver 层根因自审（后台只读 agent 系统扫描 5 分半）。没有派发 benchmark，API 花费 **¥0**。
+
+### 221.1 起点
+
+两仓远端 tree 与本地 tree 逐字节一致，commit 署名 Lambertyan、英文 message，工作区干净。基线 `pnpm check` **EXIT=0**，dependabot 两仓 **0 PR / 0 alert**。
+
+### 221.2 根因级自审：产品侧与 Eval 侧全绿，driver 层找到实证缺陷
+
+按 note 13 不在健康机制上试探，本轮逐一审查了产品侧 LLM adapter（`openai-compatible.ts`：空 body/usage 缺失/refusal 分类）、usage 计数（`usage.ts`：unpriced 与截断独立入账）、重试（`retry.ts`：预算为时长、429 分类）、产品 embedding cache（上轮已确认 dimensions 入指纹）、Eval judge（prompt 级缓存、temperature 0）——**逐一健康，有实证注释支撑，未改动**。转向尚未系统覆盖的竞品 driver 层，后台审查给出 4 个可定位缺陷，我逐一用最小复现验证：
+
+| # | 缺陷 | 复现结果 | 严重度 |
+|---|---|---|---|
+| 1 | `mem0_driver.py` 模型名只写进 manifest，`config["llm"]["config"]` 无 `model` | manifest `deepseek-reasoner`，实际 config 无 model → mem0ai 回退 `deepseek-chat` | 高 |
+| 2 | loopback proxy 只对 `deepseek` provider 注入 base_url | `MEM0_LLM=openai` + 本地 base_url → 配置无 `openai_base_url`，打厂商端 401，manifest 仍写 proxy | 中 |
+| 3 | `memcog_driver.py` 把 `JSONDecodeError` 也进 3 次重试 | proxy 已记一次 call+usage 后重发 → 同一逻辑调用计费翻倍 | 中 |
+| 4 | embedder 读 `ZHIPU_EMBEDDING_MODEL`/`EMBEDDING_DIMENSIONS`，workflow 实际设 `ZHIPU_EMBED_MODEL`/`ZHIPU_EMBED_DIMENSIONS` | workflow 设 `custom-embed-v9`/`777`，driver 读成 `embedding-3`/`1024` | 低 |
+
+#1/#2/#4 是同一根因——**manifest 声明的值与实际构建的配置脱节**，与前四轮"声明与实做漂移"完全同类。#3 是"重试计费"另一类，需 stub 模拟"已计费但解析失败"才能安全修，本轮记录为下一轮候选，不混入未经充分测试的改动。
+
+### 221.3 修复与验收：TDD 红→绿 + 每维门禁
+
+- 模型名解析为单一 `llm_model`，同时写入 client config 与 manifest（一个变量、两个汇聚点，消除漂移）。
+- loopback base_url 按 provider 注入对应字段：`deepseek` 用 `deepseek_base_url`，其余用 `openai_base_url`；manifest 的 `base_url` 取同一解析值。
+- embedder 优先读 workflow 设置的 `ZHIPU_EMBED_*`，旧名保留为兼容 fallback，`MEM0_*` 优先。
+
+新增 `TestManifestNamesTheConfigThatWasBuilt` 三个用例先红后绿：声明模型用例改前 config 无 model；base_url 用例改前 openai 臂无 `openai_base_url`；embedder 用例改前 `assert 'embedding-3' == 'custom-embed-v9'` 失败。改后竞品 SUT 全组 **26 passed / 1 skipped**（skip 需厂商包），run `45015350567` 建立的 proxied 凭据规则回归测试仍绿。全量 `pnpm check` 与 `pnpm test:tools` 提交前复核。
+
+### 221.4 六个固定问题（本轮增量）
+
+**① 权威测评集/排行榜完备？** 本轮联网复核 ContextStream 官方榜与 Maximem 自家榜：ContextStream 96.8（484/500，Claude Opus 5.5 reader，held-out 96.0）、Synap 95.6、agentmemory 96.2、Mastra 94.87、Mem0 94.4 @ ~6.8K、Zep 90.2 @ ~4.4K——与我方账本一致，无新增可比口径数字，**账本维持 54 条**。Maximem"95.6 #1"是其自家表话术，数字即已记录的 Synap 95.6，不入新行。
+
+**② 竞品穷举**：账本 54 条不变；技术栈/成本分布同前。
+
+**③ 准确率×成本同图**：沿用 [`evidence/longmemeval/position-2026-11-27i.png`](../evidence/longmemeval/position-2026-11-27i.png)，本轮无新读数、无新派发，图不变。
+
+**④ 是否穷尽领军竞品价值？** 三条待复刻机制（per-question 路由 / 抽取式记忆 / 多步 ReAct）状态不变。本轮修复让"同比模型"实验真正比到声明的模型，而非各自 provider 的默认值——这直接关系到 note 12（强弱模型实测）与 note 14（固定 LLM 比 Harness）的可信度。
+
+**⑤ 最优路径剩余步骤与代价**：同 §217.5–§220.5——队头 `resolution: raw` ¥3.57 / 1.5 h（需派发，本轮不动）；其后 431 题人口 ¥10.45、LoCoMo 300 题 ¥7.28；队列剩余约 **¥20.27 / 5 h**。本轮花费 **¥0**。
+
+**⑥ 自我审查**：红→绿可复现且有最小复现证据（config 无 model / 无 openai_base_url / embedder 读错名）；修复让 manifest 与 client config 从同一变量派生，note 16 的产品侧核查有据；未改动的 #3 明确记录为何本轮不碰；方向正确——连续三轮在同一测试层面（声明与实做漂移）根因收敛，而非在健康核心上试探。
+
+### 221.5 产品成熟度与 SOTA 判定
+
+产品能力 28 项 / 19 product / 0 blocked·gap 不变；浏览器双引擎 OPFS digest 稳。位置仍为 **93.40% @ 7,346 token/题，非 SOTA**；领先者 ContextStream 96.8、Exabase 96.40、agentmemory 96.2、MemCog 95.8，成本轴被 Mem0 94.4 @ ~6,800 token 支配。发布阻塞仍是仓库外 `NPM_TOKEN`。**未达 100%，不发可发布信号。**
+
+> 本轮最值钱的一句：**manifest 报 `deepseek-reasoner`，客户端却默默用了 `deepseek-chat`——同比模型实验比的不是模型，是两个 provider 默认值，而报告对此一无所知。**
+>
+> 最该记住的一句：**连续三轮收敛的 bug 都在"声明与实做之间"——manifest 与 config、成本帧与账单、key 与维度；凡是同一个值写两遍的地方，迟早会漂移，正解是让它只有一个源头。**
