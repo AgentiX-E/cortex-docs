@@ -39674,3 +39674,52 @@ commit 署名 Lambertyan、英文 message，工作区干净。基线 `pnpm check
 > 本轮最值钱的一句：**一个坏 body 让同一逻辑调用在账本上变成 3 次——不是 proxy 多记了，是 driver 把"已经付过钱"的错误当成"还没付钱"又打了两次。**
 >
 > 最该记住的一句：**判断能不能重试，看的是"这次失败有没有被计费"，不是异常类型；`urlopen` 和 `json.loads` 看着在同一个 try 里，其实一个在账单之前、一个在账单之后。**
+
+---
+
+## §223 换方向审查：job summary 的畸形计数崩溃 + 竞品前沿复核（2026-11-28）
+
+### 223.1 主动转向，而非在同一口井继续挖
+
+连续五轮（§218–222）都在"比较基础设施"收敛同类根因。按 note 13 的自我审查纪律，本轮**先做方向核查**再动手：逐一确认计量层、产品路由（`question-shape.ts` 与 `classifyAggregationKind` 有 parity 测试守卫）、能力账本（19/28 product、9 instrument、0 blocked/gap——9 是设计分类不是缺口）、浏览器轴（OPFS/IDB 与 A3 采集界面已完成，仅 Safari 持久 profile 需真实 iOS）、rerank 接线（`fuseRerank` + `rerankCalls`/`rerankDegraded` census 已在产品路径）、统计核心（McNemar/Wilson 有 oracle 已知值与 property-based 测试）——**全部健康**。不再在健康机制上做边界试探。
+
+转向后被审计的 `benchmark-summary.py`（241 行 job summary 渲染器，15 个真实 subprocess 测试）里找到一个**实证的健壮性 bug**。
+
+### 223.2 根因：best-effort sink 的字段未做类型守卫
+
+脚本头明确声明"Never fails the step"——它是 artifact 通道失效后数字的第二独立 sink。`ablation_table` 却直接算 `rate = treatment / questions`。当报告是合法 JSON 但 `retryFires.treatmentFires=null`（与文件自己为 `pValue` 记录的 persisted-NaN 往返同类）时：
+
+```
+TypeError: unsupported operand type(s) for /: 'NoneType' and 'int'   →  EXIT=1
+```
+
+测试文件原有 15 条覆盖了畸形 JSON、未知 shape、意外顶层类型，**唯独没覆盖"合法 JSON + 畸形字段值"**。红测试（真实 subprocess）复现 EXIT=1；修复后三个计数先做非布尔数字守卫，合法值行为与措辞逐字不变（三条既有 retry-fire verdict 测试不动），畸形值降级为 `n/a` + `-- UNREADABLE` 标注。16 条全绿。
+
+### 223.3 联网竞品前沿复核（note 4/5）
+
+| 来源 | 数字/机制 | 处置 |
+|---|---|---|
+| ContextStream 官方榜 | 96.8%（484/500）官方 GPT-4o 判分；**留出半 96.0%（239/249）**；会话级证据到达 98.2%；**per-question 路由**（从问题文本选策略，不用数据集标签）；reader 为 Claude Opus 5.5 | 已在账本/分析账（§1520）；本轮确认留出半口径与路由机制，仍无 token 计数、无公开代码，**不新增可比行** |
+| Oracle Agent Memory (arXiv:2607.13157) | LongMemEval 93.8%（469/500），gpt-5.5 xhigh + nomic-embed + top-K=200；分类里 MR 最低 88.0% | vendor 自报、无公开复现、与账本可比五元组不符，**不入账本**，记为前沿情报 |
+| KV-LTM (arXiv) | 持久化会话级 KV 缓存作记忆层，文本为事实基准；存储 0.34–3.6 TB/用户/年 | 架构论文、无 LongMemEval 分数，**仅登记方向** |
+| ContextPilot/StateLM-RL | 同 32K 窗口，RL 后 69–72 分 vs 未训练 27.61 | 不同测评集口径，**不入账本**；印证 note 12"工具给了不等于会用" |
+| Recallium 98.4%（Opus 5.5） | 最高公开分，但无公开代码、口径不可比 | 维持账本门禁拒收，不作 SOTA 断言依据 |
+
+**结论**：54 条账本不变；前三名（Recallium/ContextStream/Agent Zero）均无公开代码，"只能读不能跑"的判定不变。
+
+### 223.4 六问回答
+
+1. **榜单完备?** 完备，账本 54 条；本轮联网复核的前沿数字均因口径/可比性门禁不入账。
+2. **竞品穷举** 54 条不变；技术栈/成本分布同前，新增 4 项前沿情报仅作脚注。
+3. **同图** 沿用 [position-2026-11-27i.png](../evidence/longmemeval/position-2026-11-27i.png)，无新可比读数，图不变。
+4. **竞品价值穷尽?** ContextStream 的 per-question 路由是最值得复刻的机制（已登记为三条候选之一）；前三名无公开代码，只能读其论文口径。本轮把这条机制的细节（留出半、98.2% 会话到达）记入分析账。
+5. **SOTA 剩余路径** 队头 `resolution: raw` ¥3.57 / 1.5 h，其后 431 题人口 ¥10.45、LoCoMo 300 题 ¥7.28；队列剩余约 **¥20.27 / 5 h**。
+6. **自我审查** 红→绿可复现（真实 subprocess 复现 EXIT=1）、合法字段行为逐字不变（三条既有测试锁定）、方向经过五类系统核查才切换到有实证的缺口——符合 note 13"不在健康机制上试探"。
+
+### 223.5 产品成熟度与 SOTA 判定
+
+产品能力 28 项 / 19 product / 0 blocked·gap 不变；位置仍为 **93.40% @ 7,346 token/题，非 SOTA**；领先者 Recallium 98.4 / ContextStream 96.8（留出半 96.0）/ Exabase 96.40 / agentmemory 96.2，成本轴被 Mem0 94.4 @ ~6,800 token 支配。发布阻塞仍是仓库外 `NPM_TOKEN`。**未达 100%，不发可发布信号。**
+
+> 本轮最值钱的一句：**一个为"artifact 丢了也不丢数字"而生的第二 sink，被一个 null 计数直接干崩——保护伞自己在最需要它的那天失效。**
+>
+> 最该记住的一句：**方向核查本身就是推进；确认五类核心机制全健康后，才把手术刀落在唯一有实证的缺口上，而不是为了凑一轮改动去健康代码里找边界试探。**
