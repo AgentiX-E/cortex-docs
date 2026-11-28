@@ -39988,4 +39988,59 @@ BenchLM Nemotron 3.5 Bolt 72.10%（不同 harness、display-only，不可比）�
 > 本轮最值钱的一句：**接口承诺的是"每次调用"的 cap 和"整段回复"的 last-wins，实现却只看了"构造时"的值和
 > "第一个围栏"里的对象。范围一旦被悄悄收窄，正确的调用（更小的 token cap、围栏外的最终答案）就被当成不存在——
 > 而这类缺陷在绿灯下完全隐形，因为测试也从没问过那个问题。契约写在哪，红测就要钉在哪。**
+
+### 229.1 方向决策（note 13/8：从"产品 BUG"转向"测试自身的 BUG"）
+§224–§228 连续五轮修产品/门禁/契约缺陷。本轮开工门禁全绿（两仓 tree 同步、dependabot 0），
+并行派三路审查：provider 抽象、缓存/存储幂等、强弱模型契约。三路共报 7 处候选，**逐条读代码实证后全部否决**，
+本轮不制造产品改动（详见 229.3）。随后换一个确定性更高的方向：审查**测试本身是否在测错东西**——
+这类修复不改产品行为、零成本风险，且能让长期绿灯的空洞断言变成真正的守卫。
+
+### 229.2 修复的三处空洞测试（突变验证有效）
+| 环节 | 事实 |
+|---|---|
+| 空洞 1 | `edge-cases.test.ts` 的 sinkhorn 用例只断言 `cost>=0`、`iterations>0`——最优传输 cost 按构造必非负、循环必至少跑一次，返回错误 coupling 仍通过 |
+| 强化 1 | 断言 coupling 行列边缘 = [0.3,0.7]/[0.6,0.4]（6 位精度）、`converged===true`、cost ∈ (0,1)；突变 `converged=false` → `expected false to be true` |
+| 空洞 2 | `retrieval.test.ts` 把每个 turn 嵌成零向量、断言 `index.sort()===[0,1,2]`——score 全相等时任何实现都满足，无法区分正确排序与倒置 |
+| 强化 2 | 用可区分向量（q 对齐 c、正交 b、反对 a），断言 `index===[0,1,2]` 且 `text===['c','b','a']`；突变 `index: rank`→`5-rank` → `expected [5,4,3] to deeply equal [0,1,2]` |
+| 空洞 3 | `reader-identity.test.ts` 含 `expect(()=>metrics).not.toThrow()`——读局部变量恒不抛；其唯一非恒真断言（TEMPERATURE=0→0）已被第 162 行覆盖，渲染断言已被 189-190 行覆盖 |
+| 处置 3 | 删除该空洞测试（无覆盖损失），而非重复既有断言 |
+| 门禁 | core 8/8、eval 103/103 通过；两包覆盖率全维 100%（见完整 check） |
+
+外部英文设计文档 `docs/DESIGN-VACUOUS-ASSERTIONS.md` 已写（cortex 仓职责）。
+
+### 229.3 实证后否决的 7 处产品候选（note 13：不为推测制造改动）
+- `maxTokens` 被 platform adapter 吞、`parseJson`/`readObject` 围栏截断：**上轮 §228 已修**，审查报的是旧状态。
+- `StorageEmbeddingCache.flush()` 并发写丢失：产品侧无并发调用方、注释明确设计约束 → 不修。
+- eval 缓存 key 无模型身份：真实 bench 单进程单 embedding、`clearEmbeddingCache` 生产代码零调用；
+  曾写出红→绿修复，但 key 从裸文本改为带身份会使 CI Actions cache 里的**全部旧缓存一次性失效**，
+  触发全量重 embed + Zhipu 429（note 8 成本红线），且要重写 4 处既有断言（note 13 架构级调整）→ **已回滚，不修**。
+- 序列化非幂等/混合宽度：write 端 dim 守卫已拒绝混合宽度、无字节寻址 → 不修。
+- rerank 硬编码 DeepSeek：注释 §13.212 已明确处理 provider 前缀剥离 → 非缺陷。
+- `parseSecondLookQuery` 取首行：既有 fixture 锁定"答案在上"是刻意约定 → 非缺陷。
+三处工具脚本候选（参数缺值静默降级 ×2、benchmark-summary 的 `missing:null`→TypeError）**登记下一轮**：
+它们是真实产品 BUG 且无测试覆盖，比空洞测试修复优先级更高。
+
+### 229.4 联网竞品前沿复核（note 5，本轮）
+BenchLM LongMemEval 页只有 2 行（Nemotron 3.5 Bolt 72.10% / 69.92%，均 NVIDIA 自报、NeMo Gym 单一
+harness、display-only、明确"不用于排名"）。无新可比五元组，账本维持 **54 条**、图不变，不改变 cortex
+非 SOTA 判定与领先者名字（ContextStream 96.8）。
+
+### 229.5 六问回答
+1. **榜单完备?** 账本 54 条不变；BenchLM 两行 lab-reported 不可比，不入账。
+2. **竞品穷举** 54 条不变，LLM 使用 / 技术栈 / 成本分布同 §31.2 表；无新可比读数。
+3. **同图** 沿用 [position-2026-11-27i.png](../evidence/longmemeval/position-2026-11-27i.png)；图不变。
+4. **竞品价值穷尽?** 三条待复刻机制状态不变；本轮修复属测试质量自检，与竞品机制无关；`reviewBareDecline` adoption 仍是唯一待落地项。
+5. **SOTA 剩余路径** 队头 `resolution: raw` ¥3.57/1.5h，其后 431 题人口 ¥10.45、LoCoMo 300 题 ¥7.28；
+   队列剩余约 **¥20.27 / 5h**；本轮花费 **¥0**（本地单测 + 联网复核）。
+6. **自我审查** 三处空洞测试均有突变证据（旧断言抓不到、新断言抓得到）；删除的第 3 处无覆盖损失；
+   7 处产品候选逐一实证否决而非硬凑；缓存修复因成本红线回滚而非强行落地——方向、计算、机制自洽。
+
+### 229.6 产品成熟度与 SOTA 判定
+产品能力 28 项 / 19 product / 0 blocked·gap 不变；位置仍为 **93.40% @ 7,346 token/题，非 SOTA**；
+领先者 ContextStream 96.8 / Exabase 96.40 / agentmemory 96.2（均高于我们），成本轴被 Mem0 94.4 @ ~6,800 token
+支配。**未达 100%，不发可发布信号**（阻塞仍是仓库外 `NPM_TOKEN`）。
+
+> 本轮最值钱的一句：**绿灯不等于覆盖。`cost>=0`、`iterations>0`、`index.sort()===[0,1,2]`——
+> 这些断言在命题恒真时也通过。一个永远抓不到 bug 的测试，和一个没有测试的函数，
+> 在覆盖率报表上长得一模一样。判据不是"测试通过了"，是"把它声称的行为改坏，它会失败"。**
 >

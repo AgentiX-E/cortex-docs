@@ -6660,4 +6660,15 @@ Hindsight 虽有代码但一手分数 91.4% 低于 cortex 93.40%，不构成新�
 | Nemotron 3.5 Bolt | 72.10%（BF16）/ 69.92% | BenchLM display-only，NVIDIA 自报，NeMo Gym 不同 harness | 不可比，不入账 |
 
 结论：**账本维持 54 条不变**，图不变。门禁与前几节一致：一手/权威/口径完整/可复现才入账；二手营销
-与个人自报只记脚注，不据此入账或作 SOTA 断言。三个读数都不改变 cortex 非 SOTA 判定，也不改变领先者名字（ContextStream 96.8，官方判分 + 留出半）。Papr 若后续放出官方 run data 与 harness，应像 Maximem Synap 一样按可比五元组重新核对——本轮先记录、不派发测评（note 15：竞品测评按需触发，不随提交自动跑）。
+与个人自报只记脚注，不据此入账或作 SOTA 断言。三个读数都不改变 cortex 非 SOTA 判定，也不改变
+领先者名字（ContextStream 96.8）。Papr 若后续放出官方 run data 与 harness，应像 Maximem Synap
+一样按可比五元组重新核对——本轮先记录、不派发测评（note 15：竞品测评按需触发，不随提交自动跑）。
+
+## 40 2026-11-28：测试质量自检复核——BenchLM 两行仍不可比，账本维持 54 条
+
+本轮（§229）联网复核 BenchLM LongMemEval 权威页：仅 2 行（Nemotron 3.5 Bolt E4B BF16 72.10%、
+E4B 69.92%），均 NVIDIA 自报、NeMo Gym 单一 harness、页面明确标注 display-only 且"不用于排名"。
+无新可比五元组，`position-2026-11-27i.png` 不更新。领先者格局不变：准确率轴 ContextStream 96.8
+/ Exabase 96.40 / agentmemory 96.2，成本轴 Mem0 94.4 @ ~6,800 token 支配，cortex 93.40% @ 7,346
+仍非 SOTA。本轮工作是测试质量自检（三处空洞测试强化，见 `04-execution-tracking-report.md §229`），
+与竞品能力对比无关，不新增行、不改图。
