@@ -39527,3 +39527,53 @@ commit 署名 Lambertyan、英文 message，工作区干净。基线 `pnpm check
 > 本轮最值钱的一句：**七个承载"评估→产品割裂"的机制逐一审查全绿——这比再修一个解析器更能说明核心层已经稳了。**
 >
 > 最该记住的一句：**一个把零 usage 占位帧当真实计费覆盖的计量器，会把竞品成本静默记成免费；这种 bug 不会报错，只会让排行榜说谎。**
+
+## 220. 竞品 embedding 缓存的 key 里没有维度：同文本不同宽度会互相投毒
+
+本轮仍是**不等待任何工作流结果**的一轮：两仓同步实测、全量基线、dependabot、六问机制审查、竞品计量基础设施根因自审。没有派发 benchmark，API 花费 **¥0**。
+
+### 220.1 起点
+
+两仓远端 tree 与本地 tree 逐字节一致（API 实测均一致），commit 署名 Lambertyan、英文 message，工作区干净。基线 `pnpm check` **EXIT=0**，dependabot 两仓 **0 PR / 0 alert**。逐文件门禁 206 文件 / 0 ratcheted、竞品账本 54 条绿、产品能力账本 28 行（19 product / 0 blocked / 0 gap）。
+
+### 220.2 发现的 BUG：与上一轮零 usage 帧同类，但这次在向量侧
+
+上一轮修了 `sut_llm_proxy.py` 把零 usage 占位帧当真实计费、把竞品成本抹成零。本轮按 note 8/17（全面审查 LLM/Embedding 成本）与 note 7（竞品公平比较基础设施）顺同一根因线索审到 `tools/competitor-sut/embed_cache_proxy.py`，发现真实缺陷：
+
+- 注释自己写明 Zhipu `embedding-3` 是**变维度模型**，`dimensions` 省略会 400 或返回厂商默认宽度；`mem0_driver.py` 的 `MEM0_EMBEDDING_DIMS` 两条路径分别默认 256 与 1024。
+- 但 `cache_key(model, text)` **不含 dimensions**——同一文本在 1024 与 256 宽度下产生两个不同向量，却命中同一 key，把宽向量交给要窄向量的请求。
+- 缓存跨 dispatch 复用，两种宽度配置共用同一 cache 文件时**必然**碰撞。
+
+失败模式是静默且被误归因的：向量库报 "failed ingest" 或搜一个没建过的空间，缓存侧却认为命中成功、无任何错误日志。这与零 usage 帧是同一类——负责让比较诚实的组件反过来让比较悄悄失真。
+
+### 220.3 修复与验收：TDD 红→绿 + 每维门禁
+
+改为 `sha256(model \0 width \0 text)`：受控字段在前、自由文本在最后，杜绝用含 NUL 的文本伪造边界；`width` 缺省为空串以区分"未声明宽度"与"显式 1024"；`do_POST` 把 `dimensions` 归一为 int（`"1024"` 与 `1024` 不产生两条互相判 miss 的条目），无法解析则回退 `None` 而非让一次成功回答失败。
+
+先写 5 个新用例并在旧代码上确认红：集成用例同文本按 1024、256 两次请求，上游只被调用 **1 次**（`assert 1 == 2` 失败）——BUG 证据确凿。改后全绿：宽度变化必 miss、NUL 不能伪造维度、三段组成被 pin、两宽度两次上游调用零命中、同宽度仍命中。连带更新一条旧 pin 用例的期望值（组成从两段变三段，属刻意变更）。相关四组工具测试 **65 passed / 4 skipped**，全量 `pnpm check` 与 `pnpm test:tools` 提交前复核。
+
+### 220.4 note 16 核查：产品侧本就正确，无割裂
+
+按注意 16，核查产品侧 `packages/cortex-core/src/cache/embedding-cache.ts`：`CachingEmbedding.fingerprintOf` 已把 `identity.dimensions` / `model.dimension()` 纳入指纹（`[provider,model,endpoint,dimensions].join('/')` 或 `unknown/${dimension}`），`EmbeddingMemo` 的 key 为 `fingerprint \0 sha256(text)`，两宽度占两个空间。**产品侧无此 BUG，未做任何改动**——缺口只在竞品测量路径，正是错误向量会扭曲 SOTA 比较而非用户答案的地方。
+
+### 220.5 六个固定问题（本轮增量）
+
+**① 权威测评集/排行榜完备？** 前三轮已核查 sota2.com（口径混排）与 MemoryBear（不入账本），本轮无新增可入库数字，账本维持 54 条。
+
+**② 竞品穷举**：账本 54 条不变；技术栈/成本分布同前。
+
+**③ 准确率×成本同图**：沿用 [`evidence/longmemeval/position-2026-11-27i.png`](../evidence/longmemeval/position-2026-11-27i.png)，本轮无新读数、无新派发，图不变。
+
+**④ 是否穷尽领军竞品价值？** `COMPETITOR-MECHANISMS` 的三条待复刻机制（per-question 路由 / 抽取式记忆 / 多步 ReAct）状态不变。本轮修复的是承载这类公平比较的**向量缓存**，使下一次同比模型实验的向量不会因配置不同而串味。
+
+**⑤ 最优路径剩余步骤与代价**：同 §217.5/§218.4/§219.4——队头 `resolution: raw` ¥3.57 / 1.5 h（需派发，本轮不动）；其后 431 题人口 ¥10.45、LoCoMo 300 题 ¥7.28；队列剩余约 **¥20.27 / 5 h**。本轮花费 **¥0**。
+
+**⑥ 自我审查**：红→绿可复现且有集成证据（1 次 vs 2 次上游调用）；修复保住"命中即精确值、跨进程复用、字节不改"三条边界；note 16 产品侧核查有据；方向正确——连续两轮在同一计量基础设施里收敛同类静默失真，根因级收干净，而非在健康机制上试探。
+
+### 220.6 产品成熟度与 SOTA 判定
+
+产品能力 28 项 / 19 product / 0 blocked·gap 不变；浏览器双引擎 OPFS digest 稳。位置仍为 **93.40% @ 7,346 token/题，非 SOTA**；领先者 ContextStream 96.8、Exabase 96.40、agentmemory 96.2、MemCog 95.8，成本轴被 Mem0 94.4 @ ~6,800 token 支配。发布阻塞仍是仓库外 `NPM_TOKEN`。**未达 100%，不发可发布信号。**
+
+> 本轮最值钱的一句：**负责让竞品比较诚实的缓存，把 1024 宽的向量交给要 256 宽的请求——这不会报错，只会让一次向量库 "failed ingest" 背后藏着一个缓存串味。**
+>
+> 最该记住的一句：**连续两轮同类 bug 都在"计量基础设施"（成本帧、向量 key）里，而不是在核心检索里——这恰恰说明核心层稳了，比较仪器的刻度还没校完。**
