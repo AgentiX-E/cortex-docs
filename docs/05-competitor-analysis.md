@@ -6598,3 +6598,24 @@ variant、scoring、reader、judge、token/harness 中的任何一项。
 读数会误判 cortex 差距扩大 3.7 点。这条记录的价值是方法论：与第 34 节 MemoryBear 一样，"榜上的数字"
 必须先回答"它测的是哪个 variant、用什么 scoring、谁当 reader"才能进入排序——答不出的，记为脚注而非
 入库。`SOTA-LANDSCAPE.md` 已覆盖 Chronos / EMem-G，无重复登记。
+
+## 36 2026-11-28：Hindsight —— 一手论文 91.4% 与二手营销 94.6% 打架
+
+新出现的开源竞品 **Hindsight**（`vectorize-io/hindsight`，全栈 MIT，论文 arXiv:2512.12818，第三方
+Virginia Tech Sanghani Center + Washington Post 独立复现）在不同来源给出两个不同的 LongMemEval 分数：
+
+| 来源 | 数字 | variant / 口径 | 处置 |
+|---|---|---|---|
+| 论文摘要（arXiv:2512.12818，一手） | **91.4%**（放大 backbone）/ 83.6%（开源 20B） | LongMemEval overall，作者自报 | 一手；**低于 cortex 93.40%** |
+| 中文聚合站 + README 基准图（二手） | **94.6%**（"第三方独立复现"） | 正文无判分口径，数字仅在图/站点 | 与一手冲突，**不入账本** |
+| BenchLM 2026-11-27 | Nemotron 3.5 Bolt 72.10% | 不同 harness、display-only | 不可比，不入账 |
+
+结论：**账本维持 54 条不变**。这是第 34（MemoryBear 记录不放行）、第 35（sota2.com 口径混排）之后同一门禁的
+第三次应用，但触发点不同：前两次是"口径不可比"，这次是**同一系统的二手营销数字高于它自己论文的一手数字**。
+规则一致——打架时以一手为准，二手好看数字只作脚注，绝不据此入账或作 SOTA 断言。
+
+机制层可借鉴（仅登记、不改账本）：四路检索（语义 / BM25 / 图 / 时间）+ RRF 融合 + cross-encoder 精排
+（114M 自研 `hs-rerank-1`）、后台 consolidation 成带证据的 observations、mental model 预计算（读取零 LLM
+调用）、0.8B `hs-decide-1-flash` 决策模型压缩 LLM 调用。这些印证账本已记的"cross-encoder reranking 是最大
+单一部件（去掉 −3.92）"和"前缀稳定=成本杠杆"两条方向，无重复建设价值；前三名仍无公开代码，Hindsight
+虽有代码但一手分数低于我们，不构成新领先者。

@@ -39723,3 +39723,47 @@ TypeError: unsupported operand type(s) for /: 'NoneType' and 'int'   →  EXIT=1
 > 本轮最值钱的一句：**一个为"artifact 丢了也不丢数字"而生的第二 sink，被一个 null 计数直接干崩——保护伞自己在最需要它的那天失效。**
 >
 > 最该记住的一句：**方向核查本身就是推进；确认五类核心机制全健康后，才把手术刀落在唯一有实证的缺口上，而不是为了凑一轮改动去健康代码里找边界试探。**
+
+---
+
+## 224. 输入层的两道边界闸：拼错的 LIMIT 与不存在的日期（2026-11-28）
+
+### 224.1 方向决策（note 13）
+连续六轮（§218–223）都在"比较的下游计量层"收敛同类根因。本轮开工前逐一核查并确认健康：成本触发门（20 个 benchmark/竞品 workflow 全 `workflow_dispatch`，唯一自动触发的 `verify.yml` 只跑本地 check/Postgres 容器/浏览器，无 LLM 调用——note 15 满足）、CI gate 自身（`pg-integration-count.mjs`/`readings-in-place.mjs`/`browser-reading-check.mjs` 均有专门测试且 fail-closed）、`question-shape.ts` 路由（parity 测试守卫）、数据集 loader/sampling 主体、`valuesAreIdentical` 判等、judge 全文（verdict 前缀解析 + unrecognised 计数）、`registered-arm.test.ts` 评估→产品接线——全部健康。**据此把手术刀从"下游计量"上移到从未系统审查的"输入层"**，并行派发只读审查 agent 扫描摄取/检索/temporal，同时自己按 note 5 做竞品联网复核。
+
+### 224.2 修复的两个真实 BUG（TDD 红→绿）
+审查 agent 返回 2 个可定位缺陷，逐一最小复现确认后修复：
+
+| BUG | 位置 | 红证据 | 修复 |
+|---|---|---|---|
+| `LIMIT=abc`→`NaN`→空样本上榜 | `bench/run.ts:183`、`run-ablation.ts:519` + `sampling.ts:15` | `NaN` 下 `<=0`/`>=len`/`while(len<NaN)` 三闸全失效，采样器返回 `[]`，benchmark 以 0 题算 accuracy 并写报告 | 新增严格解析 `readWholeNumberLimit`（仿 `reader-transport.ts` 的 `readMilliseconds`：空白=默认、仅 `^\d+$`、带变量名报错）；两个入口的 `LIMIT`/`DIAGNOSTICS_LIMIT` 全改用它；`sampleInstances` 再加非有限值守卫兜底所有调用方 |
+| `2023/02/30` 被当合法日期→负"几天前" | `temporal-engine.ts:174` `isValidDate` | `isValidDate('2023/02/30')===true`；`computeTemporalAnswer(...,'2023/03/01',[{date:'2023/02/30'}])` 返回 **-1**（对照 `turn-clock.ts:127` 已做 `day>daysInMonth`） | `isValidDate` 改为解析三分量 + `daysInMonth` 日历校验（与 turn-clock 同闸）：`2023/02/29` 拒、`2024/02/29` 收、`00`/`13+` 拒；幽灵日期事件被丢弃→无答案，真实 2/28 仍得 `1` |
+
+`LIMIT=0`=全集（有意设计）保持不变并有测试锁定。`readWholeNumberLimit` 经 `cortex-eval` barrel 导出，两个 bench 入口均从该 barrel 引用。
+
+### 224.3 联网竞品复核（note 5）——发现一处必须记录的"数字打架"
+发现一个重要新竞品 **Hindsight**（`vectorize-io/hindsight`，全栈 MIT 开源，论文 arXiv:2512.12818，第三方（Virginia Tech Sanghani Center + Washington Post）独立复现）。但严谨复核揭出一处口径冲突：
+
+| 来源 | LongMemEval 数字 | 处置 |
+|---|---|---|
+| Hindsight **自己的论文**（arXiv:2512.12818 摘要） | **91.4%**（放大 backbone）/ 83.6%（开源 20B） | 一手来源，**低于 Cortex 93.40%** |
+| 多个二手聚合站 / README 基准图 | **94.6%**（"第三方独立复现"） | 数字只在二手站点与图片里，正文无判据；与一手自报不一致，**不入账本** |
+| BenchLM（2026-11-27） | Nemotron 3.5 Bolt 72.10% | 不同 harness/模型口径，display-only，不入账 |
+| Supermemory（厂商自报） | 95% Recall@15、~720 token | 无公开可比判分口径，仅作成本轴脚注 |
+
+机制可借鉴点：四路检索（语义/BM25/图/时间）+ RRF 融合 + cross-encoder 精排（114M 自研模型）、后台 consolidation 成 evidence-backed observations、mental model 预计算（零 LLM 读取）、0.8B 决策模型压缩 LLM 调用——与账本已记的"cross-encoder reranking 是最大单一部件""前缀稳定=成本杠杆"方向一致，**作为前沿情报登记，仍无 token/判分可比五元组，不改 54 条账本**。教训：一手论文数字与二手营销数字打架时以一手为准，绝不据二手分入账或作 SOTA 断言。
+
+### 224.4 六问回答
+1. **榜单完备?** 账本 54 条不变；Hindsight 一手 91.4% 与二手 94.6% 冲突，按门禁不入账、仅作脚注。
+2. **竞品穷举** 54 条不变；新增 Hindsight/AgentMem-OS/Supermemory 前沿情报仅作脚注。
+3. **同图** 沿用 [position-2026-11-27i.png](../evidence/longmemeval/position-2026-11-27i.png)，无新可比读数，图不变。
+4. **竞品价值穷尽?** 三条待复刻机制状态不变；Hindsight 的 cross-encoder 精排 + 自研小模型进一步印证"rerank 是最大单一部件"，本轮无重复建设。
+5. **SOTA 剩余路径** 队头 `resolution: raw` ¥3.57/1.5h，其后 431 题人口 ¥10.45、LoCoMo 300 题 ¥7.28；队列剩余约 **¥20.27 / 5h**；本轮花费 **¥0**（本地单测 + 联网）。
+6. **自我审查** 两 BUG 红→绿可复现（`-1` 与空样本实证）、对照闸门一致（mirrors `turn-clock.ts`/`reader-transport.ts`）、合法路径有测试锁定、方向经八类系统核查后从计量层上移到输入层——符合 note 13。
+
+### 224.5 产品成熟度与 SOTA 判定
+产品能力 28 项 / 19 product / 0 blocked·gap 不变；位置仍为 **93.40% @ 7,346 token/题，非 SOTA**；领先者 Recallium 98.4（不可比）/ ContextStream 96.8 / Exabase 96.40 / agentmemory 96.2，成本轴被 Mem0 94.4 @ ~6,800 token 支配。Hindsight 一手 91.4% 低于 Cortex，不构成新领先者。**未达 100%，不发可发布信号**（阻塞仍是仓库外 `NPM_TOKEN`）。
+
+> 本轮最值钱的一句：**拼错一个环境变量，benchmark 会以 0 道题算出 accuracy 并照常上榜——它不崩，所以它比崩溃更危险。**
+>
+> 最该记住的一句：**竞品的二手营销数字（94.6%）和它自己论文的一手数字（91.4%）打架时，信论文——排行榜的诚实，先从拒绝一个好看但无判据的数字开始。**
